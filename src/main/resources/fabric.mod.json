@@ -1,0 +1,42 @@
+{
+	"schemaVersion": 1,
+	"id": "my-bot-mod",
+	"version": "v0.0.1",
+	"name": "My Bot Mod",
+	"description": "一个类似 Carpet Mod 的假人（机器人玩家）模组，提供假人召唤和控制功能",
+	"authors": [
+		"Skyline_hcss",
+		"kiro AI"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/my-bot-mod/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"name.modid.MyBotMod"
+		],
+		"client": [
+			"name.modid.client.MyBotModClient"
+		],
+		"fabric-datagen": [
+			"name.modid.client.MyBotModDataGenerator"
+		]
+	},
+	"mixins": [
+		"my-bot-mod.mixins.json",
+		{
+			"config": "my-bot-mod.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.2",
+		"minecraft": "~1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	}
+}
