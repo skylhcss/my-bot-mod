@@ -31,6 +31,8 @@ bin/
 # fabric
 
 run/
+.fabric/
+remappedSrc/
 
 # java
 
@@ -38,3 +40,19 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+
+# minecraft
+
+logs/
+crash-reports/
+saves/
+screenshots/
+resourcepacks/
+shaderpacks/
+config/
+mods/
+*.log
+
+# project specific
+
+MEMORY.md.backup

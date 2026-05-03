@@ -1,18 +1,19 @@
 {
 	"schemaVersion": 1,
 	"id": "my-bot-mod",
-	"version": "v0.0.1",
-	"name": "My Bot Mod",
+	"version": "${version}",
+	"name": "我的机器人",
 	"description": "一个类似 Carpet Mod 的假人（机器人玩家）模组，提供假人召唤和控制功能",
 	"authors": [
-		"Skyline_hcss",
-		"kiro AI"
+		"Skyline_hcss"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/skylhcss/my-bot-mod",
+		"sources": "https://github.com/skylhcss/my-bot-mod",
+		"issues": "https://github.com/skylhcss/my-bot-mod/issues",
+		"email": "Skyline.hcss@gmail.com"
 	},
-	"license": "CC0-1.0",
+	"license": "MIT",
 	"icon": "assets/my-bot-mod/icon.png",
 	"environment": "*",
 	"entrypoints": {

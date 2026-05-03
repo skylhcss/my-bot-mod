@@ -21,8 +21,8 @@ public class BotSkinTextureLoader {
     // PNG 皮肤纹理缓存
     private static final Map<UUID, ResourceLocation> pngSkinTextures = new HashMap<>();
     
-    // temporary 文件夹路径
-    private static final String TEMP_FOLDER = "temporary";
+    // 皮肤文件夹路径（在 run 目录下）
+    private static final String SKIN_FOLDER = "run/skins";
     
     /**
      * 在客户端加载 PNG 皮肤纹理
@@ -38,7 +38,7 @@ public class BotSkinTextureLoader {
             }
             
             // 查找 PNG 文件
-            File pngFile = new File(TEMP_FOLDER, pngFileName);
+            File pngFile = new File(SKIN_FOLDER, pngFileName);
             if (!pngFile.exists()) {
                 MyBotMod.LOGGER.error("PNG 皮肤文件不存在: {}", pngFileName);
                 return null;

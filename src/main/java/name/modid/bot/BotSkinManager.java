@@ -17,8 +17,8 @@ import java.util.*;
  * 负责获取和应用玩家皮肤
  * 支持三种皮肤来源：
  * 1. Mojang API（正版玩家皮肤）
- * 2. 本地 PNG 文件（temporary 文件夹）
- * 3. Base64 编码的 .txt 文件（temporary 文件夹）
+ * 2. 本地 PNG 文件（run/skins 文件夹）
+ * 3. Base64 编码的 .txt 文件（run/skins 文件夹）
  */
 public class BotSkinManager {
     
@@ -31,8 +31,8 @@ public class BotSkinManager {
     // 皮肤缓存
     private static final Map<String, Property> skinCache = new HashMap<>();
     
-    // temporary 文件夹路径
-    private static final String TEMP_FOLDER = "temporary";
+    // 皮肤文件夹路径（在游戏目录下）
+    private static File skinFolder = null;
     
     // 标记是否已初始化
     private static boolean initialized = false;
@@ -92,7 +92,7 @@ public class BotSkinManager {
                 // 清除现有的纹理属性
                 profile.getProperties().removeAll("textures");
                 profile.getProperties().put("textures", defaultSkin);
-                MyBotMod.LOGGER.info("为假人 {} 应用 temporary 文件夹中的随机 Base64 皮肤", botName);
+                MyBotMod.LOGGER.info("为假人 {} 应用 run/skins 文件夹中的随机 Base64 皮肤", botName);
             } else {
                 // 即使没有皮肤文件，也要设置一个空的纹理属性，确保系统使用默认皮肤
                 // 这样可以保证 profile.getProperties().containsKey("textures") 返回 true
@@ -195,30 +195,30 @@ public class BotSkinManager {
     }
 
     /**
-     * 加载默认皮肤（从 temporary 文件夹）
+     * 加载默认皮肤（从 skins 文件夹）
      */
     private static void loadDefaultSkins() {
         try {
-            File tempFolder = new File(TEMP_FOLDER);
-            if (!tempFolder.exists() || !tempFolder.isDirectory()) {
-                MyBotMod.LOGGER.warn("temporary 文件夹不存在，将在模组初始化时创建");
+            if (skinFolder == null || !skinFolder.exists() || !skinFolder.isDirectory()) {
+                MyBotMod.LOGGER.warn("皮肤文件夹不存在: {}", skinFolder != null ? skinFolder.getAbsolutePath() : "null");
                 return;
             }
             
+            MyBotMod.LOGGER.info("正在从 {} 加载皮肤文件", skinFolder.getAbsolutePath());
+            
             // 加载 PNG 文件
-            File[] pngFiles = tempFolder.listFiles((dir, name) -> 
+            File[] pngFiles = skinFolder.listFiles((dir, name) -> 
                 name.toLowerCase().endsWith(".png")
             );
             
             if (pngFiles != null && pngFiles.length > 0) {
                 for (File file : pngFiles) {
                     PNG_SKIN_FILES.add(file);
-                    MyBotMod.LOGGER.info("找到 PNG 皮肤文件: {}", file.getName());
                 }
             }
             
             // 加载 .txt 文件（Base64 编码的皮肤数据）
-            File[] txtFiles = tempFolder.listFiles((dir, name) -> 
+            File[] txtFiles = skinFolder.listFiles((dir, name) -> 
                 name.endsWith(".txt") && !name.equalsIgnoreCase("README.txt")
             );
             
@@ -228,7 +228,6 @@ public class BotSkinManager {
                         String skinData = Files.readString(file.toPath()).trim();
                         if (!skinData.isEmpty()) {
                             DEFAULT_SKINS.add(new Property("textures", skinData, ""));
-                            MyBotMod.LOGGER.info("加载 Base64 皮肤文件: {}", file.getName());
                         }
                     } catch (Exception e) {
                         MyBotMod.LOGGER.error("加载皮肤文件 {} 失败: {}", file.getName(), e.getMessage());
@@ -236,17 +235,19 @@ public class BotSkinManager {
                 }
             }
             
+            // 统计并输出日志
             int totalSkins = PNG_SKIN_FILES.size() + DEFAULT_SKINS.size();
             if (totalSkins == 0) {
-                MyBotMod.LOGGER.warn("temporary 文件夹中没有找到任何皮肤文件");
+                MyBotMod.LOGGER.warn("皮肤文件夹中没有找到任何皮肤文件");
                 MyBotMod.LOGGER.warn("支持的格式：PNG 文件（64x64 或 64x32）和 Base64 编码的 .txt 文件");
             } else {
-                MyBotMod.LOGGER.info("成功加载 {} 个 PNG 皮肤和 {} 个 Base64 皮肤", 
-                    PNG_SKIN_FILES.size(), DEFAULT_SKINS.size());
+                MyBotMod.LOGGER.info("成功加载 {} 个皮肤文件（PNG: {}, Base64: {}）", 
+                    totalSkins, PNG_SKIN_FILES.size(), DEFAULT_SKINS.size());
             }
             
         } catch (Exception e) {
             MyBotMod.LOGGER.error("加载默认皮肤时出错: {}", e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -270,9 +271,9 @@ public class BotSkinManager {
     }
 
     /**
-     * 创建 temporary 文件夹和示例说明文件
+     * 初始化皮肤文件夹
      */
-    public static void initializeTemporaryFolder() {
+    public static void initializeSkinFolder() {
         // 防止重复初始化
         if (initialized) {
             return;
@@ -280,17 +281,41 @@ public class BotSkinManager {
         initialized = true;
         
         try {
-            File tempFolder = new File(TEMP_FOLDER);
-            if (!tempFolder.exists()) {
-                tempFolder.mkdirs();
-                MyBotMod.LOGGER.info("创建 temporary 文件夹");
+            // 获取游戏运行目录（.minecraft 或开发环境的 run 目录）
+            File gameDir = new File(".");
+            MyBotMod.LOGGER.info("游戏目录: {}", gameDir.getAbsolutePath());
+            
+            // 尝试多个可能的皮肤文件夹位置
+            File[] possibleLocations = {
+                new File(gameDir, "skins"),           // ./skins
+                new File(gameDir, "run/skins"),       // ./run/skins
+                new File("run/skins"),                // run/skins（相对路径）
+                new File("skins")                     // skins（相对路径）
+            };
+            
+            // 查找存在的皮肤文件夹
+            for (File location : possibleLocations) {
+                MyBotMod.LOGGER.info("检查皮肤文件夹: {}", location.getAbsolutePath());
+                if (location.exists() && location.isDirectory()) {
+                    skinFolder = location;
+                    MyBotMod.LOGGER.info("找到皮肤文件夹: {}", skinFolder.getAbsolutePath());
+                    break;
+                }
+            }
+            
+            // 如果没有找到，创建默认位置
+            if (skinFolder == null) {
+                skinFolder = new File(gameDir, "skins");
+                MyBotMod.LOGGER.info("创建皮肤文件夹: {}", skinFolder.getAbsolutePath());
+                skinFolder.mkdirs();
             }
             
             // 加载皮肤文件
             loadDefaultSkins();
             
         } catch (Exception e) {
-            MyBotMod.LOGGER.error("初始化 temporary 文件夹时出错: {}", e.getMessage());
+            MyBotMod.LOGGER.error("初始化皮肤文件夹时出错: {}", e.getMessage());
+            e.printStackTrace();
         }
     }
 }

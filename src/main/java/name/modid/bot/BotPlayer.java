@@ -46,6 +46,14 @@ public class BotPlayer extends ServerPlayer {
         this.creatorUUID = creator.getUUID();
         this.creatorName = creator.getName().getString();
         this.actionController = new BotActionController(this);
+        
+        // 设置假人的物理属性，使其能够跳跃、被击退和碰撞
+        // 参考 Carpet Mod 的 EntityPlayerMPFake
+        // 设置步高为 0.6（允许自动上台阶）
+        this.setMaxUpStep(0.6F);
+        
+        // 确保假人不是旁观者模式（旁观者无法被碰撞）
+        // 这在 BotManager.createBot() 中设置游戏模式时会被覆盖
     }
 
     /**
@@ -81,24 +89,83 @@ public class BotPlayer extends ServerPlayer {
             this.connection.resetPosition();
         }
         
-        // 调用父类 tick
-        // 注意：移动输入的应用在 tick() 开始时通过 ServerPlayerMixin 完成
-        super.tick();
+        // 每 200 tick（10秒）保存一次假人数据（如果启用了驻留功能）
+        if (this.level().getServer().getTickCount() % 200 == 0) {
+            var config = name.modid.config.ModConfig.getInstance();
+            if (config.botPersistence) {
+                BotPersistenceManager.saveBot(this);
+            }
+        }
         
-        // 在 super.tick() 之后调用 doTick()
-        // 这会处理其他玩家相关的逻辑
-        this.doTick();
+        try {
+            // 调用父类 tick（包含物理处理）
+            // 注意：移动输入的应用在 tick() 开始时通过 ServerPlayerMixin 完成
+            super.tick();
+            
+            // 在 super.tick() 之后调用 doTick()
+            // 这是 Carpet Mod 的做法，确保所有玩家逻辑都被处理
+            this.doTick();
+            
+            // 处理饥饿系统
+            var config = name.modid.config.ModConfig.getInstance();
+            if (!config.botHunger) {
+                // 如果禁用饥饿，保持满饱食度
+                this.getFoodData().setFoodLevel(20);
+                this.getFoodData().setSaturation(20.0F);
+            }
+        } catch (NullPointerException ignored) {
+            // Carpet Mod 的做法：捕获可能的 NPE
+            // 这可能发生在某些服务器实现中
+        }
     }
     
     /**
      * 假人死亡时的处理
-     * 从管理器中移除假人
+     * 根据配置决定是否自动重生或移除假人
      */
     @Override
     public void die(net.minecraft.world.damagesource.DamageSource damageSource) {
         super.die(damageSource);
-        // 从管理器中移除假人
-        BotManager.removeBot(this.getName().getString());
+        
+        var config = name.modid.config.ModConfig.getInstance();
+        
+        if (config.autoRespawnOnDeath) {
+            // 自动重生：延迟 20 tick（1秒）后重生
+            this.level().getServer().tell(new net.minecraft.server.TickTask(
+                this.level().getServer().getTickCount() + 20,
+                () -> {
+                    // 重生假人
+                    this.setHealth(this.getMaxHealth());
+                    this.getFoodData().setFoodLevel(20);
+                    this.removeAllEffects();
+                    
+                    // 传送回重生点或创建者位置
+                    var respawnPos = this.getRespawnPosition();
+                    if (respawnPos != null) {
+                        this.teleportTo(respawnPos.getX(), respawnPos.getY(), respawnPos.getZ());
+                    }
+                }
+            ));
+        } else {
+            // 从管理器中移除假人
+            BotManager.removeBot(this.getName().getString());
+        }
+    }
+    
+    /**
+     * 假人是否受到伤害
+     * 根据配置决定是否可以受到伤害
+     */
+    @Override
+    public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
+        var config = name.modid.config.ModConfig.getInstance();
+        
+        // 如果配置为不受伤害，则忽略所有伤害
+        if (!config.botTakeDamage) {
+            return false;
+        }
+        
+        return super.hurt(source, amount);
     }
 
     /**

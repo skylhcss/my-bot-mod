@@ -31,6 +31,18 @@ public class BotManager {
      */
     public static BotPlayer createBot(MinecraftServer server, ServerPlayer creator, String botName, Vec3 position, GameType gameMode) {
         try {
+            var config = name.modid.config.ModConfig.getInstance();
+            
+            // 检查假人功能是否启用
+            if (!config.enableBotFeature) {
+                return null;
+            }
+            
+            // 检查假人数量限制
+            if (config.maxBotCount > 0 && bots.size() >= config.maxBotCount) {
+                return null;
+            }
+            
             // 验证假人名字格式
             if (!isValidBotName(botName)) {
                 return null;
@@ -85,6 +97,13 @@ public class BotManager {
             // 第三步：将假人添加到世界（这会触发实体生成包的发送）
             level.addFreshEntity(bot);
             
+            // 第四步：发送头部旋转包，确保皮肤朝向正确
+            // 这是 Carpet Mod 的做法，确保客户端正确渲染假人的头部朝向
+            server.getPlayerList().broadcastAll(
+                new net.minecraft.network.protocol.game.ClientboundRotateHeadPacket(bot, (byte) (yaw * 256 / 360)),
+                level.dimension()
+            );
+            
             // 注册假人
             bots.put(botName.toLowerCase(), bot);
             botsByUUID.put(bot.getUUID(), bot);
@@ -136,6 +155,9 @@ public class BotManager {
                     java.util.List.of(bot.getUUID())
                 )
             );
+            
+            // 删除驻留数据
+            BotPersistenceManager.deleteBot(bot.getServer(), botName);
             
             return true;
         }

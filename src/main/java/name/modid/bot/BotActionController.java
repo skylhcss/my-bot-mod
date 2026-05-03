@@ -27,6 +27,12 @@ public class BotActionController {
     private int attackingTicks = 0;
     private int usingTicks = 0;
     
+    // 间隔动作（参考 Carpet Mod）
+    private int attackInterval = 0;  // 攻击间隔（tick）
+    private int attackIntervalCounter = 0;  // 攻击间隔计数器
+    private int useInterval = 0;  // 使用间隔（tick）
+    private int useIntervalCounter = 0;  // 使用间隔计数器
+    
     public BotActionController(BotPlayer bot) {
         this.bot = bot;
     }
@@ -38,49 +44,204 @@ public class BotActionController {
     public void tick() {
         // 处理攻击动作
         if (attacking && attackingTicks > 0) {
-            bot.swing(InteractionHand.MAIN_HAND);
-            
-            // 查找最近的可攻击实体
-            var nearestEntity = bot.level().getNearestEntity(
-                net.minecraft.world.entity.LivingEntity.class,
-                net.minecraft.world.entity.ai.targeting.TargetingConditions.DEFAULT,
-                bot,
-                bot.getX(),
-                bot.getEyeY(),
-                bot.getZ(),
-                bot.getBoundingBox().inflate(3.0D)
-            );
-            
-            // 如果找到实体，则攻击
-            if (nearestEntity != null) {
-                bot.attack(nearestEntity);
+            // 如果是间隔模式，检查间隔计数器
+            if (attackInterval > 0) {
+                attackIntervalCounter++;
+                if (attackIntervalCounter >= attackInterval) {
+                    attackIntervalCounter = 0;
+                    performAttack();
+                }
+            } else {
+                // 持续模式或单次模式
+                performAttack();
             }
             
             attackingTicks--;
             if (attackingTicks <= 0) {
                 attacking = false;
+                attackInterval = 0;
+                attackIntervalCounter = 0;
             }
         }
         
         // 处理使用物品动作
         if (using && usingTicks > 0) {
-            bot.gameMode.useItem(bot, bot.level(), bot.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
+            // 如果是间隔模式，检查间隔计数器
+            if (useInterval > 0) {
+                useIntervalCounter++;
+                if (useIntervalCounter >= useInterval) {
+                    useIntervalCounter = 0;
+                    performUse();
+                }
+            } else {
+                // 持续模式或单次模式
+                performUse();
+            }
+            
             usingTicks--;
             if (usingTicks <= 0) {
                 using = false;
+                useInterval = 0;
+                useIntervalCounter = 0;
             }
         }
         
         // 更新潜行状态
         bot.setShiftKeyDown(sneaking);
         
+        // 更新疾跑状态
+        // 必须在跳跃之前设置疾跑状态，因为疾跑会影响移动速度
+        bot.setSprinting(sprinting);
+        
         // 更新跳跃状态
-        if (jumping && bot.onGround()) {
-            bot.jumpFromGround();
+        // 使用 setJumping() 而不是直接调用 jumpFromGround()
+        // 这样可以让游戏的物理引擎正确处理跳跃
+        bot.setJumping(jumping);
+    }
+    
+    /**
+     * 执行攻击动作
+     * 参考 Carpet Mod：使用射线追踪检测视线前方的目标
+     * 1. 优先攻击视线前方的实体
+     * 2. 如果没有实体，则挖掘视线前方的方块
+     */
+    private void performAttack() {
+        bot.swing(InteractionHand.MAIN_HAND);
+        
+        // 从配置获取攻击距离
+        var config = name.modid.config.ModConfig.getInstance();
+        double reachDistance = bot.gameMode.getGameModeForPlayer().isCreative() 
+            ? config.creativeAttackReachDistance 
+            : config.attackReachDistance;
+        
+        // 如果启用了杀戮光环
+        if (config.enableKillAura) {
+            performKillAura(config.killAuraRange);
+            return;
         }
         
-        // 更新疾跑状态
-        bot.setSprinting(sprinting);
+        // 执行射线追踪
+        var hitResult = bot.pick(reachDistance, 0.0F, false);
+        
+        // 检查是否击中实体
+        // 如果禁用杀戮光环，则只攻击视线前方的实体
+        var entityHitResult = !config.enableKillAura 
+            ? getEntityHitResult(bot, reachDistance)
+            : getNearestEntity(bot, reachDistance);
+        
+        if (entityHitResult != null && entityHitResult.getEntity() instanceof net.minecraft.world.entity.LivingEntity) {
+            // 攻击实体
+            bot.attack(entityHitResult.getEntity());
+        } else if (hitResult.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            // 挖掘方块
+            var blockHitResult = (net.minecraft.world.phys.BlockHitResult) hitResult;
+            var blockPos = blockHitResult.getBlockPos();
+            var blockState = bot.level().getBlockState(blockPos);
+            
+            // 只有在非空气方块时才尝试破坏
+            if (!blockState.isAir()) {
+                // 尝试破坏方块
+                // 在创造模式下直接破坏，在生存模式下需要持续挖掘
+                if (bot.gameMode.getGameModeForPlayer().isCreative()) {
+                    // 创造模式：直接破坏
+                    bot.gameMode.destroyBlock(blockPos);
+                } else {
+                    // 生存模式：持续挖掘
+                    // 使用 continueDestroyBlock 来模拟持续挖掘
+                    bot.gameMode.destroyBlock(blockPos);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 执行杀戮光环（攻击范围内所有实体）
+     * @param range 攻击范围
+     */
+    private void performKillAura(double range) {
+        // 查找范围内的所有生物实体
+        var entities = bot.level().getEntitiesOfClass(
+            net.minecraft.world.entity.LivingEntity.class,
+            bot.getBoundingBox().inflate(range),
+            entity -> entity != bot && !entity.isSpectator()
+        );
+        
+        // 攻击所有实体
+        for (var entity : entities) {
+            bot.attack(entity);
+        }
+    }
+    
+    /**
+     * 获取最近的实体（不考虑视线）
+     * @param player 玩家
+     * @param reachDistance 攻击距离
+     * @return 实体命中结果，如果没有则返回 null
+     */
+    private net.minecraft.world.phys.EntityHitResult getNearestEntity(net.minecraft.server.level.ServerPlayer player, double reachDistance) {
+        var nearestEntity = player.level().getNearestEntity(
+            net.minecraft.world.entity.LivingEntity.class,
+            net.minecraft.world.entity.ai.targeting.TargetingConditions.DEFAULT,
+            player,
+            player.getX(),
+            player.getEyeY(),
+            player.getZ(),
+            player.getBoundingBox().inflate(reachDistance)
+        );
+        
+        if (nearestEntity != null) {
+            return new net.minecraft.world.phys.EntityHitResult(nearestEntity);
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 获取视线前方的实体
+     * 使用射线追踪检测假人视线前方的实体
+     * @param player 玩家
+     * @param reachDistance 攻击距离
+     * @return 实体命中结果，如果没有则返回 null
+     */
+    private net.minecraft.world.phys.EntityHitResult getEntityHitResult(net.minecraft.server.level.ServerPlayer player, double reachDistance) {
+        // 获取玩家的视线方向
+        var viewVector = player.getViewVector(1.0F);
+        var eyePosition = player.getEyePosition(1.0F);
+        var reachVector = eyePosition.add(viewVector.x * reachDistance, viewVector.y * reachDistance, viewVector.z * reachDistance);
+        
+        // 创建边界框用于检测
+        var aabb = player.getBoundingBox().expandTowards(viewVector.scale(reachDistance)).inflate(1.0D);
+        
+        // 查找视线范围内的所有实体
+        var entities = player.level().getEntities(player, aabb, entity -> 
+            !entity.isSpectator() && entity.isPickable()
+        );
+        
+        net.minecraft.world.phys.EntityHitResult closestHit = null;
+        double closestDistance = reachDistance;
+        
+        // 遍历所有实体，找到最近的被视线击中的实体
+        for (var entity : entities) {
+            var entityAABB = entity.getBoundingBox().inflate(entity.getPickRadius());
+            var clipResult = entityAABB.clip(eyePosition, reachVector);
+            
+            if (clipResult.isPresent()) {
+                double distance = eyePosition.distanceTo(clipResult.get());
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestHit = new net.minecraft.world.phys.EntityHitResult(entity, clipResult.get());
+                }
+            }
+        }
+        
+        return closestHit;
+    }
+    
+    /**
+     * 执行使用物品动作
+     */
+    private void performUse() {
+        bot.gameMode.useItem(bot, bot.level(), bot.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
     }
     
     /**
@@ -100,12 +261,37 @@ public class BotActionController {
     }
 
     /**
-     * 开始攻击
-     * @param continuous 是否持续攻击
+     * 开始攻击（单次）
+     * 参考 Carpet Mod: /player <name> attack once
      */
-    public void startAttack(boolean continuous) {
+    public void startAttackOnce() {
         this.attacking = true;
-        this.attackingTicks = continuous ? Integer.MAX_VALUE : 1;
+        this.attackingTicks = 1;
+        this.attackInterval = 0;
+        this.attackIntervalCounter = 0;
+    }
+
+    /**
+     * 开始攻击（持续）
+     * 参考 Carpet Mod: /player <name> attack continuous
+     */
+    public void startAttackContinuous() {
+        this.attacking = true;
+        this.attackingTicks = Integer.MAX_VALUE;
+        this.attackInterval = 0;
+        this.attackIntervalCounter = 0;
+    }
+    
+    /**
+     * 开始攻击（间隔）
+     * 参考 Carpet Mod: /player <name> attack interval <ticks>
+     * @param interval 攻击间隔（tick）
+     */
+    public void startAttackInterval(int interval) {
+        this.attacking = true;
+        this.attackingTicks = Integer.MAX_VALUE;
+        this.attackInterval = interval;
+        this.attackIntervalCounter = 0;
     }
 
     /**
@@ -114,15 +300,42 @@ public class BotActionController {
     public void stopAttack() {
         this.attacking = false;
         this.attackingTicks = 0;
+        this.attackInterval = 0;
+        this.attackIntervalCounter = 0;
     }
 
     /**
-     * 开始使用物品
-     * @param continuous 是否持续使用
+     * 开始使用物品（单次）
+     * 参考 Carpet Mod: /player <name> use once
      */
-    public void startUse(boolean continuous) {
+    public void startUseOnce() {
         this.using = true;
-        this.usingTicks = continuous ? Integer.MAX_VALUE : 1;
+        this.usingTicks = 1;
+        this.useInterval = 0;
+        this.useIntervalCounter = 0;
+    }
+
+    /**
+     * 开始使用物品（持续）
+     * 参考 Carpet Mod: /player <name> use continuous
+     */
+    public void startUseContinuous() {
+        this.using = true;
+        this.usingTicks = Integer.MAX_VALUE;
+        this.useInterval = 0;
+        this.useIntervalCounter = 0;
+    }
+    
+    /**
+     * 开始使用物品（间隔）
+     * 参考 Carpet Mod: /player <name> use interval <ticks>
+     * @param interval 使用间隔（tick）
+     */
+    public void startUseInterval(int interval) {
+        this.using = true;
+        this.usingTicks = Integer.MAX_VALUE;
+        this.useInterval = interval;
+        this.useIntervalCounter = 0;
     }
 
     /**
@@ -131,6 +344,8 @@ public class BotActionController {
     public void stopUse() {
         this.using = false;
         this.usingTicks = 0;
+        this.useInterval = 0;
+        this.useIntervalCounter = 0;
     }
 
     /**
@@ -155,39 +370,35 @@ public class BotActionController {
     }
 
     /**
-     * 向上看
-     * @param angle 角度增量
+     * 看向正上方（pitch = -90）
      */
-    public void lookUp(float angle) {
-        float newPitch = Math.max(-90.0F, bot.getXRot() - angle);
-        bot.setXRot(newPitch);
+    public void lookUp() {
+        bot.setXRot(-90.0F);
     }
 
     /**
-     * 向下看
-     * @param angle 角度增量
+     * 看向正下方（pitch = 90）
      */
-    public void lookDown(float angle) {
-        float newPitch = Math.min(90.0F, bot.getXRot() + angle);
-        bot.setXRot(newPitch);
+    public void lookDown() {
+        bot.setXRot(90.0F);
     }
 
     /**
-     * 向左看
-     * @param angle 角度增量
+     * 向左转 90 度（相对当前朝向）
      */
-    public void lookLeft(float angle) {
-        bot.setYRot(bot.getYRot() - angle);
-        bot.setYHeadRot(bot.getYRot());
+    public void lookLeft() {
+        float newYaw = bot.getYRot() - 90.0F;
+        bot.setYRot(newYaw);
+        bot.setYHeadRot(newYaw);
     }
 
     /**
-     * 向右看
-     * @param angle 角度增量
+     * 向右转 90 度（相对当前朝向）
      */
-    public void lookRight(float angle) {
-        bot.setYRot(bot.getYRot() + angle);
-        bot.setYHeadRot(bot.getYRot());
+    public void lookRight() {
+        float newYaw = bot.getYRot() + 90.0F;
+        bot.setYRot(newYaw);
+        bot.setYHeadRot(newYaw);
     }
 
     /**
@@ -295,14 +506,28 @@ public class BotActionController {
      * 骑乘附近的实体
      */
     public boolean mount() {
-        // 查找附近可骑乘的实体（排除假人）
+        var config = name.modid.config.ModConfig.getInstance();
+        
+        // 查找附近可骑乘的实体
         var nearbyEntities = bot.level().getEntities(
             bot,
             bot.getBoundingBox().inflate(3.0D),
-            entity -> entity.isPickable() 
-                && !entity.isPassenger() 
-                && !(entity instanceof BotPlayer)  // 排除假人
-                && entity != bot  // 排除自己
+            entity -> {
+                // 基本条件
+                if (!entity.isPickable() || entity.isPassenger() || entity == bot) {
+                    return false;
+                }
+                
+                // 检查是否允许骑乘其他假人
+                if (entity instanceof BotPlayer && !config.allowMountOtherBots) {
+                    return false;
+                }
+                
+                // 检查白名单
+                String entityId = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE
+                    .getKey(entity.getType()).toString();
+                return config.mountWhitelist.isEmpty() || config.mountWhitelist.contains(entityId);
+            }
         );
 
         for (var entity : nearbyEntities) {

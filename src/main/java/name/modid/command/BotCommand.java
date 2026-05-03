@@ -2,6 +2,7 @@ package name.modid.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.FloatArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -26,8 +27,17 @@ public class BotCommand {
      * 注册命令
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        var config = name.modid.config.ModConfig.getInstance();
+        
         dispatcher.register(Commands.literal("bot")
-            .requires(source -> source.hasPermission(2)) // 需要OP权限
+            .requires(source -> {
+                // 如果允许非 OP 创建假人，则所有玩家都可以使用
+                if (config.allowNonOpCreateBot) {
+                    return true;
+                }
+                // 否则需要 OP 权限（等级 2）
+                return source.hasPermission(2);
+            })
             .then(Commands.argument("botName", StringArgumentType.word())
                 // /bot <name> spawn
                 .then(Commands.literal("spawn")
@@ -44,16 +54,32 @@ public class BotCommand {
                 )
                 // /bot <name> attack
                 .then(Commands.literal("attack")
-                    .executes(ctx -> controlBotAction(ctx, "attack", false))
+                    .then(Commands.literal("once")
+                        .executes(ctx -> controlBotAction(ctx, "attack", "once", 0))
+                    )
                     .then(Commands.literal("continuous")
-                        .executes(ctx -> controlBotAction(ctx, "attack", true))
+                        .executes(ctx -> controlBotAction(ctx, "attack", "continuous", 0))
+                    )
+                    .then(Commands.literal("interval")
+                        .then(Commands.argument("ticks", IntegerArgumentType.integer(1))
+                            .executes(ctx -> controlBotAction(ctx, "attack", "interval", 
+                                IntegerArgumentType.getInteger(ctx, "ticks")))
+                        )
                     )
                 )
                 // /bot <name> use
                 .then(Commands.literal("use")
-                    .executes(ctx -> controlBotAction(ctx, "use", false))
+                    .then(Commands.literal("once")
+                        .executes(ctx -> controlBotAction(ctx, "use", "once", 0))
+                    )
                     .then(Commands.literal("continuous")
-                        .executes(ctx -> controlBotAction(ctx, "use", true))
+                        .executes(ctx -> controlBotAction(ctx, "use", "continuous", 0))
+                    )
+                    .then(Commands.literal("interval")
+                        .then(Commands.argument("ticks", IntegerArgumentType.integer(1))
+                            .executes(ctx -> controlBotAction(ctx, "use", "interval", 
+                                IntegerArgumentType.getInteger(ctx, "ticks")))
+                        )
                     )
                 )
                 // /bot <name> stop - 停止所有动作或特定动作
@@ -89,31 +115,19 @@ public class BotCommand {
                 .then(Commands.literal("unsprint")
                     .executes(ctx -> toggleBotState(ctx, "sprint", false))
                 )
-                // /bot <name> look up
+                // /bot <name> look up/down/left/right/north/south/east/west
                 .then(Commands.literal("look")
                     .then(Commands.literal("up")
-                        .executes(ctx -> lookDirection(ctx, "up", 15.0F))
-                        .then(Commands.argument("angle", FloatArgumentType.floatArg(0.0F, 90.0F))
-                            .executes(ctx -> lookDirection(ctx, "up", FloatArgumentType.getFloat(ctx, "angle")))
-                        )
+                        .executes(ctx -> lookDirection(ctx, "up"))
                     )
                     .then(Commands.literal("down")
-                        .executes(ctx -> lookDirection(ctx, "down", 15.0F))
-                        .then(Commands.argument("angle", FloatArgumentType.floatArg(0.0F, 90.0F))
-                            .executes(ctx -> lookDirection(ctx, "down", FloatArgumentType.getFloat(ctx, "angle")))
-                        )
+                        .executes(ctx -> lookDirection(ctx, "down"))
                     )
                     .then(Commands.literal("left")
-                        .executes(ctx -> lookDirection(ctx, "left", 15.0F))
-                        .then(Commands.argument("angle", FloatArgumentType.floatArg(0.0F, 180.0F))
-                            .executes(ctx -> lookDirection(ctx, "left", FloatArgumentType.getFloat(ctx, "angle")))
-                        )
+                        .executes(ctx -> lookDirection(ctx, "left"))
                     )
                     .then(Commands.literal("right")
-                        .executes(ctx -> lookDirection(ctx, "right", 15.0F))
-                        .then(Commands.argument("angle", FloatArgumentType.floatArg(0.0F, 180.0F))
-                            .executes(ctx -> lookDirection(ctx, "right", FloatArgumentType.getFloat(ctx, "angle")))
-                        )
+                        .executes(ctx -> lookDirection(ctx, "right"))
                     )
                     .then(Commands.literal("north")
                         .executes(ctx -> lookCardinal(ctx, 180.0F))
@@ -308,8 +322,9 @@ public class BotCommand {
 
     /**
      * 控制假人动作（攻击、使用）
+     * 参考 Carpet Mod: /player <name> attack <once|continuous|interval <ticks>>
      */
-    private static int controlBotAction(CommandContext<CommandSourceStack> ctx, String action, boolean continuous) {
+    private static int controlBotAction(CommandContext<CommandSourceStack> ctx, String action, String mode, int interval) {
         String botName = StringArgumentType.getString(ctx, "botName");
         BotPlayer bot = BotManager.getBot(botName);
 
@@ -319,20 +334,45 @@ public class BotCommand {
         }
 
         BotActionController controller = bot.getActionController();
+        String message = "";
         
         switch (action) {
             case "attack":
-                controller.startAttack(continuous);
-                ctx.getSource().sendSuccess(() -> Component.literal(
-                    "假人 " + botName + (continuous ? " 开始持续攻击" : " 攻击一次")), true);
+                switch (mode) {
+                    case "once":
+                        controller.startAttackOnce();
+                        message = "假人 " + botName + " 攻击一次";
+                        break;
+                    case "continuous":
+                        controller.startAttackContinuous();
+                        message = "假人 " + botName + " 开始持续攻击";
+                        break;
+                    case "interval":
+                        controller.startAttackInterval(interval);
+                        message = "假人 " + botName + " 开始间隔攻击（每 " + interval + " tick）";
+                        break;
+                }
                 break;
             case "use":
-                controller.startUse(continuous);
-                ctx.getSource().sendSuccess(() -> Component.literal(
-                    "假人 " + botName + (continuous ? " 开始持续使用物品" : " 使用物品一次")), true);
+                switch (mode) {
+                    case "once":
+                        controller.startUseOnce();
+                        message = "假人 " + botName + " 使用物品一次";
+                        break;
+                    case "continuous":
+                        controller.startUseContinuous();
+                        message = "假人 " + botName + " 开始持续使用物品";
+                        break;
+                    case "interval":
+                        controller.startUseInterval(interval);
+                        message = "假人 " + botName + " 开始间隔使用物品（每 " + interval + " tick）";
+                        break;
+                }
                 break;
         }
 
+        String finalMessage = message;
+        ctx.getSource().sendSuccess(() -> Component.literal(finalMessage), true);
         return 1;
     }
 
@@ -401,8 +441,9 @@ public class BotCommand {
 
     /**
      * 控制假人看向方向
+     * 参考 Carpet Mod：up/down 看向正上/下方，left/right 转 90 度
      */
-    private static int lookDirection(CommandContext<CommandSourceStack> ctx, String direction, float angle) {
+    private static int lookDirection(CommandContext<CommandSourceStack> ctx, String direction) {
         String botName = StringArgumentType.getString(ctx, "botName");
         BotPlayer bot = BotManager.getBot(botName);
 
@@ -412,25 +453,29 @@ public class BotCommand {
         }
 
         BotActionController controller = bot.getActionController();
+        String actionDescription = "";
         
         switch (direction) {
             case "up":
-                controller.lookUp(angle);
+                controller.lookUp();
+                actionDescription = "看向正上方";
                 break;
             case "down":
-                controller.lookDown(angle);
+                controller.lookDown();
+                actionDescription = "看向正下方";
                 break;
             case "left":
-                controller.lookLeft(angle);
+                controller.lookLeft();
+                actionDescription = "向左转 90°";
                 break;
             case "right":
-                controller.lookRight(angle);
+                controller.lookRight();
+                actionDescription = "向右转 90°";
                 break;
         }
 
-        String directionName = getDirectionName(direction);
-        ctx.getSource().sendSuccess(() -> Component.literal(
-            "假人 " + botName + " 向" + directionName + "看 " + angle + "°"), true);
+        String finalDescription = actionDescription;
+        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " " + finalDescription), true);
         return 1;
     }
 
@@ -938,9 +983,10 @@ public class BotCommand {
             boolean test4 = !bot.isSprinting();
             
             // 测试视角旋转（不需要 tick）
+            // 现在 lookRight() 会转 90 度
             float originalYaw = bot.getYRot();
-            controller.lookRight(45.0F);
-            boolean test5 = Math.abs(bot.getYRot() - (originalYaw + 45.0F)) < 0.1F;
+            controller.lookRight();
+            boolean test5 = Math.abs(bot.getYRot() - (originalYaw + 90.0F)) < 0.1F;
             
             // 清理
             BotManager.removeBot(testBotName);
