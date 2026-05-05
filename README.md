@@ -1,8 +1,9 @@
 # 我的机器人 (My Bot Mod) - Minecraft 假人模组
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)](https://www.minecraft.net/)
-[![Fabric](https://img.shields.io/badge/Fabric-0.92.2-blue.svg)](https://fabricmc.net/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LI0CENSE)
+[![Fabric](https://img.shields.io/badge/Fabric-0.92.8-blue.svg)](https://fabricmc.net/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-1.1.1a-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
 [![GitHub](https://img.shields.io/badge/GitHub-skylhcss%2Fmy--bot--mod-blue.svg)](https://github.com/skylhcss/my-bot-mod)
 
 一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric。
@@ -23,18 +24,18 @@
 - 🔧 **Carpet Mod 兼容**：自动检测并避免冲突
 
 ### 与 Carpet Mod 对比
-| 功能 | 我的机器人 | Carpet Mod |
-|------|-----------|------------|
-| 假人创建/删除 | ✅ | ✅ |
-| 移动控制 | ✅ | ✅ |
-| 攻击/使用 | ✅ | ✅ |
-| 间隔模式 | ✅ | ✅ |
-| 皮肤系统 | ✅ | ✅ |
-| 配置界面 | ✅ | 只在其附属mod中有 |
-| 假人驻留 | ✅ | 只在其附属mod中有 |
-| Carpet 兼容 | ✅ | N/A |
-| Scarpet 集成 | ❌ | ✅ |
-| **覆盖率** | **~90%** | **80%** |
+| 功能          | 我的机器人    | Carpet Mod |
+|-------------|----------|------------|
+| 假人创建/删除     | ✅        | ✅          |
+| 移动控制        | ✅        | ✅          |
+| 攻击/使用       | ✅        | ✅          |
+| 间隔模式        | ✅        | ✅          |
+| 皮肤系统        | ✅        | ✅          |
+| 配置界面        | ✅        | 只在其附属mod中有 |
+| 假人驻留        | ✅        | 只在其附属mod中有 |
+| Carpet 兼容   | ✅        | N/A        |
+| Scarpet 集成  | ❌        | ✅          |
+| **覆盖率**     | **~90%** | **80%**    |
 
 **兼容性说明**：
 - 默认启用 Carpet Mod 兼容模式
@@ -45,8 +46,8 @@
 
 ### 前置要求
 - Minecraft 1.20.1
-- Fabric Loader 0.15.11+
-- Fabric API 0.92.2+
+- Fabric Loader 0.19.2+
+- Fabric API 0.92.8+
 
 ### 安装步骤
 1. 下载最新版本的模组 JAR 文件
@@ -91,6 +92,7 @@
 
 ## 📖 详细文档
 
+- [更新日志](CHANGELOG.md) - 版本更新历史
 - [命令参考](docs/COMMANDS.md) - 所有命令的详细说明
 - [配置指南](docs/CONFIG.md) - 配置系统使用指南
 - [皮肤系统](docs/SKINS.md) - 皮肤加载和自定义
@@ -144,20 +146,38 @@
 
 ## 📝 更新日志
 
-### v1.1.1 (2026-05-03)
-- ✅ UI布局重构：左侧边栏 + 右侧内容区域
-- ✅ 修复滚动功能：完整的滚动支持和滚动条显示
-- ✅ 组件尺寸优化：统一高度24px，合理间距
-- ✅ 新增SidebarButton组件：专门的侧边栏导航按钮
-- ✅ 视觉改进：更深的背景色，绿色高亮激活状态
-- ✅ 交互优化：正确的鼠标事件处理和内容裁剪
+### v1.1.2 (2026-05-05) - 假人驻留系统完全重写
+- 🔄 **假人驻留系统完全重写**，参考 GugleCarpetAddition (GCA) 的实现
+  - 使用 SavedData 系统持久化假人数据
+  - 添加区块加载票据（Chunk Ticket）机制，确保假人所在区块保持加载
+  - 在第一个玩家加入时自动加载假人（而非服务器启动时）
+  - 支持跨维度的假人驻留（主世界、下界、末地）
+  - 每 5 秒自动刷新区块加载票据
+  - 假人每 10 秒自动保存一次状态
+- ✨ **扩展假人状态保存**
+  - 新增经验等级和进度保存
+  - 新增药水效果保存
+  - 新增疲劳度保存
+  - 计划添加物品栏和末影箱保存
+- 🔧 **优化假人管理**
+  - 创建假人时自动添加区块加载票据
+  - 删除假人时自动清理区块加载票据
+  - 假人移动到新区块时自动更新票据
+  - 服务器关闭时清理所有区块加载票据
+- 📝 **更新文档**
+  - 详细说明假人驻留的工作原理
+  - 添加区块加载机制的说明
+  - 更新配置文档
 
-### v1.0.0 (2026-05-02)
-- ✅ 完整的假人系统
-- ✅ 配置界面
-- ✅ 皮肤系统
-- ✅ 假人驻留
-- ✅ 所有核心功能
+### v1.1.1a (2026-05-05)
+- 🔄 假人驻留系统全面重构（参考 GugleCarpetAddition，改为玩家加入时加载）
+- 🔄 滑块组件完全重写，彻底解决互相干扰和拖动问题
+- 🎨 简化配置界面，删除所有黄色标题和说明文字
+- 🎨 为每个配置项添加单独的重置按钮，移除总重置按钮
+- ✅ 修复假人驻留功能在同名存档和单人存档中的问题
+- ✅ 修复滑块联动、无法连续拖动、文字重叠、完成按钮失灵、按钮跳转等问题
+
+详见 [CHANGELOG](CHANGELOG.md) 文件。
 
 ## 🤝 贡献
 

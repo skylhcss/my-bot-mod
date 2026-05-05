@@ -94,6 +94,8 @@ public class BotPlayer extends ServerPlayer {
             var config = name.modid.config.ModConfig.getInstance();
             if (config.botPersistence) {
                 BotPersistenceManager.saveBot(this);
+                // 同时更新区块加载票据（如果假人移动到了新区块）
+                BotPersistenceManager.updateChunkTicket(this);
             }
         }
         

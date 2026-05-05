@@ -61,4 +61,21 @@ public class ModernCheckbox extends Checkbox {
         graphics.fill(x, y, x + 1, y + height, color);
         graphics.fill(x + width - 1, y, x + width, y + height, color);
     }
+    
+    /**
+     * 设置选中状态
+     */
+    public void setSelected(boolean selected) {
+        // 使用反射设置私有字段
+        try {
+            var field = Checkbox.class.getDeclaredField("selected");
+            field.setAccessible(true);
+            field.set(this, selected);
+        } catch (Exception e) {
+            // 如果反射失败，尝试通过点击来切换状态
+            if (this.selected() != selected) {
+                this.onPress();
+            }
+        }
+    }
 }

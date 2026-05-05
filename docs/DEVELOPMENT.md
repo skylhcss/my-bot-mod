@@ -5,6 +5,7 @@
 ## 目录
 - [项目结构](#项目结构)
 - [核心架构](#核心架构)
+- [v1.1.1a 重构说明](#v111a-重构说明)
 - [构建项目](#构建项目)
 - [开发环境](#开发环境)
 - [代码规范](#代码规范)
@@ -25,7 +26,7 @@ my-bot-mod/
 │   │   │   │   ├── BotActionController.java  # 动作控制
 │   │   │   │   ├── BotManager.java     # 假人管理
 │   │   │   │   ├── BotSkinManager.java # 皮肤管理
-│   │   │   │   ├── BotPersistenceManager.java  # 驻留系统
+│   │   │   │   ├── BotPersistenceManager.java  # 驻留系统（v1.1.1a 重构）
 │   │   │   │   └── FakeServerGamePacketListenerImpl.java  # 网络连接
 │   │   │   ├── command/
 │   │   │   │   └── BotCommand.java     # 命令系统
@@ -40,8 +41,18 @@ my-bot-mod/
 │   └── client/
 │       ├── java/name/modid/client/
 │       │   ├── screen/                 # 配置界面
-│       │   │   ├── ConfigScreen.java
-│       │   │   ├── BotFeaturesConfigScreen.java
+│       │   │   ├── ModernConfigScreen.java  # 主配置界面
+│       │   │   ├── pages/              # 配置页面（v1.1.1a 简化）
+│       │   │   │   ├── ConfigPage.java      # 页面基类
+│       │   │   │   ├── GeneralPage.java     # 通用设置
+│       │   │   │   ├── AttackPage.java      # 攻击设置
+│       │   │   │   ├── SurvivalPage.java    # 生存设置
+│       │   │   │   ├── MountPage.java       # 骑乘设置
+│       │   │   │   └── AdvancedPage.java    # 高级设置
+│       │   │   ├── widget/             # UI 组件（v1.1.1a 重写）
+│       │   │   │   ├── ModernButton.java
+│       │   │   │   ├── ModernCheckbox.java
+│       │   │   │   └── ModernSlider.java    # 滑块（完全重写）
 │       │   │   ├── KeybindConfigScreen.java
 │       │   │   ├── AboutScreen.java
 │       │   │   └── MountWhitelistScreen.java
@@ -101,172 +112,157 @@ my-bot-mod/
 
 ---
 
-### 3. BotManager（假人管理器）
+### 3. BotPersistenceManager（驻留系统）
 
-**职责**：
-- 管理所有假人的创建、删除和查询
-- 维护假人注册表
+**v1.1.1a 重构**：
 
-**关键方法**：
-- `createBot()`：创建假人
-- `removeBot()`：删除假人
-- `getBot()`：获取假人
-- `getAllBots()`：获取所有假人
+**新架构**：
+- 继承自 `SavedData`
+- 使用 Minecraft 的数据持久化系统
+- 数据保存在 `world/data/my_bot_mod_bots.dat`
 
-**数据结构**：
-- `bots`：`Map<String, BotPlayer>` - 按名字索引
-- `botsByUUID`：`Map<UUID, BotPlayer>` - 按 UUID 索引
-
----
-
-### 4. ServerPlayerMixin（核心 Mixin）
-
-**职责**：
-- 在 `ServerPlayer.tick()` 的 HEAD 位置注入
-- 为假人更新动作状态和应用移动输入
-
-**注入点**：
-```java
-@Inject(method = "tick", at = @At("HEAD"))
-private void onTick(CallbackInfo ci) {
-    ServerPlayer player = (ServerPlayer) (Object) this;
-    if (player instanceof BotPlayer bot) {
-        bot.getActionController().tick();
-        bot.getActionController().applyMovement();
-    }
-}
-```
-
-**为什么这样做**：
-- Carpet Mod 的做法
-- 确保移动输入在物理处理之前被设置
-- 每个 tick 都更新，即使值为 0
-
----
-
-### 5. 移动系统
-
-**核心原理**：
-- 使用 `zza` 和 `xxa` 字段控制移动
-- 在 `tick()` 开始时应用移动输入
-- 让游戏物理引擎处理实际移动
-
-**关键代码**：
-```java
-public void applyMovement() {
-    float vel = sneaking ? 0.3F : 1.0F;
-    bot.zza = forward * vel;
-    bot.xxa = strafing * vel;
-}
-```
-
-**为什么有效**：
-- 每个 tick 都设置移动输入
-- 在物理处理之前设置
-- 潜行时速度降低
-
----
-
-### 6. 攻击系统
-
-**核心原理**：
-- 使用射线追踪检测视线前方的目标
-- 优先攻击实体，如果没有则挖掘方块
+**关键改进**：
+- 每个世界独立存储，避免同名存档冲突
+- 支持单人存档（延迟加载机制）
+- NBT 格式存储，更可靠
+- 自动管理数据生命周期
 
 **关键方法**：
+- `get(MinecraftServer)`：获取或创建实例
+- `save(CompoundTag)`：保存数据到 NBT
+- `load(CompoundTag)`：从 NBT 加载数据
+- `saveBot(BotPlayer)`：保存单个假人
+- `loadAllBots(MinecraftServer)`：加载所有假人
+
+---
+
+### 4. ModernSlider（滑块组件）
+
+**v1.1.1a 完全重写**：
+
+**新特性**：
+- 独立的拖拽状态（`isDragging`）
+- 严格的边界检查
+- 焦点管理系统
+- 精确的碰撞检测
+
+**关键改进**：
 ```java
-private void performAttack() {
-    // 1. 执行射线追踪
-    var hitResult = bot.pick(reachDistance, 0.0F, false);
-    
-    // 2. 检查是否击中实体
-    var entityHitResult = getEntityHitResult(bot, reachDistance);
-    
-    // 3. 攻击实体或挖掘方块
-    if (entityHitResult != null) {
-        bot.attack(entityHitResult.getEntity());
-    } else if (hitResult.getType() == HitResult.Type.BLOCK) {
-        bot.gameMode.destroyBlock(blockPos);
+// 严格的边界检查
+private void setValueFromMouse(double mouseX) {
+    if (mouseX < this.getX() || mouseX > this.getX() + this.width) {
+        return; // 不在范围内，直接返回
     }
+    // 计算新值...
+}
+
+// 焦点管理
+@Override
+public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+    if (!this.isFocused()) {
+        return false; // 只响应获得焦点的滑块
+    }
+    // 处理键盘输入...
 }
 ```
 
 ---
 
-### 7. 皮肤系统
+## v1.1.1a 重构说明
 
-**三级优先级**：
-1. Mojang API
-2. PNG 文件
-3. Base64 文件
+### 假人驻留系统重构
 
-**服务器端**：`BotSkinManager`
-- 管理皮肤数据
-- 应用皮肤到 GameProfile
+**参考实现**：GugleCarpetAddition
 
-**客户端**：`BotSkinTextureLoader`
-- 加载 PNG 文件
-- 创建纹理
+**主要变更**：
+1. **存储方式**：独立 JSON 文件 → SavedData 系统
+2. **数据位置**：`world/data/bots/*.json` → `world/data/my_bot_mod_bots.dat`
+3. **数据格式**：JSON → NBT
+4. **加载机制**：同步加载 → 延迟加载（延迟 1 秒）
 
-**Mixin**：`PlayerInfoMixin`
-- 拦截皮肤渲染
-- 应用假人皮肤
-
----
-
-### 8. 配置系统
-
-**配置类**：`ModConfig`
-- JSON 格式
-- 自动加载和保存
-- 单例模式
-
-**配置界面**：
-- `ConfigScreen`：主界面
-- `BotFeaturesConfigScreen`：功能配置
-- `KeybindConfigScreen`：快捷键
-- `AboutScreen`：关于
-- `MountWhitelistScreen`：白名单
-
----
-
-### 9. 驻留系统
-
-**核心类**：`BotPersistenceManager`
-
-**工作流程**：
-1. 服务器启动时加载假人
-2. 假人每 200 tick 自动保存
-3. 服务器关闭时保存所有假人
-
-**数据格式**：
-```json
-{
-  "name": "TestBot",
-  "uuid": "...",
-  "creatorUUID": "...",
-  "dimension": "minecraft:overworld",
-  "x": 100.0,
-  "y": 64.0,
-  "z": 200.0,
-  "yaw": 0.0,
-  "pitch": 0.0,
-  "gameMode": "survival",
-  "state": {
-    "attacking": false,
-    "using": false,
-    "sneaking": false,
-    "jumping": false,
-    "sprinting": false,
-    "forward": 0.0,
-    "strafing": 0.0,
-    "attackInterval": 0,
-    "useInterval": 0,
-    "health": 20.0,
-    "foodLevel": 20,
-    "saturation": 20.0
-  }
+**技术细节**：
+```java
+public class BotPersistenceManager extends SavedData {
+    // 使用 SavedData 系统
+    public static BotPersistenceManager get(MinecraftServer server) {
+        ServerLevel overworld = server.getLevel(ServerLevel.OVERWORLD);
+        return overworld.getDataStorage().computeIfAbsent(
+            BotPersistenceManager::load,
+            BotPersistenceManager::new,
+            DATA_NAME
+        );
+    }
+    
+    // 延迟加载，支持单人存档
+    server.tell(new TickTask(
+        server.getTickCount() + 20, // 延迟 1 秒
+        () -> { /* 加载假人 */ }
+    ));
 }
+```
+
+**优势**：
+- ✅ 每个世界独立存储
+- ✅ 避免同名存档冲突
+- ✅ 支持单人存档
+- ✅ 自动管理数据生命周期
+- ✅ 更可靠的数据持久化
+
+---
+
+### 滑块组件重写
+
+**问题**：
+- 滑块互相干扰
+- 拖动一个滑块时其他滑块也会动
+- 键盘事件影响所有滑块
+
+**解决方案**：
+1. **独立状态管理**：每个滑块有自己的 `isDragging` 状态
+2. **严格边界检查**：只响应在组件范围内的鼠标事件
+3. **焦点管理**：键盘事件只响应获得焦点的滑块
+4. **精确碰撞检测**：`clicked()` 和 `isMouseOver()` 使用严格范围检查
+
+**代码对比**：
+```java
+// 修复前
+private void setValueFromMouse(double mouseX) {
+    this.value = Mth.clamp(...); // 没有边界检查
+}
+
+// 修复后
+private void setValueFromMouse(double mouseX) {
+    if (mouseX < this.getX() || mouseX > this.getX() + this.width) {
+        return; // 严格检查
+    }
+    this.value = Mth.clamp(...);
+}
+```
+
+---
+
+### UI 界面简化
+
+**变更**：
+- 删除所有黄色分组标题（`§e§l标题`）
+- 删除所有灰色说明文本（`§7说明...`）
+- 只保留配置项本身
+
+**原因**：
+- 减少视觉干扰
+- 提高界面清晰度
+- 解决文字重叠问题
+- 更符合现代 UI 设计
+
+**示例**：
+```java
+// 修复前
+drawGroupTitle(graphics, "攻击设置", currentY);
+drawDescription(graphics, "设置假人的攻击距离", currentY + 20);
+ModernSlider slider = new ModernSlider(...);
+
+// 修复后
+ModernSlider slider = new ModernSlider(...); // 只保留配置项
 ```
 
 ---
@@ -274,8 +270,8 @@ private void performAttack() {
 ## 构建项目
 
 ### 前置要求
-- JDK 17+
-- Gradle 8.0+
+- JDK 17 或更高版本
+- Gradle 8.0 或更高版本（使用 Gradle Wrapper）
 
 ### 构建命令
 ```bash
@@ -290,140 +286,97 @@ private void performAttack() {
 
 # 运行服务器
 ./gradlew runServer
-
-# 生成源代码
-./gradlew genSources
 ```
 
 ### 输出文件
 构建后的 JAR 文件位于：
 ```
-build/libs/my-bot-mod-1.0.0.jar
+build/libs/my-bot-mod-1.1.1a.jar
 ```
 
 ---
 
 ## 开发环境
 
-### IDE 推荐
-- **IntelliJ IDEA**（推荐）
-- Eclipse
-- VS Code
-
-### 导入项目
+### IDE 设置
 
 #### IntelliJ IDEA
-1. File > Open
-2. 选择项目根目录
-3. 等待 Gradle 同步完成
-4. Run > Edit Configurations
-5. 添加 Gradle 任务：`runClient`
+1. 导入项目（Gradle 项目）
+2. 等待 Gradle 同步完成
+3. 运行配置会自动创建
 
 #### Eclipse
-1. File > Import > Gradle > Existing Gradle Project
-2. 选择项目根目录
-3. 等待导入完成
+1. 运行 `./gradlew eclipse`
+2. 导入为 Eclipse 项目
+
+#### VS Code
+1. 安装 Java Extension Pack
+2. 打开项目文件夹
+3. Gradle 会自动识别
 
 ---
 
-### 调试
+### 运行配置
 
-#### 启动调试
+#### 客户端
 ```bash
-./gradlew runClient --debug-jvm
+./gradlew runClient
 ```
 
-#### 附加调试器
-1. 在 IDE 中创建 Remote JVM Debug 配置
-2. Host: `localhost`
-3. Port: `5005`
-4. 启动调试会话
+#### 服务器
+```bash
+./gradlew runServer
+```
+
+#### 调试
+在 IDE 中使用 Gradle 任务的调试模式。
 
 ---
 
 ## 代码规范
 
-### 命名规范
-- **类名**：大驼峰（PascalCase）
-- **方法名**：小驼峰（camelCase）
-- **变量名**：小驼峰（camelCase）
-- **常量名**：全大写下划线（UPPER_SNAKE_CASE）
+### Java 代码风格
+- 使用 4 空格缩进
+- 类名使用 PascalCase
+- 方法名和变量名使用 camelCase
+- 常量使用 UPPER_SNAKE_CASE
+- 每行最多 120 个字符
 
 ### 注释规范
-- **类注释**：说明类的职责和用途
-- **方法注释**：说明方法的功能、参数和返回值
-- **复杂逻辑**：添加行内注释
-- **使用中文**：所有注释使用简体中文
-
-### 代码风格
-- **缩进**：4 个空格
-- **行长度**：不超过 120 字符
-- **大括号**：K&R 风格
-- **空行**：方法之间空一行
-
-### 示例
 ```java
 /**
- * 假人动作控制器
- * 负责控制假人的所有动作，如攻击、使用物品、移动等
+ * 类或方法的简要说明
+ * 
+ * @param param 参数说明
+ * @return 返回值说明
  */
-public class BotActionController {
-    
-    private final BotPlayer bot;
-    private boolean attacking = false;
-    
-    /**
-     * 构造函数
-     * @param bot 假人实体
-     */
-    public BotActionController(BotPlayer bot) {
-        this.bot = bot;
-    }
-    
-    /**
-     * 每 tick 更新动作状态
-     */
-    public void tick() {
-        // 处理攻击动作
-        if (attacking) {
-            performAttack();
-        }
-    }
-}
 ```
+
+### 命名规范
+- 类名：`BotPlayer`, `BotManager`
+- 接口名：`IBotController`
+- 包名：`name.modid.bot`
 
 ---
 
 ## 测试
 
-### 测试系统
-项目包含完整的测试系统，覆盖所有主要功能。
-
 ### 运行测试
-```
-/bot test              # 运行所有测试
-/bot test movement     # 测试移动功能
-/bot test actions      # 测试动作功能
-/bot test skin         # 测试皮肤系统
+```bash
+./gradlew test
 ```
 
-### 测试覆盖
-- ✅ 名字验证
-- ✅ 创建和删除
-- ✅ 移动功能
-- ✅ 动作控制
-- ✅ 皮肤系统
-- ✅ 骑乘功能
-
-### 添加测试
-在 `BotCommand.java` 中添加新的测试方法：
-
-```java
-private static int testNewFeature(ServerCommandSource source) {
-    // 测试逻辑
-    return 1;
-}
+### 游戏内测试
 ```
+/bot test
+```
+
+测试套件包括：
+- 假人创建和删除
+- 移动和动作控制
+- 攻击和使用物品
+- 皮肤加载
+- 配置系统
 
 ---
 
@@ -432,64 +385,33 @@ private static int testNewFeature(ServerCommandSource source) {
 ### 提交 Issue
 1. 检查是否已有相同 Issue
 2. 使用 Issue 模板
-3. 提供详细信息：
-   - Minecraft 版本
-   - 模组版本
-   - 错误日志
-   - 复现步骤
+3. 提供详细的复现步骤
+4. 附上日志和截图
 
 ### 提交 Pull Request
 1. Fork 项目
-2. 创建功能分支：`git checkout -b feature/new-feature`
-3. 提交更改：`git commit -m "Add new feature"`
-4. 推送分支：`git push origin feature/new-feature`
-5. 创建 Pull Request
+2. 创建功能分支
+3. 遵循代码规范
+4. 添加测试
+5. 更新文档
+6. 提交 PR
 
-### PR 要求
-- ✅ 代码符合规范
-- ✅ 添加必要的注释
-- ✅ 通过所有测试
-- ✅ 更新相关文档
-- ✅ 提供清晰的 PR 描述
-
----
-
-## 常见开发问题
-
-### Q: 如何添加新命令？
-A: 在 `BotCommand.java` 中添加新的命令方法，并在 `register()` 中注册。
-
-### Q: 如何修改假人行为？
-A: 修改 `BotActionController.java` 中的相关方法。
-
-### Q: 如何添加新的配置项？
-A: 在 `ModConfig.java` 中添加字段，并在配置界面中添加对应的 UI 元素。
-
-### Q: 如何调试 Mixin？
-A: 使用 `System.out.println()` 或日志输出，或使用 IDE 的调试功能。
-
-### Q: 如何测试皮肤系统？
-A: 在 `run/skins/` 文件夹中添加测试皮肤文件，然后运行游戏。
+### 开发流程
+1. 创建 Issue 讨论功能
+2. 获得批准后开始开发
+3. 提交 PR 并等待审核
+4. 根据反馈修改
+5. 合并到主分支
 
 ---
 
 ## 相关资源
 
-### 官方文档
 - [Fabric Wiki](https://fabricmc.net/wiki/)
 - [Minecraft Wiki](https://minecraft.fandom.com/)
-- [Mixin Documentation](https://github.com/SpongePowered/Mixin/wiki)
-
-### 参考项目
 - [Carpet Mod](https://github.com/gnembon/fabric-carpet)
-- [Fabric API](https://github.com/FabricMC/fabric)
-
-### 社区
-- [Fabric Discord](https://discord.gg/v6v4pMv)
-- [Minecraft Modding Discord](https://discord.gg/minecraft-modding)
+- [GugleCarpetAddition](https://github.com/Gu-ZT/gugle-carpet-addition)
 
 ---
 
-## 许可证
-
-本项目采用 MIT 许可证。详见 [LICENSE](../LICENSE) 文件。
+**提示**：如果你有任何问题，欢迎在 GitHub 上提 Issue 或加入我们的 Discord 服务器。

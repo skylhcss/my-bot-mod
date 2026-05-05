@@ -89,25 +89,10 @@ public class ModernConfigScreen extends Screen {
         int bottomButtonHeight = 20;
         int bottomY = this.height - PADDING - bottomButtonHeight;
         
-        // 重置按钮
+        // 完成按钮（居中）
         this.addRenderableWidget(
             new ModernButton(
-                PADDING,
-                bottomY,
-                bottomButtonWidth,
-                bottomButtonHeight,
-                Component.literal("重置为默认"),
-                button -> {
-                    config.reset();
-                    this.minecraft.setScreen(new ModernConfigScreen(parent));
-                }
-            )
-        );
-        
-        // 完成按钮
-        this.addRenderableWidget(
-            new ModernButton(
-                this.width - PADDING - bottomButtonWidth,
+                (this.width - bottomButtonWidth) / 2,
                 bottomY,
                 bottomButtonWidth,
                 bottomButtonHeight,
@@ -169,7 +154,12 @@ public class ModernConfigScreen extends Screen {
     
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // 先让页面内的组件处理点击
+        // 先让父类处理（侧边栏按钮和底部按钮）
+        if (super.mouseClicked(mouseX, mouseY, button)) {
+            return true;
+        }
+        
+        // 然后让页面内的组件处理点击
         if (currentPage != null) {
             // 调整鼠标Y坐标以匹配滚动偏移
             for (var widget : currentPage.widgets) {
@@ -186,8 +176,7 @@ public class ModernConfigScreen extends Screen {
             }
         }
         
-        // 然后让父类处理（侧边栏按钮和底部按钮）
-        return super.mouseClicked(mouseX, mouseY, button);
+        return false;
     }
     
     @Override

@@ -1,5 +1,6 @@
 package name.modid;
 
+import name.modid.bot.BotManager;
 import name.modid.bot.BotPersistenceManager;
 import name.modid.bot.BotSkinManager;
 import name.modid.command.BotCommand;
@@ -39,17 +40,35 @@ public class MyBotMod implements ModInitializer {
 			name.modid.command.BotModCommand.register(dispatcher);
 		});
 		
-		// 注册服务器生命周期事件
-		// 服务器启动完成后加载假人
-		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-			LOGGER.info("服务器启动完成，正在加载驻留假人...");
-			BotPersistenceManager.loadAllBots(server);
+		// 注册玩家加入事件，用于加载假人
+		// 参考 GCA：在第一个玩家加入时触发加载，而不是在服务器启动时
+		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
+			LOGGER.info("玩家 {} 加入，触发假人加载检查", handler.getPlayer().getName().getString());
+			BotPersistenceManager.onPlayerJoin(server, handler.getPlayer());
 		});
 		
-		// 服务器关闭前保存假人
+		// 注册服务器 tick 事件，用于定期刷新区块加载票据
+		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+			LOGGER.info("服务器启动完成，开始监控假人区块加载");
+			// 重置驻留假人加载标记
+			BotPersistenceManager.resetLoadedFlag(server);
+		});
+		
+		// 注册服务器 tick 事件（每 100 tick 刷新一次区块票据）
+		net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
+			// 每 100 tick（5秒）刷新一次
+			if (server.getTickCount() % 100 == 0) {
+				BotPersistenceManager.refreshAllChunkTickets(server);
+			}
+		});
+		
+		// 服务器关闭前保存假人并清理区块票据
 		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
 			LOGGER.info("服务器正在关闭，正在保存驻留假人...");
-			BotPersistenceManager.saveAllBots();
+			BotPersistenceManager.saveAllBots(server);
+			BotPersistenceManager.clearAllChunkTickets(server);
+			// 清理假人内存记录，确保下次启动时可以正确加载
+			BotManager.clearAllBots();
 		});
 
 		LOGGER.info("假人模组加载完成！");

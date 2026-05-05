@@ -108,6 +108,14 @@ public class BotManager {
             bots.put(botName.toLowerCase(), bot);
             botsByUUID.put(bot.getUUID(), bot);
             
+            // 如果启用了驻留功能，添加区块加载票据
+            if (config.botPersistence) {
+                BotPersistenceManager manager = BotPersistenceManager.get(server);
+                if (manager != null) {
+                    manager.addChunkTicket(server, botName, level, bot.blockPosition());
+                }
+            }
+            
             return bot;
         } catch (Exception e) {
             e.printStackTrace();
@@ -213,9 +221,33 @@ public class BotManager {
 
     /**
      * 检查假人是否存在
+     * 不仅检查内存中的记录，还要验证假人是否真的存在于世界中
      */
     public static boolean hasBot(String botName) {
-        return bots.containsKey(botName.toLowerCase());
+        BotPlayer bot = bots.get(botName.toLowerCase());
+        if (bot == null) {
+            return false;
+        }
+        
+        // 检查假人是否已被移除
+        if (bot.isRemoved()) {
+            // 如果假人已被移除，清理内存中的记录
+            bots.remove(botName.toLowerCase());
+            botsByUUID.remove(bot.getUUID());
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 清理所有假人的内存记录
+     * 在服务器关闭时调用，确保下次启动时可以正确加载驻留假人
+     */
+    public static void clearAllBots() {
+        bots.clear();
+        botsByUUID.clear();
+        System.out.println("[假人模组] 清理了所有假人的内存记录");
     }
 
     /**

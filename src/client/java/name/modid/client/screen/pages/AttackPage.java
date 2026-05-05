@@ -3,6 +3,7 @@ package name.modid.client.screen.pages;
 import name.modid.client.screen.ModernConfigScreen;
 import name.modid.client.screen.widget.ModernCheckbox;
 import name.modid.client.screen.widget.ModernSlider;
+import name.modid.client.screen.widget.ResetButton;
 import name.modid.config.ModConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -28,56 +29,71 @@ public class AttackPage extends ConfigPage {
     protected void initPage() {
         int currentY = contentY + 20;
         
-        // === 攻击距离设置 ===
-        // 标题占位（20px）
-        currentY += 20;
-        
-        // 攻击距离滑块（需要额外空间显示文本）
-        currentY += 15; // 文本空间
+        // 生存模式攻击距离滑块
         ModernSlider attackReachSlider = new ModernSlider(
             contentX + 10,
             currentY,
-            contentWidth - 20,
+            contentWidth - 40,
             ITEM_HEIGHT,
             1.0,
             10.0,
             config.attackReachDistance,
-            value -> Component.literal(String.format("攻击距离: %.1f 格", value)),
-            value -> config.attackReachDistance = value
+            value -> Component.literal(String.format("生存模式攻击距离: %.1f 格", value)),
+            value -> {
+                config.attackReachDistance = value;
+                config.save();
+            }
         );
         addWidget(attackReachSlider);
-        currentY += ITEM_HEIGHT + ITEM_SPACING + 10;
+        
+        // 重置按钮
+        ResetButton resetAttackReach = new ResetButton(
+            contentX + contentWidth - 26,
+            currentY,
+            () -> {
+                config.attackReachDistance = 4.5;
+                config.save();
+                attackReachSlider.setCurrentValue(4.5);
+            }
+        );
+        addWidget(resetAttackReach);
+        currentY += ITEM_HEIGHT + 30;
         
         // 创造模式攻击距离滑块
-        currentY += 15; // 文本空间
         ModernSlider creativeAttackReachSlider = new ModernSlider(
             contentX + 10,
             currentY,
-            contentWidth - 20,
+            contentWidth - 40,
             ITEM_HEIGHT,
             1.0,
             15.0,
             config.creativeAttackReachDistance,
             value -> Component.literal(String.format("创造模式攻击距离: %.1f 格", value)),
-            value -> config.creativeAttackReachDistance = value
+            value -> {
+                config.creativeAttackReachDistance = value;
+                config.save();
+            }
         );
         addWidget(creativeAttackReachSlider);
-        currentY += ITEM_HEIGHT + ITEM_SPACING + 10;
         
-        // 说明文本占位
-        currentY += 15;
-        
-        currentY += GROUP_SPACING;
-        
-        // === 杀戮光环设置 ===
-        // 标题占位（20px）
-        currentY += 20;
+        // 重置按钮
+        ResetButton resetCreativeAttackReach = new ResetButton(
+            contentX + contentWidth - 26,
+            currentY,
+            () -> {
+                config.creativeAttackReachDistance = 6.0;
+                config.save();
+                creativeAttackReachSlider.setCurrentValue(6.0);
+            }
+        );
+        addWidget(resetCreativeAttackReach);
+        currentY += ITEM_HEIGHT + 30;
         
         // 启用杀戮光环
         ModernCheckbox killAuraCheckbox = new ModernCheckbox(
             contentX + 10,
             currentY,
-            contentWidth - 20,
+            contentWidth - 40,
             ITEM_HEIGHT,
             Component.literal("启用杀戮光环"),
             config.enableKillAura
@@ -90,77 +106,53 @@ public class AttackPage extends ConfigPage {
             }
         };
         addWidget(killAuraCheckbox);
-        currentY += ITEM_HEIGHT + ITEM_SPACING + 10;
+        
+        // 重置按钮
+        ResetButton resetKillAura = new ResetButton(
+            contentX + contentWidth - 26,
+            currentY,
+            () -> {
+                config.enableKillAura = false;
+                config.save();
+                killAuraCheckbox.setSelected(false);
+            }
+        );
+        addWidget(resetKillAura);
+        currentY += ITEM_HEIGHT + 20;
         
         // 杀戮光环范围滑块
-        currentY += 15; // 文本空间
         ModernSlider killAuraRangeSlider = new ModernSlider(
             contentX + 10,
             currentY,
-            contentWidth - 20,
+            contentWidth - 40,
             ITEM_HEIGHT,
             1.0,
             10.0,
             config.killAuraRange,
             value -> Component.literal(String.format("杀戮光环范围: %.1f 格", value)),
-            value -> config.killAuraRange = value
+            value -> {
+                config.killAuraRange = value;
+                config.save();
+            }
         );
         addWidget(killAuraRangeSlider);
-        currentY += ITEM_HEIGHT + ITEM_SPACING + 10;
         
-        // 说明文本占位（30px）
-        currentY += 30;
+        // 重置按钮
+        ResetButton resetKillAuraRange = new ResetButton(
+            contentX + contentWidth - 26,
+            currentY,
+            () -> {
+                config.killAuraRange = 4.0;
+                config.save();
+                killAuraRangeSlider.setCurrentValue(4.0);
+            }
+        );
+        addWidget(resetKillAuraRange);
+        currentY += ITEM_HEIGHT + 30;
     }
     
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        int currentY = contentY + 20;
-        
-        // 绘制攻击距离标题
-        drawGroupTitle(graphics, "攻击距离", currentY);
-        currentY += 20;
-        
-        // 跳过滑块位置（包括文本空间）
-        currentY += 15 + ITEM_HEIGHT + ITEM_SPACING + 10;
-        currentY += 15 + ITEM_HEIGHT + ITEM_SPACING + 10;
-        
-        // 绘制说明
-        int descY = (int)(currentY - scrollOffset);
-        if (descY >= contentY && descY <= contentY + contentHeight) {
-            graphics.drawString(font, 
-                Component.literal("§7设置假人的攻击距离（格数）"), 
-                contentX + 10, 
-                descY, 
-                0xAAAAAA);
-        }
-        currentY += 15;
-        
-        currentY += GROUP_SPACING;
-        
-        // 绘制杀戮光环标题
-        drawGroupTitle(graphics, "杀戮光环", currentY);
-        currentY += 20;
-        
-        // 跳过复选框和滑块位置
-        currentY += ITEM_HEIGHT + ITEM_SPACING + 10;
-        currentY += 15 + ITEM_HEIGHT + ITEM_SPACING + 10;
-        
-        // 绘制杀戮光环说明
-        int desc2Y = (int)(currentY - scrollOffset);
-        if (desc2Y >= contentY && desc2Y <= contentY + contentHeight) {
-            graphics.drawString(font, 
-                Component.literal("§7启用后，假人会攻击范围内的所有实体"), 
-                contentX + 10, 
-                desc2Y, 
-                0xAAAAAA);
-            
-            graphics.drawString(font, 
-                Component.literal("§7禁用时，假人只攻击视线前方的目标"), 
-                contentX + 10, 
-                desc2Y + 15, 
-                0xAAAAAA);
-        }
-        
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 }
