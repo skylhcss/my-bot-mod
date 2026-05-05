@@ -49,7 +49,7 @@ saves/
 screenshots/
 resourcepacks/
 shaderpacks/
-config/
+/config/
 mods/
 *.log
 
