@@ -1,5 +1,7 @@
 package name.modid.client.screen.pages;
 
+import name.modid.client.screen.widget.DesignTokens;
+import name.modid.client.screen.widget.SectionCard;
 import name.modid.config.ModConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -12,70 +14,59 @@ import java.util.List;
 
 /**
  * 配置页面基类
- * 所有配置页面都继承此类
+ * 使用 SectionCard 系统组织配置项，使用 pose translate 实现滚动
  */
 public abstract class ConfigPage {
     
     protected final ModConfig config;
-    public final List<AbstractWidget> widgets = new ArrayList<>();
     protected Minecraft minecraft;
     protected Font font;
     
-    protected int width;
-    protected int height;
-    protected int contentX;
-    protected int contentY;
-    protected int contentWidth;
-    protected int contentHeight;
+    // Section 卡片列表
+    protected final List<SectionCard> sections = new ArrayList<>();
     
-    // 滚动相关
+    // 布局参数（由主屏幕设置）
+    protected int scrollAreaX;
+    protected int scrollAreaY;
+    protected int scrollAreaWidth;
+    protected int scrollAreaHeight;
+    protected int contentWidth; // 内容区宽度（面板内减去边距）
+    
+    // 滚动状态
     public double scrollOffset = 0;
     protected double maxScrollOffset = 0;
-    
-    // 布局常量
-    protected static final int ITEM_HEIGHT = 24;
-    protected static final int ITEM_SPACING = 6;
-    protected static final int GROUP_SPACING = 20;
+    protected int virtualContentHeight = 0;
     
     public ConfigPage(ModConfig config) {
         this.config = config;
     }
     
     /**
-     * 初始化页面
+     * 初始化页面（由主屏幕调用）
      */
-    public void init(int screenWidth, int screenHeight, Minecraft minecraft, Font font) {
-        this.width = screenWidth;
-        this.height = screenHeight;
+    public void init(int areaX, int areaY, int areaWidth, int areaHeight, Minecraft minecraft, Font font) {
+        this.scrollAreaX = areaX;
+        this.scrollAreaY = areaY;
+        this.scrollAreaWidth = areaWidth;
+        this.scrollAreaHeight = areaHeight;
+        this.contentWidth = areaWidth - DesignTokens.SCROLL_AREA_PADDING * 2;
         this.minecraft = minecraft;
         this.font = font;
         
-        // 计算内容区域（从主屏幕获取）
-        int sidebarWidth = 80;
-        int padding = 10;
-        int titleHeight = 30;
-        int buttonHeight = 20;
+        this.sections.clear();
+        this.scrollOffset = 0;
         
-        this.contentX = sidebarWidth + padding * 2;
-        this.contentY = titleHeight + padding;
-        this.contentWidth = screenWidth - sidebarWidth - padding * 4;
-        this.contentHeight = screenHeight - titleHeight - padding * 3 - buttonHeight;
+        // 子类构建 Section 卡片
+        buildPage();
         
-        // 清空组件
-        widgets.clear();
-        scrollOffset = 0;
-        
-        // 子类实现具体初始化
-        initPage();
-        
-        // 计算最大滚动偏移
-        calculateMaxScroll();
+        // 布局所有卡片并计算虚拟高度
+        layoutSections();
     }
     
     /**
-     * 子类实现具体的页面初始化
+     * 子类实现：构建 Section 卡片和配置项
      */
-    protected abstract void initPage();
+    protected abstract void buildPage();
     
     /**
      * 获取页面标题
@@ -83,68 +74,81 @@ public abstract class ConfigPage {
     public abstract Component getTitle();
     
     /**
-     * 渲染页面
+     * 添加一个 Section 卡片
      */
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 启用裁剪
-        graphics.enableScissor(contentX, contentY, contentX + contentWidth, contentY + contentHeight);
+    protected SectionCard addSection(String title) {
+        SectionCard card = new SectionCard(title);
+        sections.add(card);
+        return card;
+    }
+    
+    /**
+     * 布局所有 Section 卡片，计算虚拟内容高度
+     */
+    private void layoutSections() {
+        int cardX = scrollAreaX + DesignTokens.SCROLL_AREA_PADDING;
+        int currentY = scrollAreaY + DesignTokens.CONTENT_TOP;
         
-        // 渲染所有组件
-        for (AbstractWidget widget : widgets) {
-            // 计算组件在屏幕上的实际位置
-            int screenY = (int)(widget.getY() - scrollOffset);
-            
-            // 只渲染可见的组件
-            if (screenY + widget.getHeight() >= contentY && screenY <= contentY + contentHeight) {
-                // 临时设置组件位置
-                int originalY = widget.getY();
-                widget.setY(screenY);
-                
-                // 渲染组件
-                widget.render(graphics, mouseX, mouseY, partialTick);
-                
-                // 恢复原始位置
-                widget.setY(originalY);
+        for (int i = 0; i < sections.size(); i++) {
+            SectionCard card = sections.get(i);
+            int cardHeight = card.layout(cardX, currentY, contentWidth);
+            currentY += cardHeight;
+            if (i < sections.size() - 1) {
+                currentY += DesignTokens.CARD_GAP;
             }
         }
         
-        // 禁用裁剪
+        this.virtualContentHeight = currentY - scrollAreaY;
+        this.maxScrollOffset = Math.max(0, virtualContentHeight - scrollAreaHeight);
+    }
+    
+    /**
+     * 渲染页面
+     */
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 裁剪区域（屏幕绝对坐标，不受 pose 影响）
+        graphics.enableScissor(scrollAreaX, scrollAreaY, scrollAreaX + scrollAreaWidth, scrollAreaY + scrollAreaHeight);
+        
+        // 使用 pose translate 偏移渲染
+        graphics.pose().pushPose();
+        graphics.pose().translate(0, -scrollOffset, 0);
+        
+        // 调整鼠标 Y 坐标以匹配虚拟坐标
+        double adjustedMouseY = mouseY + scrollOffset;
+        
+        for (SectionCard card : sections) {
+            card.render(graphics, mouseX, (int) adjustedMouseY, partialTick);
+        }
+        
+        graphics.pose().popPose();
         graphics.disableScissor();
         
-        // 绘制滚动条
+        // 绘制滚动条（不受 translate 影响）
         if (maxScrollOffset > 0) {
             renderScrollbar(graphics);
         }
     }
     
-    /**
-     * 渲染滚动条
-     */
     private void renderScrollbar(GuiGraphics graphics) {
-        int scrollbarX = contentX + contentWidth - 6;
-        int scrollbarY = contentY;
-        int scrollbarHeight = contentHeight;
+        int sbX = scrollAreaX + scrollAreaWidth - DesignTokens.SCROLLBAR_WIDTH - 2;
+        int sbY = scrollAreaY;
+        int sbH = scrollAreaHeight;
         
-        // 绘制滚动条背景
-        graphics.fill(scrollbarX, scrollbarY, scrollbarX + 6, scrollbarY + scrollbarHeight, 0x40FFFFFF);
+        graphics.fill(sbX, sbY, sbX + DesignTokens.SCROLLBAR_WIDTH, sbY + sbH, DesignTokens.SCROLLBAR_TRACK);
         
-        // 计算滚动条滑块的大小和位置
-        double contentRatio = (double) contentHeight / (contentHeight + maxScrollOffset);
-        int thumbHeight = Math.max(20, (int)(scrollbarHeight * contentRatio));
-        int thumbY = scrollbarY + (int)((scrollbarHeight - thumbHeight) * (scrollOffset / maxScrollOffset));
+        double ratio = (double) sbH / virtualContentHeight;
+        int thumbH = Math.max(DesignTokens.SCROLLBAR_MIN_THUMB, (int) (sbH * ratio));
+        int thumbY = sbY + (int) ((sbH - thumbH) * (scrollOffset / maxScrollOffset));
         
-        // 绘制滚动条滑块
-        graphics.fill(scrollbarX, thumbY, scrollbarX + 6, thumbY + thumbHeight, 0x80FFFFFF);
+        graphics.fill(sbX, thumbY, sbX + DesignTokens.SCROLLBAR_WIDTH, thumbY + thumbH, DesignTokens.SCROLLBAR_THUMB);
     }
     
     /**
-     * 处理鼠标滚动
+     * 处理鼠标滚轮
      */
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        // 检查鼠标是否在内容区域内
-        if (mouseX >= contentX && mouseX <= contentX + contentWidth &&
-            mouseY >= contentY && mouseY <= contentY + contentHeight) {
-            
+        if (mouseX >= scrollAreaX && mouseX <= scrollAreaX + scrollAreaWidth
+            && mouseY >= scrollAreaY && mouseY <= scrollAreaY + scrollAreaHeight) {
             if (maxScrollOffset > 0) {
                 scrollOffset = Math.max(0, Math.min(maxScrollOffset, scrollOffset - scrollY * 15));
                 return true;
@@ -154,68 +158,52 @@ public abstract class ConfigPage {
     }
     
     /**
-     * 处理鼠标点击
+     * 处理鼠标点击（虚拟坐标）
      */
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // 应用滚动偏移
+        if (mouseX < scrollAreaX || mouseX > scrollAreaX + scrollAreaWidth) return false;
+        
         double adjustedMouseY = mouseY + scrollOffset;
         
-        for (AbstractWidget widget : widgets) {
-            if (widget.isMouseOver(mouseX, adjustedMouseY)) {
-                return widget.mouseClicked(mouseX, adjustedMouseY, button);
+        for (SectionCard card : sections) {
+            for (AbstractWidget widget : card.getAllWidgets()) {
+                if (widget.isMouseOver(mouseX, adjustedMouseY) && widget.mouseClicked(mouseX, adjustedMouseY, button)) {
+                    return true;
+                }
             }
         }
         return false;
     }
     
     /**
-     * 计算最大滚动偏移
+     * 处理鼠标拖动
      */
-    protected void calculateMaxScroll() {
-        if (widgets.isEmpty()) {
-            maxScrollOffset = 0;
-            return;
-        }
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        double adjustedMouseY = mouseY + scrollOffset;
         
-        // 找到最底部的组件
-        int maxY = 0;
-        for (AbstractWidget widget : widgets) {
-            int widgetBottom = widget.getY() + widget.getHeight();
-            if (widgetBottom > maxY) {
-                maxY = widgetBottom;
+        for (SectionCard card : sections) {
+            for (AbstractWidget widget : card.getAllWidgets()) {
+                if (widget.mouseDragged(mouseX, adjustedMouseY, button, dragX, dragY)) {
+                    return true;
+                }
             }
         }
+        return false;
+    }
+    
+    /**
+     * 处理鼠标释放
+     */
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        double adjustedMouseY = mouseY + scrollOffset;
         
-        // 计算需要滚动的距离
-        int contentBottom = contentY + contentHeight;
-        maxScrollOffset = Math.max(0, maxY - contentBottom + 20);
-    }
-    
-    /**
-     * 添加组件
-     */
-    protected void addWidget(AbstractWidget widget) {
-        widgets.add(widget);
-    }
-    
-    /**
-     * 绘制分组标题
-     */
-    protected void drawGroupTitle(GuiGraphics graphics, String title, int y) {
-        int screenY = (int)(y - scrollOffset);
-        if (screenY >= contentY - 20 && screenY <= contentY + contentHeight) {
-            graphics.drawString(font, Component.literal("§e§l" + title), contentX + 10, screenY, 0xFFFF55);
+        for (SectionCard card : sections) {
+            for (AbstractWidget widget : card.getAllWidgets()) {
+                if (widget.mouseReleased(mouseX, adjustedMouseY, button)) {
+                    return true;
+                }
+            }
         }
-    }
-    
-    /**
-     * 绘制描述文本
-     */
-    protected void drawDescription(GuiGraphics graphics, String description, int y) {
-        int screenY = (int)(y - scrollOffset);
-        if (screenY >= contentY - 20 && screenY <= contentY + contentHeight) {
-            graphics.drawString(font, Component.literal("§7" + description), contentX + 10, screenY, 0xAAAAAA);
-        }
+        return false;
     }
 }
-
