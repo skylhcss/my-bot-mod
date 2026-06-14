@@ -225,8 +225,8 @@ public class BotModCommand {
      * 重新加载配置
      */
     private static int reloadConfig(CommandContext<CommandSourceStack> ctx) {
-        // 重新加载配置（通过重新获取实例）
-        ModConfig.getInstance();
+        // 重新从磁盘加载配置
+        ModConfig.reload();
         ctx.getSource().sendSuccess(() -> Component.literal("§a配置已重新加载"), true);
         return 1;
     }

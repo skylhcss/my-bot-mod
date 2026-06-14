@@ -135,10 +135,11 @@ public class BotSkinManager {
      * @return 皮肤属性，如果失败则返回 null
      */
     private static Property fetchSkinFromMojang(String playerName) {
+        HttpURLConnection connection = null;
         try {
             // 第一步：获取玩家 UUID
             String uuidUrl = "https://api.mojang.com/users/profiles/minecraft/" + playerName;
-            HttpURLConnection connection = (HttpURLConnection) new URL(uuidUrl).openConnection();
+            connection = (HttpURLConnection) new URL(uuidUrl).openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(5000);
             connection.setReadTimeout(5000);
@@ -148,15 +149,19 @@ public class BotSkinManager {
                 return null;
             }
             
-            BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line);
+            String uuidJsonStr;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                uuidJsonStr = response.toString();
+            } finally {
+                connection.disconnect();
             }
-            reader.close();
             
-            JsonObject uuidJson = JsonParser.parseString(response.toString()).getAsJsonObject();
+            JsonObject uuidJson = JsonParser.parseString(uuidJsonStr).getAsJsonObject();
             String uuid = uuidJson.get("id").getAsString();
             
             // 第二步：获取玩家皮肤数据
@@ -171,14 +176,19 @@ public class BotSkinManager {
                 return null;
             }
             
-            reader = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            response = new StringBuilder();
-            while ((line = reader.readLine()) != null) {
-                response.append(line);
+            String profileJsonStr;
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                profileJsonStr = response.toString();
+            } finally {
+                connection.disconnect();
             }
-            reader.close();
             
-            JsonObject profileJson = JsonParser.parseString(response.toString()).getAsJsonObject();
+            JsonObject profileJson = JsonParser.parseString(profileJsonStr).getAsJsonObject();
             if (profileJson.has("properties")) {
                 JsonObject properties = profileJson.getAsJsonArray("properties").get(0).getAsJsonObject();
                 String value = properties.get("value").getAsString();
@@ -189,6 +199,10 @@ public class BotSkinManager {
             
         } catch (Exception e) {
             MyBotMod.LOGGER.debug("从 Mojang API 获取玩家 {} 的皮肤失败: {}", playerName, e.getMessage());
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
         
         return null;

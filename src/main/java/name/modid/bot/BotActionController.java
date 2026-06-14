@@ -123,11 +123,8 @@ public class BotActionController {
         // 执行射线追踪
         var hitResult = bot.pick(reachDistance, 0.0F, false);
         
-        // 检查是否击中实体
-        // 如果禁用杀戮光环，则只攻击视线前方的实体
-        var entityHitResult = !config.enableKillAura 
-            ? getEntityHitResult(bot, reachDistance)
-            : getNearestEntity(bot, reachDistance);
+        // 检查是否击中实体（此处 killAura 已在上方 return，无需分支判断）
+        var entityHitResult = getEntityHitResult(bot, reachDistance);
         
         if (entityHitResult != null && entityHitResult.getEntity() instanceof net.minecraft.world.entity.LivingEntity) {
             // 攻击实体
@@ -170,30 +167,6 @@ public class BotActionController {
         for (var entity : entities) {
             bot.attack(entity);
         }
-    }
-    
-    /**
-     * 获取最近的实体（不考虑视线）
-     * @param player 玩家
-     * @param reachDistance 攻击距离
-     * @return 实体命中结果，如果没有则返回 null
-     */
-    private net.minecraft.world.phys.EntityHitResult getNearestEntity(net.minecraft.server.level.ServerPlayer player, double reachDistance) {
-        var nearestEntity = player.level().getNearestEntity(
-            net.minecraft.world.entity.LivingEntity.class,
-            net.minecraft.world.entity.ai.targeting.TargetingConditions.DEFAULT,
-            player,
-            player.getX(),
-            player.getEyeY(),
-            player.getZ(),
-            player.getBoundingBox().inflate(reachDistance)
-        );
-        
-        if (nearestEntity != null) {
-            return new net.minecraft.world.phys.EntityHitResult(nearestEntity);
-        }
-        
-        return null;
     }
     
     /**

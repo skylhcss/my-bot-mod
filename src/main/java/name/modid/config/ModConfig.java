@@ -159,6 +159,15 @@ public class ModConfig {
     }
     
     /**
+     * 重新加载配置文件
+     * 从磁盘重新读取配置，替换当前单例
+     */
+    public static ModConfig reload() {
+        INSTANCE = load();
+        return INSTANCE;
+    }
+    
+    /**
      * 从文件加载配置
      */
     private static ModConfig load() {

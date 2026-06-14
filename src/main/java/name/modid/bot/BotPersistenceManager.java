@@ -14,6 +14,8 @@ import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 
+import name.modid.MyBotMod;
+
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -147,7 +149,7 @@ public class BotPersistenceManager extends SavedData {
                         manager.botsData.put(name.toLowerCase(), data);
                     }
                 } catch (Exception e) {
-                    System.err.println("[假人模组] 无法加载假人数据: " + name);
+                    MyBotMod.LOGGER.error("无法加载假人数据: {}", name);
                     e.printStackTrace();
                 }
             }
@@ -291,7 +293,7 @@ public class BotPersistenceManager extends SavedData {
                     field.setAccessible(true);
                     data.state.useInterval = (int) field.get(controller);
                 } catch (Exception e) {
-                    System.err.println("[假人模组] 无法保存假人动作状态: " + e.getMessage());
+                    MyBotMod.LOGGER.error("无法保存假人动作状态: {}", e.getMessage());
                 }
                 
                 // 保存健康和饥饿
@@ -316,10 +318,10 @@ public class BotPersistenceManager extends SavedData {
             manager.botsData.put(data.name.toLowerCase(), data);
             manager.setDirty();
             
-            System.out.println("[假人模组] 保存假人数据: " + data.name + " 在 " + data.dimension);
+            MyBotMod.LOGGER.info("保存假人数据: {} 在 {}", data.name, data.dimension);
             
         } catch (Exception e) {
-            System.err.println("[假人模组] 无法保存假人数据: " + e.getMessage());
+            MyBotMod.LOGGER.error("无法保存假人数据: {}", e.getMessage());
             e.printStackTrace();
         }
     }
@@ -330,13 +332,12 @@ public class BotPersistenceManager extends SavedData {
     public static void deleteBot(MinecraftServer server, String botName) {
         BotPersistenceManager manager = get(server);
         if (manager != null) {
+            // 必须先移除区块票据，因为 removeChunkTicket 需要 botsData 中的维度信息
+            manager.removeChunkTicket(server, botName);
             manager.botsData.remove(botName.toLowerCase());
             
-            // 移除区块加载票据
-            manager.removeChunkTicket(server, botName);
-            
             manager.setDirty();
-            System.out.println("[假人模组] 删除假人数据: " + botName);
+            MyBotMod.LOGGER.info("删除假人数据: {}", botName);
         }
     }
     
@@ -353,7 +354,7 @@ public class BotPersistenceManager extends SavedData {
         // 记录票据
         botChunkTickets.put(botName.toLowerCase(), chunkPos);
         
-        System.out.println("[假人模组] 为假人 " + botName + " 添加区块加载票据: " + chunkPos);
+        MyBotMod.LOGGER.info("为假人 {} 添加区块加载票据: {}", botName, chunkPos);
     }
     
     /**
@@ -374,7 +375,7 @@ public class BotPersistenceManager extends SavedData {
                 
                 if (level != null) {
                     level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
-                    System.out.println("[假人模组] 移除假人 " + botName + " 的区块加载票据: " + chunkPos);
+                    MyBotMod.LOGGER.info("移除假人 {} 的区块加载票据: {}", botName, chunkPos);
                 }
             }
         }
@@ -449,14 +450,14 @@ public class BotPersistenceManager extends SavedData {
         // 注意：这里检查的是是否加载过驻留数据，而不是当前是否有假人
         // 因为玩家可能在游戏中创建了新假人，但驻留的假人还没加载
         if (worldLoadedFlags.getOrDefault(worldId, false)) {
-            System.out.println("[假人模组] 驻留假人已加载过（世界: " + worldId + "），跳过");
+            MyBotMod.LOGGER.info("驻留假人已加载过（世界: {}），跳过", worldId);
             return;
         }
         
         // 标记为已加载
         worldLoadedFlags.put(worldId, true);
         
-        System.out.println("[假人模组] 检测到玩家 " + player.getName().getString() + " 加入，准备加载驻留假人");
+        MyBotMod.LOGGER.info("检测到玩家 {} 加入，准备加载驻留假人", player.getName().getString());
         
         // 延迟加载，确保玩家完全加入世界
         // 参考 GCA：延迟 40 tick（2秒）
@@ -498,12 +499,12 @@ public class BotPersistenceManager extends SavedData {
         List<BotData> bots = getAllBots(server);
         
         if (bots.isEmpty()) {
-            System.out.println("[假人模组] 没有需要加载的驻留假人");
+            MyBotMod.LOGGER.info("没有需要加载的驻留假人");
             return;
         }
         
-        System.out.println("[假人模组] 开始加载 " + bots.size() + " 个驻留假人...");
-        System.out.println("[假人模组] 当前内存中的假人数量: " + BotManager.getAllBots().size());
+        MyBotMod.LOGGER.info("开始加载 {} 个驻留假人...", bots.size());
+        MyBotMod.LOGGER.info("当前内存中的假人数量: {}", BotManager.getAllBots().size());
         
         int loadedCount = 0;
         int skippedCount = 0;
@@ -511,17 +512,17 @@ public class BotPersistenceManager extends SavedData {
         
         for (BotData data : bots) {
             try {
-                System.out.println("[假人模组] 正在处理假人: " + data.name);
+                MyBotMod.LOGGER.info("正在处理假人: {}", data.name);
                 
                 // 检查假人是否已经存在（可能是在游戏中创建的）
                 // hasBot() 方法会检查假人是否真的存在于世界中
                 if (BotManager.hasBot(data.name)) {
-                    System.out.println("[假人模组] 假人 " + data.name + " 已存在于世界中，跳过加载");
+                    MyBotMod.LOGGER.info("假人 {} 已存在于世界中，跳过加载", data.name);
                     skippedCount++;
                     continue;
                 }
                 
-                System.out.println("[假人模组] 假人 " + data.name + " 不存在，开始创建...");
+                MyBotMod.LOGGER.info("假人 {} 不存在，开始创建...", data.name);
                 
                 // 获取目标世界
                 ServerLevel level = server.getLevel(
@@ -532,7 +533,7 @@ public class BotPersistenceManager extends SavedData {
                 );
                 
                 if (level == null) {
-                    System.err.println("[假人模组] 无法加载假人 " + data.name + "：世界 " + data.dimension + " 不存在");
+                    MyBotMod.LOGGER.error("无法加载假人 {}：世界 {} 不存在", data.name, data.dimension);
                     failedCount++;
                     continue;
                 }
@@ -545,11 +546,11 @@ public class BotPersistenceManager extends SavedData {
                 Vec3 position = new Vec3(data.x, data.y, data.z);
                 GameType gameMode = GameType.byName(data.gameMode, GameType.SURVIVAL);
                 
-                System.out.println("[假人模组] 调用 BotManager.createBot() 创建假人 " + data.name);
+                MyBotMod.LOGGER.info("调用 BotManager.createBot() 创建假人 {}", data.name);
                 BotPlayer bot = BotManager.createBot(server, creator, data.name, position, gameMode);
                 
                 if (bot != null) {
-                    System.out.println("[假人模组] 假人 " + data.name + " 创建成功，正在设置属性...");
+                    MyBotMod.LOGGER.info("假人 {} 创建成功，正在设置属性...", data.name);
                     
                     // 设置旋转（包括头部旋转）
                     bot.setYRot(data.yaw);
@@ -565,7 +566,7 @@ public class BotPersistenceManager extends SavedData {
                     // 如果启用了保留状态，恢复假人状态
                     var config = name.modid.config.ModConfig.getInstance();
                     if (config.preserveBotState && data.state != null) {
-                        System.out.println("[假人模组] 延迟恢复假人 " + data.name + " 的状态...");
+                        MyBotMod.LOGGER.info("延迟恢复假人 {} 的状态...", data.name);
                         // 延迟恢复状态，确保假人完全加载
                         server.tell(new net.minecraft.server.TickTask(
                             server.getTickCount() + 5,
@@ -580,20 +581,22 @@ public class BotPersistenceManager extends SavedData {
                             // CompoundTag inventoryTag = TagParser.parseTag(data.inventoryData);
                             // bot.getInventory().load(inventoryTag.getList("Inventory", 10));
                         } catch (Exception e) {
-                            System.err.println("[假人模组] 无法恢复假人 " + data.name + " 的物品栏: " + e.getMessage());
+                            MyBotMod.LOGGER.error("无法恢复假人 {} 的物品栏: {}", data.name, e.getMessage());
                         }
                     }
                     
                     loadedCount++;
-                    System.out.println("[假人模组] ✓ 成功加载假人: " + data.name + 
-                                     " [" + data.dimension + "] " +
-                                     String.format("(%.1f, %.1f, %.1f)", data.x, data.y, data.z));
+                    MyBotMod.LOGGER.info("✓ 成功加载假人: {} [{}] ({}, {}, {})",
+                        data.name, data.dimension,
+                        String.format("%.1f", data.x),
+                        String.format("%.1f", data.y),
+                        String.format("%.1f", data.z));
                 } else {
-                    System.err.println("[假人模组] ✗ 无法创建假人: " + data.name + "（BotManager.createBot() 返回 null）");
+                    MyBotMod.LOGGER.error("✗ 无法创建假人: {}（BotManager.createBot() 返回 null）", data.name);
                     failedCount++;
                 }
             } catch (Exception e) {
-                System.err.println("[假人模组] ✗ 加载假人 " + data.name + " 时发生错误: " + e.getMessage());
+                MyBotMod.LOGGER.error("✗ 加载假人 {} 时发生错误: {}", data.name, e.getMessage());
                 e.printStackTrace();
                 failedCount++;
             }
@@ -614,10 +617,10 @@ public class BotPersistenceManager extends SavedData {
         }
         
         if (loadedCount > 0 || skippedCount > 0 || failedCount > 0) {
-            System.out.println(summary.toString());
+            MyBotMod.LOGGER.info("驻留假人加载完成：{}", summary);
         }
         
-        System.out.println("[假人模组] 加载完成后内存中的假人数量: " + BotManager.getAllBots().size());
+        MyBotMod.LOGGER.info("加载完成后内存中的假人数量: {}", BotManager.getAllBots().size());
     }
     
     /**
@@ -683,15 +686,15 @@ public class BotPersistenceManager extends SavedData {
                         //     bot.addEffect(effect);
                         // }
                     } catch (Exception e) {
-                        System.err.println("[假人模组] 无法恢复药水效果: " + e.getMessage());
+                        MyBotMod.LOGGER.error("无法恢复药水效果: {}", e.getMessage());
                     }
                 }
             }
             
-            System.out.println("[假人模组] 成功恢复假人 " + bot.getName().getString() + " 的状态");
+            MyBotMod.LOGGER.info("成功恢复假人 {} 的状态", bot.getName().getString());
             
         } catch (Exception e) {
-            System.err.println("[假人模组] 恢复假人状态时发生错误: " + e.getMessage());
+            MyBotMod.LOGGER.error("恢复假人状态时发生错误: {}", e.getMessage());
             e.printStackTrace();
         }
     }
@@ -720,13 +723,13 @@ public class BotPersistenceManager extends SavedData {
         }
         
         if (savedCount > 0) {
-            System.out.println("[假人模组] 保存了 " + savedCount + " 个假人到世界数据");
+            MyBotMod.LOGGER.info("保存了 {} 个假人到世界数据", savedCount);
         }
         
         // 重置加载标记，以便下次服务器启动时可以重新加载
         String worldId = getWorldId(server);
         worldLoadedFlags.remove(worldId);
-        System.out.println("[假人模组] 重置世界 " + worldId + " 的加载标记");
+        MyBotMod.LOGGER.info("重置世界 {} 的加载标记", worldId);
     }
     
     /**
@@ -757,7 +760,7 @@ public class BotPersistenceManager extends SavedData {
                     updateChunkTicket(bot);
                 }
             } catch (Exception e) {
-                System.err.println("[假人模组] 刷新假人 " + bot.getName().getString() + " 的区块票据时发生错误: " + e.getMessage());
+                MyBotMod.LOGGER.error("刷新假人 {} 的区块票据时发生错误: {}", bot.getName().getString(), e.getMessage());
             }
         }
     }
@@ -765,6 +768,7 @@ public class BotPersistenceManager extends SavedData {
     /**
      * 清理所有区块加载票据
      * 在服务器关闭时调用
+     * 遍历所有维度以确保票据被正确移除，不依赖 botsData
      */
     public static void clearAllChunkTickets(MinecraftServer server) {
         BotPersistenceManager manager = get(server);
@@ -776,6 +780,7 @@ public class BotPersistenceManager extends SavedData {
             String botName = entry.getKey();
             ChunkPos chunkPos = entry.getValue();
             
+            // 尝试从 botsData 获取维度，如果不可用则遍历所有维度
             BotData data = manager.botsData.get(botName);
             if (data != null) {
                 ServerLevel level = server.getLevel(
@@ -788,11 +793,16 @@ public class BotPersistenceManager extends SavedData {
                 if (level != null) {
                     level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
                 }
+            } else {
+                // botsData 不可用时，遍历所有维度尝试移除票据
+                for (ServerLevel level : server.getAllLevels()) {
+                    level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
+                }
             }
         }
         
         manager.botChunkTickets.clear();
-        System.out.println("[假人模组] 清理了所有区块加载票据");
+        MyBotMod.LOGGER.info("清理了所有区块加载票据");
     }
     
     /**
@@ -806,6 +816,6 @@ public class BotPersistenceManager extends SavedData {
     public static void resetLoadedFlag(MinecraftServer server) {
         String worldId = getWorldId(server);
         worldLoadedFlags.remove(worldId);
-        System.out.println("[假人模组] 重置世界 " + worldId + " 的驻留假人加载标记");
+        MyBotMod.LOGGER.info("重置世界 {} 的加载标记", worldId);
     }
 }

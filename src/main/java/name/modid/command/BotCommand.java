@@ -220,7 +220,7 @@ public class BotCommand {
         String botName = StringArgumentType.getString(ctx, "botName");
 
         // 验证名字格式
-        if (!isValidBotName(botName)) {
+        if (!BotManager.isValidBotName(botName)) {
             ctx.getSource().sendFailure(Component.literal(
                 "无效的假人名字！名字必须：\n" +
                 "- 长度 3-16 个字符\n" +
@@ -261,7 +261,7 @@ public class BotCommand {
         Vec3 position = Vec3Argument.getVec3(ctx, "position");
 
         // 验证名字格式
-        if (!isValidBotName(botName)) {
+        if (!BotManager.isValidBotName(botName)) {
             ctx.getSource().sendFailure(Component.literal(
                 "无效的假人名字！名字必须：\n" +
                 "- 长度 3-16 个字符\n" +
@@ -293,16 +293,6 @@ public class BotCommand {
             ctx.getSource().sendFailure(Component.literal("召唤假人失败！"));
             return 0;
         }
-    }
-    
-    /**
-     * 验证假人名字是否有效
-     */
-    private static boolean isValidBotName(String name) {
-        if (name == null || name.length() < 3 || name.length() > 16) {
-            return false;
-        }
-        return name.matches("^[a-zA-Z0-9_]+$");
     }
 
     /**
@@ -841,15 +831,15 @@ public class BotCommand {
      */
     private static boolean testNameValidation(CommandContext<CommandSourceStack> ctx) {
         // 测试有效名字
-        boolean test1 = isValidBotName("TestBot");
-        boolean test2 = isValidBotName("Bot_123");
-        boolean test3 = isValidBotName("ABC");
+        boolean test1 = BotManager.isValidBotName("TestBot");
+        boolean test2 = BotManager.isValidBotName("Bot_123");
+        boolean test3 = BotManager.isValidBotName("ABC");
         
         // 测试无效名字
-        boolean test4 = !isValidBotName("ab");  // 太短
-        boolean test5 = !isValidBotName("verylongbotname123");  // 太长
-        boolean test6 = !isValidBotName("bot.test");  // 包含非法字符
-        boolean test7 = !isValidBotName("bot-test");  // 包含连字符
+        boolean test4 = !BotManager.isValidBotName("ab");  // 太短
+        boolean test5 = !BotManager.isValidBotName("verylongbotname123");  // 太长
+        boolean test6 = !BotManager.isValidBotName("bot.test");  // 包含非法字符
+        boolean test7 = !BotManager.isValidBotName("bot-test");  // 包含连字符
         
         return test1 && test2 && test3 && test4 && test5 && test6 && test7;
     }
@@ -917,18 +907,23 @@ public class BotCommand {
             
             // 测试移动输入
             controller.moveForward();
+            controller.applyMovement();
             boolean test1 = bot.zza == 1.0F;
             
             controller.moveBackward();
+            controller.applyMovement();
             boolean test2 = bot.zza == -1.0F;
             
             controller.moveLeft();
+            controller.applyMovement();
             boolean test3 = bot.xxa == 1.0F;
             
             controller.moveRight();
+            controller.applyMovement();
             boolean test4 = bot.xxa == -1.0F;
             
             controller.stopMovement();
+            controller.applyMovement();
             boolean test5 = bot.zza == 0.0F && bot.xxa == 0.0F;
             
             // 清理

@@ -9,7 +9,10 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
 
+import name.modid.MyBotMod;
+
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 假人管理器
@@ -17,8 +20,8 @@ import java.util.*;
  */
 public class BotManager {
     
-    private static final Map<String, BotPlayer> bots = new HashMap<>();
-    private static final Map<UUID, BotPlayer> botsByUUID = new HashMap<>();
+    private static final Map<String, BotPlayer> bots = new ConcurrentHashMap<>();
+    private static final Map<UUID, BotPlayer> botsByUUID = new ConcurrentHashMap<>();
 
     /**
      * 创建并召唤一个假人
@@ -131,7 +134,7 @@ public class BotManager {
      * @param name 假人名字
      * @return 是否有效
      */
-    private static boolean isValidBotName(String name) {
+    public static boolean isValidBotName(String name) {
         if (name == null || name.length() < 3 || name.length() > 16) {
             return false;
         }
@@ -247,7 +250,7 @@ public class BotManager {
     public static void clearAllBots() {
         bots.clear();
         botsByUUID.clear();
-        System.out.println("[假人模组] 清理了所有假人的内存记录");
+        MyBotMod.LOGGER.info("清理了所有假人的内存记录");
     }
 
     /**

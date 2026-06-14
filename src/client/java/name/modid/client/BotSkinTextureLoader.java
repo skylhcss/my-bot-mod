@@ -21,8 +21,37 @@ public class BotSkinTextureLoader {
     // PNG 皮肤纹理缓存
     private static final Map<UUID, ResourceLocation> pngSkinTextures = new HashMap<>();
     
-    // 皮肤文件夹路径（在 run 目录下）
-    private static final String SKIN_FOLDER = "run/skins";
+    // 解析后的皮肤文件夹路径（延迟初始化）
+    private static File resolvedSkinFolder = null;
+    
+    /**
+     * 解析皮肤文件夹路径
+     * 与 BotSkinManager 服务端逻辑保持一致，搜索多个可能位置
+     */
+    private static File resolveSkinFolder() {
+        if (resolvedSkinFolder != null) {
+            return resolvedSkinFolder;
+        }
+        
+        File gameDir = new File(".");
+        File[] possibleLocations = {
+            new File(gameDir, "skins"),
+            new File(gameDir, "run/skins"),
+            new File("run/skins"),
+            new File("skins")
+        };
+        
+        for (File location : possibleLocations) {
+            if (location.exists() && location.isDirectory()) {
+                resolvedSkinFolder = location;
+                return resolvedSkinFolder;
+            }
+        }
+        
+        // 回退默认值
+        resolvedSkinFolder = new File(gameDir, "skins");
+        return resolvedSkinFolder;
+    }
     
     /**
      * 在客户端加载 PNG 皮肤纹理
@@ -38,7 +67,8 @@ public class BotSkinTextureLoader {
             }
             
             // 查找 PNG 文件
-            File pngFile = new File(SKIN_FOLDER, pngFileName);
+            File skinFolder = resolveSkinFolder();
+            File pngFile = new File(skinFolder, pngFileName);
             if (!pngFile.exists()) {
                 MyBotMod.LOGGER.error("PNG 皮肤文件不存在: {}", pngFileName);
                 return null;
