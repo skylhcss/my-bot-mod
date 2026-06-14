@@ -7,15 +7,9 @@ import net.minecraft.network.chat.Component;
 
 /**
  * 选项卡按钮组件
- * 用于顶部的选项卡切换
+ * 用于顶部的选项卡切换，激活时底部有绿色高亮线
  */
 public class TabButton extends Button {
-    
-    private static final int NORMAL_COLOR = 0x20FFFFFF;
-    private static final int HOVER_COLOR = 0x30FFFFFF;
-    private static final int ACTIVE_COLOR = 0x40FFFFFF;
-    private static final int BORDER_COLOR = 0x40FFFFFF;
-    private static final int ACTIVE_BORDER_COLOR = 0xFF55FF55;
     
     private boolean isActive;
     
@@ -24,48 +18,33 @@ public class TabButton extends Button {
         this.isActive = false;
     }
     
-    /**
-     * 设置是否为激活状态
-     */
     public void setActive(boolean active) {
         this.isActive = active;
     }
     
-    /**
-     * 获取是否为激活状态
-     */
     public boolean isActive() {
         return this.isActive;
     }
     
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 确定背景颜色
-        int backgroundColor;
+        // 背景
+        int bgColor;
+        if (this.isActive) bgColor = DesignTokens.TAB_ACTIVE_BG;
+        else if (this.isHovered()) bgColor = DesignTokens.TAB_HOVER_BG;
+        else bgColor = DesignTokens.TAB_NORMAL_BG;
+        
+        graphics.fill(this.getX(), this.getY(), this.getX() + this.width, this.getY() + this.height, bgColor);
+        
+        // 激活状态下划线
         if (this.isActive) {
-            backgroundColor = ACTIVE_COLOR;
-        } else if (this.isHovered()) {
-            backgroundColor = HOVER_COLOR;
-        } else {
-            backgroundColor = NORMAL_COLOR;
+            graphics.fill(this.getX(), this.getY() + this.height - 2,
+                         this.getX() + this.width, this.getY() + this.height,
+                         DesignTokens.TAB_ACTIVE_UNDERLINE);
         }
         
-        // 绘制背景
-        graphics.fill(this.getX(), this.getY(), this.getX() + this.width, this.getY() + this.height, backgroundColor);
-        
-        // 绘制边框
-        int borderColor = this.isActive ? ACTIVE_BORDER_COLOR : BORDER_COLOR;
-        drawBorder(graphics, this.getX(), this.getY(), this.width, this.height, borderColor);
-        
-        // 如果是激活状态，绘制底部高亮线
-        if (this.isActive) {
-            graphics.fill(this.getX(), this.getY() + this.height - 2, 
-                         this.getX() + this.width, this.getY() + this.height, 
-                         ACTIVE_BORDER_COLOR);
-        }
-        
-        // 绘制文本
-        int textColor = this.isActive ? 0x55FF55 : 0xFFFFFF;
+        // 文本
+        int textColor = this.isActive ? DesignTokens.TAB_TEXT_ACTIVE : DesignTokens.TAB_TEXT_NORMAL;
         graphics.drawCenteredString(
             Minecraft.getInstance().font,
             this.getMessage(),
@@ -73,15 +52,5 @@ public class TabButton extends Button {
             this.getY() + (this.height - 8) / 2,
             textColor
         );
-    }
-    
-    /**
-     * 绘制边框
-     */
-    private void drawBorder(GuiGraphics graphics, int x, int y, int width, int height, int color) {
-        graphics.fill(x, y, x + width, y + 1, color);
-        graphics.fill(x, y + height - 1, x + width, y + height, color);
-        graphics.fill(x, y, x + 1, y + height, color);
-        graphics.fill(x + width - 1, y, x + width, y + height, color);
     }
 }

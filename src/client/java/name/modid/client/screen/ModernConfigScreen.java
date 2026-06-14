@@ -1,8 +1,8 @@
 package name.modid.client.screen;
 
 import name.modid.client.screen.pages.*;
-import name.modid.client.screen.widget.ModernButton;
-import name.modid.client.screen.widget.SidebarButton;
+import name.modid.client.screen.widget.DesignTokens;
+import name.modid.client.screen.widget.TabButton;
 import name.modid.config.ModConfig;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -13,26 +13,23 @@ import java.util.List;
 
 /**
  * 现代化配置界面主屏幕
- * 采用左侧边栏 + 右侧内容的布局
+ * 居中面板 + 顶部 Tab 栏 + Section 卡片分组
  */
 public class ModernConfigScreen extends Screen {
     
     private final Screen parent;
     private final ModConfig config;
     
-    // 侧边栏按钮
-    private final List<SidebarButton> sidebarButtons = new ArrayList<>();
+    // 面板布局
+    private int panelX, panelY, panelWidth, panelHeight;
+    
+    // Tab 栏
+    private final List<TabButton> tabButtons = new ArrayList<>();
     private int currentPageIndex = 0;
     
     // 页面
     private final List<ConfigPage> pages = new ArrayList<>();
     private ConfigPage currentPage;
-    
-    // 布局常量
-    private static final int SIDEBAR_WIDTH = 80;
-    private static final int PADDING = 10;
-    private static final int TITLE_HEIGHT = 30;
-    private static final int BUTTON_HEIGHT = 20;
     
     public ModernConfigScreen(Screen parent) {
         super(Component.literal("My Bot Mod - 配置"));
@@ -44,84 +41,77 @@ public class ModernConfigScreen extends Screen {
     protected void init() {
         super.init();
         
-        // 清空之前的数据
-        sidebarButtons.clear();
+        tabButtons.clear();
         pages.clear();
+        
+        // 计算居中面板
+        panelWidth = Math.min(DesignTokens.PANEL_MAX_WIDTH, this.width - DesignTokens.PANEL_H_PADDING * 2);
+        panelX = (this.width - panelWidth) / 2;
+        panelY = DesignTokens.PANEL_TOP_MARGIN;
+        panelHeight = this.height - DesignTokens.PANEL_TOP_MARGIN - DesignTokens.PANEL_BOTTOM_MARGIN;
         
         // 创建页面
         pages.add(new GeneralPage(this, config));
-        pages.add(new AttackPage(this, config));
-        pages.add(new MountPage(this, config));
+        pages.add(new CombatPage(this, config));
         pages.add(new SurvivalPage(this, config));
         pages.add(new AdvancedPage(this, config));
         
-        // 创建侧边栏按钮
-        int buttonHeight = 24;
-        int buttonSpacing = 4;
-        int startY = TITLE_HEIGHT + PADDING;
+        // 创建 Tab 栏
+        int tabCount = pages.size();
+        int tabWidth = (panelWidth - DesignTokens.TAB_BAR_GAP * (tabCount - 1)) / tabCount;
+        int tabY = panelY;
         
-        for (int i = 0; i < pages.size(); i++) {
+        for (int i = 0; i < tabCount; i++) {
             final int index = i;
-            ConfigPage page = pages.get(i);
+            int tabX = panelX + i * (tabWidth + DesignTokens.TAB_BAR_GAP);
             
-            SidebarButton button = new SidebarButton(
-                PADDING,
-                startY + i * (buttonHeight + buttonSpacing),
-                SIDEBAR_WIDTH - PADDING * 2,
-                buttonHeight,
-                page.getTitle(),
-                btn -> switchPage(index)
-            );
-            
-            sidebarButtons.add(button);
-            this.addRenderableWidget(button);
+            TabButton tab = new TabButton(tabX, tabY, tabWidth, DesignTokens.TAB_BAR_HEIGHT,
+                pages.get(i).getTitle(), btn -> switchPage(index));
+            tabButtons.add(tab);
+            this.addRenderableWidget(tab);
         }
         
-        // 设置第一个按钮为激活状态
-        if (!sidebarButtons.isEmpty()) {
-            sidebarButtons.get(0).setActive(true);
-            currentPage = pages.get(0);
-            currentPage.init(this.width, this.height, this.minecraft, this.font);
+        // 激活第一个 Tab
+        if (!tabButtons.isEmpty()) {
+            tabButtons.get(0).setActive(true);
         }
         
-        // 添加底部按钮
-        int bottomButtonWidth = 100;
-        int bottomButtonHeight = 20;
-        int bottomY = this.height - PADDING - bottomButtonHeight;
+        // 初始化当前页面
+        initCurrentPage();
         
-        // 完成按钮（居中）
+        // 完成按钮
+        int doneX = (this.width - DesignTokens.DONE_BUTTON_WIDTH) / 2;
+        int doneY = panelY + panelHeight + 8;
         this.addRenderableWidget(
-            new ModernButton(
-                (this.width - bottomButtonWidth) / 2,
-                bottomY,
-                bottomButtonWidth,
-                bottomButtonHeight,
+            new name.modid.client.screen.widget.ModernButton(
+                doneX, doneY, DesignTokens.DONE_BUTTON_WIDTH, DesignTokens.DONE_BUTTON_HEIGHT,
                 Component.literal("完成"),
-                button -> {
-                    config.save();
-                    this.minecraft.setScreen(parent);
-                }
+                button -> { config.save(); this.minecraft.setScreen(parent); }
             )
         );
     }
     
-    /**
-     * 切换页面
-     */
+    private void initCurrentPage() {
+        currentPage = pages.get(currentPageIndex);
+        
+        // 滚动区域：Tab 栏下方到面板底部
+        int areaX = panelX;
+        int areaY = panelY + DesignTokens.TAB_BAR_HEIGHT + DesignTokens.CONTENT_TOP;
+        int areaWidth = panelWidth;
+        int areaHeight = panelY + panelHeight - areaY;
+        
+        currentPage.init(areaX, areaY, areaWidth, areaHeight, this.minecraft, this.font);
+    }
+    
     private void switchPage(int index) {
-        if (index < 0 || index >= pages.size()) {
-            return;
+        if (index < 0 || index >= pages.size()) return;
+        
+        for (int i = 0; i < tabButtons.size(); i++) {
+            tabButtons.get(i).setActive(i == index);
         }
         
-        // 更新侧边栏按钮状态
-        for (int i = 0; i < sidebarButtons.size(); i++) {
-            sidebarButtons.get(i).setActive(i == index);
-        }
-        
-        // 切换页面
         currentPageIndex = index;
-        currentPage = pages.get(index);
-        currentPage.init(this.width, this.height, this.minecraft, this.font);
+        initCurrentPage();
     }
     
     @Override
@@ -129,104 +119,48 @@ public class ModernConfigScreen extends Screen {
         // 绘制背景
         this.renderBackground(graphics);
         
-        // 绘制侧边栏背景
-        graphics.fill(0, 0, SIDEBAR_WIDTH, this.height, 0xE0000000);
+        // 绘制面板背景
+        graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, DesignTokens.PANEL_BG);
+        drawBorder(graphics, panelX, panelY, panelWidth, panelHeight, DesignTokens.PANEL_BORDER);
         
-        // 绘制标题
-        graphics.drawString(this.font, "配置", PADDING, PADDING, 0xFFFFFF);
-        
-        // 绘制内容区域背景
-        int contentX = SIDEBAR_WIDTH + PADDING;
-        int contentY = TITLE_HEIGHT;
-        int contentWidth = this.width - SIDEBAR_WIDTH - PADDING * 2;
-        int contentHeight = this.height - TITLE_HEIGHT - PADDING - BUTTON_HEIGHT - PADDING;
-        
-        graphics.fill(contentX, contentY, contentX + contentWidth, contentY + contentHeight, 0x90000000);
-        
-        // 绘制当前页面
+        // 绘制当前页面（在面板内部）
         if (currentPage != null) {
             currentPage.render(graphics, mouseX, mouseY, partialTick);
         }
         
-        // 绘制所有组件（包括侧边栏按钮和底部按钮）
+        // 绘制 Tab 和按钮（由父类渲染）
         super.render(graphics, mouseX, mouseY, partialTick);
+    }
+    
+    private void drawBorder(GuiGraphics graphics, int x, int y, int w, int h, int color) {
+        graphics.fill(x, y, x + w, y + 1, color);
+        graphics.fill(x, y + h - 1, x + w, y + h, color);
+        graphics.fill(x, y, x + 1, y + h, color);
+        graphics.fill(x + w - 1, y, x + w, y + h, color);
     }
     
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // 先让父类处理（侧边栏按钮和底部按钮）
-        if (super.mouseClicked(mouseX, mouseY, button)) {
-            return true;
-        }
-        
-        // 然后让页面内的组件处理点击
-        if (currentPage != null) {
-            // 调整鼠标Y坐标以匹配滚动偏移
-            for (var widget : currentPage.widgets) {
-                int screenY = (int)(widget.getY() - currentPage.scrollOffset);
-                int originalY = widget.getY();
-                widget.setY(screenY);
-                
-                if (widget.isMouseOver(mouseX, mouseY) && widget.mouseClicked(mouseX, mouseY, button)) {
-                    widget.setY(originalY);
-                    return true;
-                }
-                
-                widget.setY(originalY);
-            }
-        }
-        
+        if (super.mouseClicked(mouseX, mouseY, button)) return true;
+        if (currentPage != null) return currentPage.mouseClicked(mouseX, mouseY, button);
         return false;
     }
     
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        // 传递拖动事件到页面内的组件
-        if (currentPage != null) {
-            for (var widget : currentPage.widgets) {
-                int screenY = (int)(widget.getY() - currentPage.scrollOffset);
-                int originalY = widget.getY();
-                widget.setY(screenY);
-                
-                if (widget.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
-                    widget.setY(originalY);
-                    return true;
-                }
-                
-                widget.setY(originalY);
-            }
-        }
-        
+        if (currentPage != null && currentPage.mouseDragged(mouseX, mouseY, button, dragX, dragY)) return true;
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
     
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        // 传递释放事件到页面内的组件
-        if (currentPage != null) {
-            for (var widget : currentPage.widgets) {
-                int screenY = (int)(widget.getY() - currentPage.scrollOffset);
-                int originalY = widget.getY();
-                widget.setY(screenY);
-                
-                if (widget.mouseReleased(mouseX, mouseY, button)) {
-                    widget.setY(originalY);
-                    return true;
-                }
-                
-                widget.setY(originalY);
-            }
-        }
-        
+        if (currentPage != null && currentPage.mouseReleased(mouseX, mouseY, button)) return true;
         return super.mouseReleased(mouseX, mouseY, button);
     }
     
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        // 传递滚动事件到当前页面
-        if (currentPage != null && currentPage.mouseScrolled(mouseX, mouseY, 0, delta)) {
-            return true;
-        }
+        if (currentPage != null && currentPage.mouseScrolled(mouseX, mouseY, 0, delta)) return true;
         return super.mouseScrolled(mouseX, mouseY, delta);
     }
     
@@ -234,24 +168,5 @@ public class ModernConfigScreen extends Screen {
     public void onClose() {
         config.save();
         this.minecraft.setScreen(parent);
-    }
-    
-    /**
-     * 获取内容区域的边界
-     */
-    public int getContentX() {
-        return SIDEBAR_WIDTH + PADDING * 2;
-    }
-    
-    public int getContentY() {
-        return TITLE_HEIGHT + PADDING;
-    }
-    
-    public int getContentWidth() {
-        return this.width - SIDEBAR_WIDTH - PADDING * 4;
-    }
-    
-    public int getContentHeight() {
-        return this.height - TITLE_HEIGHT - PADDING * 3 - BUTTON_HEIGHT;
     }
 }
