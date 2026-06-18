@@ -56,3 +56,6 @@ mods/
 # project specific
 
 MEMORY.md.backup
+*.tmp
+*.bak
+*~
