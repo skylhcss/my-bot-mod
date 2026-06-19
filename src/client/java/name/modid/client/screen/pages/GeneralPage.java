@@ -1,6 +1,7 @@
 package name.modid.client.screen.pages;
 
 import name.modid.client.screen.ModernConfigScreen;
+import name.modid.client.screen.widget.DesignTokens;
 import name.modid.client.screen.widget.ModernCheckbox;
 import name.modid.client.screen.widget.ModernSlider;
 import name.modid.client.screen.widget.ResetButton;
@@ -30,13 +31,13 @@ public class GeneralPage extends ConfigPage {
         // Section 1: 模组开关
         SectionCard switchSection = addSection("模组开关");
         
-        ModernCheckbox enableBot = new ModernCheckbox(0, 0, 0, 22, Component.literal("启用假人功能"), config.enableBotFeature);
+        ModernCheckbox enableBot = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("启用假人功能"), config.enableBotFeature);
         enableBot.setOnChanged(() -> { config.enableBotFeature = enableBot.selected(); config.save(); });
         switchSection.addItem(enableBot, new ResetButton(0, 0, () -> {
             config.enableBotFeature = true; config.save(); enableBot.setSelected(true);
         }));
         
-        ModernCheckbox carpetCompat = new ModernCheckbox(0, 0, 0, 22, Component.literal("Carpet Mod 兼容模式"), config.carpetModCompatibility);
+        ModernCheckbox carpetCompat = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("Carpet Mod 兼容模式"), config.carpetModCompatibility);
         carpetCompat.setOnChanged(() -> { config.carpetModCompatibility = carpetCompat.selected(); config.save(); });
         switchSection.addItem(carpetCompat, new ResetButton(0, 0, () -> {
             config.carpetModCompatibility = true; config.save(); carpetCompat.setSelected(true);
@@ -45,17 +46,17 @@ public class GeneralPage extends ConfigPage {
         // Section 2: 服务器设置
         SectionCard serverSection = addSection("服务器设置");
         
-        ModernSlider maxBotSlider = new ModernSlider(0, 0, 0, 22, 0, 50, config.maxBotCount,
+        ModernSlider maxBotSlider = new ModernSlider(0, 0, 0, DesignTokens.ROW_HEIGHT, 0, 50, config.maxBotCount,
             value -> {
                 int v = (int) Math.round(value);
                 return v == 0 ? Component.literal("假人最大数量: 无限制") : Component.literal("假人最大数量: " + v);
             },
-            value -> { config.maxBotCount = (int) Math.round(value); config.save(); });
+            value -> { config.maxBotCount = (int) Math.round(value); });
         serverSection.addItem(maxBotSlider, new ResetButton(0, 0, () -> {
             config.maxBotCount = 0; config.save(); maxBotSlider.setCurrentValue(0);
         }));
         
-        ModernCheckbox nonOpCreate = new ModernCheckbox(0, 0, 0, 22, Component.literal("允许非 OP 创建假人"), config.allowNonOpCreateBot);
+        ModernCheckbox nonOpCreate = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("允许非 OP 创建假人"), config.allowNonOpCreateBot);
         nonOpCreate.setOnChanged(() -> { config.allowNonOpCreateBot = nonOpCreate.selected(); config.save(); });
         serverSection.addItem(nonOpCreate, new ResetButton(0, 0, () -> {
             config.allowNonOpCreateBot = false; config.save(); nonOpCreate.setSelected(false);

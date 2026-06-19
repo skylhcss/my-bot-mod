@@ -27,6 +27,11 @@ public class ModernCheckbox extends AbstractWidget {
     public void setSelected(boolean selected) {
         this.selected = selected;
     }
+
+    /** 设置高度（AbstractWidget 的 height 为 protected，需在子类暴露） */
+    public void setHeight(int height) {
+        this.height = height;
+    }
     
     public void setOnChanged(Runnable onChanged) {
         this.onChanged = onChanged;
@@ -58,14 +63,15 @@ public class ModernCheckbox extends AbstractWidget {
             graphics.fill(boxX + 3, boxY + 3, boxX + boxSize - 3, boxY + boxSize - 3, DesignTokens.CHECKBOX_CHECK_COLOR);
         }
         
-        // 文本
-        graphics.drawString(
+        // 文本（小号字体）
+        int textH = UI.lineHeight(DesignTokens.TEXT_SCALE);
+        UI.drawScaled(graphics,
             Minecraft.getInstance().font,
             this.getMessage(),
-            boxX + boxSize + 6,
-            boxY + (boxSize - 8) / 2,
-            DesignTokens.ITEM_TEXT_COLOR
-        );
+            boxX + boxSize + 5,
+            boxY + (boxSize - textH) / 2,
+            DesignTokens.TEXT_SCALE,
+            DesignTokens.ITEM_TEXT_COLOR);
     }
     
     private void drawBorder(GuiGraphics graphics, int x, int y, int w, int h, int color) {

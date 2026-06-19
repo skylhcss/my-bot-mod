@@ -43,13 +43,16 @@ public class TabButton extends Button {
                          DesignTokens.TAB_ACTIVE_UNDERLINE);
         }
         
-        // 文本
+        // 文本（小号字体）
         int textColor = this.isActive ? DesignTokens.TAB_TEXT_ACTIVE : DesignTokens.TAB_TEXT_NORMAL;
-        graphics.drawCenteredString(
+        int textH = UI.lineHeight(DesignTokens.TEXT_SCALE);
+        UI.drawScaledCentered(
+            graphics,
             Minecraft.getInstance().font,
             this.getMessage(),
             this.getX() + this.width / 2,
-            this.getY() + (this.height - 8) / 2,
+            this.getY() + (this.height - textH) / 2,
+            DesignTokens.TEXT_SCALE,
             textColor
         );
     }

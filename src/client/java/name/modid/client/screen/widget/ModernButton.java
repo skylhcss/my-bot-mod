@@ -19,6 +19,11 @@ public class ModernButton extends Button {
     public ModernButton(int x, int y, int width, int height, Component message, OnPress onPress) {
         super(x, y, width, height, message, onPress, DEFAULT_NARRATION);
     }
+
+    /** 设置高度（Button 继承的 height 为 protected，在此暴露） */
+    public void setHeight(int height) {
+        this.height = height;
+    }
     
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -38,13 +43,16 @@ public class ModernButton extends Button {
         // 绘制边框
         drawBorder(graphics, this.getX(), this.getY(), this.width, this.height, BORDER_COLOR);
         
-        // 绘制文本
+        // 绘制文本（小号字体）
         int textColor = this.active ? 0xFFFFFF : 0x808080;
-        graphics.drawCenteredString(
+        int textH = UI.lineHeight(DesignTokens.TEXT_SCALE);
+        UI.drawScaledCentered(
+            graphics,
             Minecraft.getInstance().font,
             this.getMessage(),
             this.getX() + this.width / 2,
-            this.getY() + (this.height - 8) / 2,
+            this.getY() + (this.height - textH) / 2,
+            DesignTokens.TEXT_SCALE,
             textColor
         );
     }

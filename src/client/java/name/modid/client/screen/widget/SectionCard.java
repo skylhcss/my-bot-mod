@@ -40,34 +40,43 @@ public class SectionCard {
     
     /**
      * 计算并布局所有子项，返回卡片总高度
+     * 所有行统一高度 ROW_HEIGHT，避免不同控件类型混排出现重叠
      */
     public int layout(int cardX, int cardY, int cardWidth) {
         this.x = cardX;
         this.y = cardY;
         this.width = cardWidth;
-        
+
         int currentY = cardY + DesignTokens.CARD_V_PADDING + DesignTokens.CARD_TITLE_HEIGHT + DesignTokens.CARD_TITLE_GAP;
-        int itemWidth = cardWidth - DesignTokens.CARD_H_PADDING * 2 - DesignTokens.RESET_SIZE - DesignTokens.RESET_SIZE;
-        
+        // 留出右侧一个 reset 按钮的宽度（reset 紧贴右内边距），控件文字居中时不会被 reset 遮挡
+        int itemWidth = cardWidth - DesignTokens.CARD_H_PADDING * 2 - DesignTokens.RESET_SIZE - 2;
+
         for (int i = 0; i < items.size(); i++) {
             AbstractWidget item = items.get(i);
+            // 统一行高，避免不同控件（slider/checkbox/button）自定义高度造成重叠
             item.setX(cardX + DesignTokens.CARD_H_PADDING);
             item.setY(currentY);
             item.setWidth(itemWidth);
-            
+            if (item instanceof ModernCheckbox cb) cb.setHeight(DesignTokens.ROW_HEIGHT);
+            else if (item instanceof ModernSlider sl) sl.setHeight(DesignTokens.ROW_HEIGHT);
+            else if (item instanceof ModernButton btn) btn.setHeight(DesignTokens.ROW_HEIGHT);
+            else if (item instanceof ResetButton rb) rb.setHeight(DesignTokens.ROW_HEIGHT);
+
             ResetButton reset = resets.get(i);
             if (reset != null) {
                 reset.setX(cardX + cardWidth - DesignTokens.CARD_H_PADDING - DesignTokens.RESET_SIZE);
                 reset.setY(currentY + (DesignTokens.ROW_HEIGHT - DesignTokens.RESET_SIZE) / 2);
             }
-            
+
             currentY += DesignTokens.ROW_HEIGHT + DesignTokens.ROW_GAP;
         }
-        
+
         // 移除末尾多余间距
-        currentY -= DesignTokens.ROW_GAP;
+        if (!items.isEmpty()) {
+            currentY -= DesignTokens.ROW_GAP;
+        }
         currentY += DesignTokens.CARD_V_PADDING;
-        
+
         this.height = currentY - cardY;
         return this.height;
     }
@@ -82,14 +91,14 @@ public class SectionCard {
         // 绘制边框
         drawRoundedBorder(graphics, x, y, width, height, DesignTokens.CARD_BORDER);
         
-        // 绘制标题
-        graphics.drawString(
+        // 绘制标题（小号字体）
+        UI.drawScaled(graphics,
             Minecraft.getInstance().font,
             Component.literal(title),
             x + DesignTokens.CARD_H_PADDING,
             y + DesignTokens.CARD_V_PADDING,
-            DesignTokens.CARD_TITLE_COLOR
-        );
+            DesignTokens.TEXT_SCALE,
+            DesignTokens.CARD_TITLE_COLOR);
         
         // 渲染子项
         for (AbstractWidget item : items) {

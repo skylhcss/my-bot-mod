@@ -211,10 +211,38 @@ public class BotActionController {
     }
     
     /**
-     * 执行使用物品动作
+     * 执行右键交互（模拟右键点击）
+     * 优先级：实体交互 > 方块交互 > 使用物品
      */
     private void performUse() {
-        bot.gameMode.useItem(bot, bot.level(), bot.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
+        bot.swing(InteractionHand.MAIN_HAND);
+        
+        var config = name.modid.config.ModConfig.getInstance();
+        double reachDistance = bot.gameMode.getGameModeForPlayer().isCreative()
+            ? config.creativeAttackReachDistance
+            : config.attackReachDistance;
+        
+        // 射线追踪：检测视线前方目标
+        var blockHitResult = bot.pick(reachDistance, 0.0F, false);
+        var entityHitResult = getEntityHitResult(bot, reachDistance);
+        
+        if (entityHitResult != null) {
+            // 优先与实体交互
+            var entity = entityHitResult.getEntity();
+            var hand = InteractionHand.MAIN_HAND;
+            var result = entity.interact(bot, hand);
+            if (!result.consumesAction()) {
+                bot.attack(entity);
+            }
+        } else if (blockHitResult.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            // 与方块交互（放置方块、打开箱子等）
+            var hitResult = (net.minecraft.world.phys.BlockHitResult) blockHitResult;
+            var itemInHand = bot.getItemInHand(InteractionHand.MAIN_HAND);
+            bot.gameMode.useItemOn(bot, bot.level(), itemInHand, InteractionHand.MAIN_HAND, hitResult);
+        } else {
+            // 没有目标：使用物品（拉弓、吃食物等）
+            bot.gameMode.useItem(bot, bot.level(), bot.getItemInHand(InteractionHand.MAIN_HAND), InteractionHand.MAIN_HAND);
+        }
     }
     
     /**

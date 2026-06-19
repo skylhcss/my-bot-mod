@@ -18,6 +18,11 @@ public class ResetButton extends AbstractWidget {
         super(x, y, DesignTokens.RESET_SIZE, DesignTokens.RESET_SIZE, Component.literal("↺"));
         this.onPress = onPress;
     }
+
+    /** 设置高度（AbstractWidget 的 height 为 protected，需在子类暴露） */
+    public void setHeight(int height) {
+        this.height = height;
+    }
     
     @Override
     public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -27,11 +32,14 @@ public class ResetButton extends AbstractWidget {
         drawBorder(graphics, this.getX(), this.getY(), this.width, this.height, DesignTokens.RESET_BORDER);
         
         int textColor = this.isHovered() ? DesignTokens.RESET_HOVER_ICON : DesignTokens.RESET_ICON_COLOR;
-        graphics.drawCenteredString(
+        int textH = UI.lineHeight(DesignTokens.TEXT_SCALE);
+        UI.drawScaledCentered(
+            graphics,
             Minecraft.getInstance().font,
             "↺",
             this.getX() + this.width / 2,
-            this.getY() + (this.height - 8) / 2,
+            this.getY() + (this.height - textH) / 2,
+            DesignTokens.TEXT_SCALE,
             textColor
         );
     }

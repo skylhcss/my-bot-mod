@@ -2,7 +2,67 @@
 
 本文档记录 My Bot Mod 的所有版本更新历史。
 
-**最后更新**: 2026-05-05
+**最后更新**: 2026-06-14
+
+---
+
+## [1.2.0] - 2026-06-14
+
+### 🎨 UI 全面重写
+- **配置界面全新布局**
+  - 全屏面板布局，边距缩小至 8px，内容区域更大
+  - 移除顶部标题栏，Tab 栏紧贴面板顶部
+  - 4 个 Tab 页：基础、战斗、生存、高级（原 5 页合并优化）
+  - Section 卡片分组系统，带圆角背景和边框
+  - 小号缩放字体（0.75x），整体更紧凑精致
+
+- **组件重写**
+  - `ModernSlider`：完全重写拖动机制，新增 `forceDrag()` API，新增已填充轨道视觉
+  - `ModernCheckbox`：继承 `AbstractWidget`，彻底消除反射调用
+  - `SectionCard`：全新卡片容器组件，支持圆角和标题
+  - `UI`：工具类，支持缩放文字绘制
+  - `DesignTokens`：统一设计令牌系统
+
+- **关于界面重写**
+  - 匹配配置面板风格（深色面板 + 分隔线 + 缩放字体）
+  - 分层展示：模组名 → 版本/作者/许可证 → 描述 → 联系方式
+
+- **快捷键配置重写**
+  - 支持组合键捕获（Ctrl/Shift/Alt + 主键，minihud 风格）
+  - 实时捕获模式：点击按钮后按下新快捷键
+  - 重置按钮恢复默认 B 键
+
+### ✨ 新功能
+- **`/bot use` 模拟右键点击**
+  - 优先与实体交互（`entity.interact`）
+  - 方块交互：放置方块、打开箱子等（`useItemOn`）
+  - 兜底使用物品：拉弓、吃食物等（`useItem`）
+  - 添加挥手动画（`swing`）
+
+### 🐛 Bug 修复
+- ✅ 修复滑动条无法流畅拖动（Screen 事件路由导致拖动中断）
+- ✅ 修复 `/bot use` 只能使用物品无法放置方块
+- ✅ 修复假人右键交互缺少挥手动画
+- ✅ 修复二级菜单返回后 Tab 状态不同步（改为 static 保持选中）
+- ✅ 修复 ModernCheckbox 使用反射设置 selected 的脆弱实现
+- ✅ 修复 ModernSlider 文字 Y-12 渲染与上方配置项重叠
+- ✅ 修复 ResetButton 默认值错误（4 处：attackReach=3.0, creativeReach=5.0, auraRange=3.0, mountBots=false）
+- ✅ 修复 `deleteBot` 先删数据再移除票据导致区块票据无法清理
+- ✅ 修复 `reloadConfig` 未实际重新加载配置文件
+- ✅ 修复 `fetchSkinFromMojang` 资源泄漏（HttpConnection 未关闭）
+- ✅ 修复 BotManager 使用非线程安全 HashMap 的并发风险
+- ✅ 修复客户端 `SKIN_FOLDER` 硬编码导致找不到皮肤文件
+
+### 🔧 技术改进
+- `BotManager` 改用 `ConcurrentHashMap` 提升线程安全性
+- `BotActionController.performKillAura` 优化：移除死代码 `getNearestEntity`
+- `BotPersistenceManager` 全面替换 `System.out/err` 为 LOGGER
+- `ModConfig.reload()` 新增配置重新加载方法
+- `MyBotModClient` 新增组合键检测系统（GLFW 按键状态精确匹配）
+
+### 📝 文档更新
+- 更新所有文档以反映 v1.2.0 修改
+- 更新版本号至 v1.2.0
 
 ---
 
@@ -212,6 +272,16 @@
 - ✅ 假人驻留功能同名存档冲突（v1.1.1a）
 - ✅ 假人驻留功能单人存档不生效（v1.1.1a）
 - ✅ 关于页面 GitHub 按钮无法跳转（v1.1.1a）
+- ✅ 滑动条无法流畅拖动（v1.2.0）
+- ✅ `/bot use` 无法放置方块（v1.2.0）
+- ✅ 二级菜单返回后 Tab 状态不同步（v1.2.0）
+- ✅ 假人右键交互缺少挥手动画（v1.2.0）
+- ✅ ModernCheckbox 反射漏洞（v1.2.0）
+- ✅ 配置界面文字重叠和重叠问题（v1.2.0）
+- ✅ ResetButton 默认值错误 4 处（v1.2.0）
+- ✅ deleteBot 区块票据泄漏（v1.2.0）
+- ✅ Mojang API 资源泄漏（v1.2.0）
+- ✅ 客户端皮肤文件夹找不到（v1.2.0）
 
 ### 待实现
 - ⏳ 自动寻路
