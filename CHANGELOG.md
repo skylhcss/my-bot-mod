@@ -18,11 +18,34 @@
 - **goto 寻路命令** (`/bot <name> goto <x> <y> <z>`)
   - 基于 A* 算法的网格寻路系统
   - 支持跳跃1格高障碍、下落3格、水平8方向移动
-  - 最大寻路距离 256 格
+  - 无距离硬限制，支持远距离寻路（部分路径回退机制）
   - 自动重新计算路径（每100 tick）
   - 卡住自动重寻路（30 tick 无移动后触发）
   - `/bot <name> goto stop` 取消寻路
   - 与自动跳跃系统集成
+
+### 🐛 Bug 修复
+- ✅ 修复 killAura 无攻击冷却导致伤害异常（添加 `getAttackStrengthScale` 检查）
+- ✅ 修复 killAura 误伤友方实体（排除其他假人和创建者）
+- ✅ 修复生存模式方块瞬间破坏（改用 `handleBlockBreakAction` 渐进式挖掘）
+- ✅ 修复 BotPersistenceManager 使用反射访问私有字段（改用 public getter）
+- ✅ 修复区块加载票据重复添加（`loadAllBotsForPlayer` 中移除冗余调用）
+- ✅ 修复假人死亡后自动重生 TickTask 无安全检查（添加 `isRemoved()` 保护）
+- ✅ 修复 NPE 被静默吞掉（改为记录日志）
+- ✅ 修复 BotPathfinder 疾跑永不关闭（移除错误的 `hasPathfindingTarget()` 条件）
+- ✅ 修复 BotSkinTextureLoader GPU 纹理未释放（`clearCache()` 和 `removeCache()` 调用 `release()`）
+- ✅ 修复 `worldLoadedFlags` 静态 Map 内存泄漏（服务器关闭时 `clearAllLoadedFlags()`）
+- ✅ 修复 ModConfig 空白名单无法保存（改为仅在 `null` 时初始化默认值）
+- ✅ 修复 BotSkinManager 重复阻塞 Mojang API 请求（添加负面缓存）
+- ✅ 修复快捷键组合键误触发（修饰键精确匹配 + 边沿检测）
+- ✅ 修复快捷键重映射后旧键仍生效（统一使用 GLFW 直接检测）
+
+### 🔧 技术改进
+- A* 寻路 `openSet.remove()` 从 O(n) 优化为惰性删除 O(1)
+- 移除寻路距离硬限制（256格），改为动态迭代上限（15,000次）+ 部分路径回退
+- 实现物品栏/末影箱完整序列化与反序列化（SNBT 格式）
+- 实现药水效果完整保存与恢复
+- BotActionController 新增 9 个 public getter 替代反射访问
 
 ### ⚙️ 配置变更
 - 新增 `allowBotAutoJump` 布尔配置项（默认 true）
