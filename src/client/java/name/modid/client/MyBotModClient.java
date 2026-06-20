@@ -4,8 +4,6 @@ import name.modid.client.screen.ModernConfigScreen;
 import name.modid.config.ModConfig;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.client.KeyMapping;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -14,40 +12,38 @@ import org.lwjgl.glfw.GLFW;
  */
 public class MyBotModClient implements ClientModInitializer {
 
-    private static KeyMapping configMenuKey;
+    /** 上一帧主键是否按下，用于边沿检测（只在按下瞬间触发，避免长按连续打开） */
+    private static boolean wasMainKeyPressed = false;
 
     @Override
     public void onInitializeClient() {
         ModConfig.getInstance();
 
-        configMenuKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-            "key.my-bot-mod.config_menu",
-            GLFW.GLFW_KEY_B,
-            "key.categories.my-bot-mod"
-        ));
-
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.screen != null) return;
-
-            // 优先检测组合键
-            if (checkComboKeybind()) {
-                client.setScreen(new ModernConfigScreen(null));
+            if (client.screen != null) {
+                // 界面打开时重置边沿状态，避免关闭后立即重新触发
+                wasMainKeyPressed = true;
                 return;
             }
 
-            // 回退到 MC 原生 KeyMapping（单键）
-            while (configMenuKey.consumeClick()) {
+            if (checkKeybind()) {
                 client.setScreen(new ModernConfigScreen(null));
             }
         });
     }
 
     /**
-     * 检测组合快捷键
-     * 格式: "key.keyboard.ctrl+shift+b" → Ctrl+Shift+B
-     *       "key.keyboard.b"             → 单键（交给 KeyMapping 处理）
+     * 检测快捷键是否触发
+     * 统一处理单键和组合键，基于 GLFW 按键状态直接检测
+     * 格式: "key.keyboard.b"             → 单键 B（无修饰键）
+     *       "key.keyboard.ctrl+shift+b" → Ctrl+Shift+B
+     *
+     * 关键修复：
+     *   1. 单键模式下严格要求无任何修饰键按下（Ctrl/Shift/Alt 都不能按）
+     *   2. 始终读取 configMenuKey 配置，而非硬编码的 B 键
+     *   3. 使用边沿检测，避免长按连续触发
      */
-    private static boolean checkComboKeybind() {
+    private static boolean checkKeybind() {
         String keybind = ModConfig.getInstance().configMenuKey;
         if (keybind == null || !keybind.startsWith("key.keyboard.")) return false;
 
@@ -70,8 +66,20 @@ public class MyBotModClient implements ClientModInitializer {
 
         long window = net.minecraft.client.Minecraft.getInstance().getWindow().getWindow();
 
-        if (GLFW.glfwGetKey(window, mainKey) != GLFW.GLFW_PRESS) return false;
+        // 检测主键当前是否按下
+        boolean mainKeyPressed = GLFW.glfwGetKey(window, mainKey) == GLFW.GLFW_PRESS;
 
+        // 边沿检测：只在按下瞬间触发（从 false 变为 true）
+        if (!mainKeyPressed) {
+            wasMainKeyPressed = false;
+            return false;
+        }
+        if (wasMainKeyPressed) {
+            return false; // 已在上一帧触发，不重复
+        }
+        wasMainKeyPressed = true;
+
+        // 检测修饰键状态
         boolean ctrlDown = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
                         || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_CONTROL) == GLFW.GLFW_PRESS;
         boolean shiftDown = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SHIFT) == GLFW.GLFW_PRESS
@@ -79,12 +87,9 @@ public class MyBotModClient implements ClientModInitializer {
         boolean altDown = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_ALT) == GLFW.GLFW_PRESS
                        || GLFW.glfwGetKey(window, GLFW.GLFW_KEY_RIGHT_ALT) == GLFW.GLFW_PRESS;
 
-        if (needCtrl != ctrlDown || needShift != shiftDown || needAlt != altDown) return false;
-
-        // 纯单键时让 MC 原生 KeyMapping 处理
-        if (!needCtrl && !needShift && !needAlt) return false;
-
-        return true;
+        // 精确匹配：配置的修饰键需求必须与实际按键状态完全一致
+        // 单键（无修饰键）时，Ctrl/Shift/Alt 都不能按下
+        return needCtrl == ctrlDown && needShift == shiftDown && needAlt == altDown;
     }
 
     private static int nameToGlfw(String name) {

@@ -41,6 +41,7 @@
   "autoRespawnOnDeath": false,
   "botTakeDamage": true,
   "botHunger": true,
+  "allowBotAutoJump": true,
   "botPersistence": false,
   "preserveBotState": false
 }
@@ -167,6 +168,20 @@
 
 ---
 
+### 动作设置
+
+#### 假人自动跳跃
+- **配置项**：`allowBotAutoJump`
+- **类型**：布尔值
+- **默认值**：`true`
+- **说明**：启用后，假人在移动时遇到1格高的障碍物会自动跳跃。
+  - 模拟真实玩家行为
+  - 需要假人正在向前移动或有寻路目标
+  - 需要假人在地面上
+  - 检测前方1格处是否有固体方块，且上方2格有空间
+
+---
+
 ### 驻留设置
 
 #### 假人驻留
@@ -277,6 +292,7 @@
 - 死亡自动重生
 - 假人受到伤害
 - 假人会饥饿
+- 自动跳跃
 
 #### 4. 驻留设置
 - 假人驻留

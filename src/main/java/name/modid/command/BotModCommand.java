@@ -92,6 +92,11 @@ public class BotModCommand {
                             .executes(ctx -> setBoolConfig(ctx, "carpetModCompatibility"))
                         )
                     )
+                    .then(Commands.literal("allowBotAutoJump")
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                            .executes(ctx -> setBoolConfig(ctx, "allowBotAutoJump"))
+                        )
+                    )
                     
                     // 数值配置
                     .then(Commands.literal("attackReachDistance")
@@ -134,6 +139,7 @@ public class BotModCommand {
                             builder.suggest("botPersistence");
                             builder.suggest("preserveBotState");
                             builder.suggest("carpetModCompatibility");
+                            builder.suggest("allowBotAutoJump");
                             return builder.buildFuture();
                         })
                         .executes(BotModCommand::getConfig)
@@ -203,6 +209,11 @@ public class BotModCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("  autoRespawnOnDeath: " + formatBool(config.autoRespawnOnDeath)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  botTakeDamage: " + formatBool(config.botTakeDamage)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  botHunger: " + formatBool(config.botHunger)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
+        
+        // 动作设置
+        ctx.getSource().sendSuccess(() -> Component.literal("§6动作设置:"), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  allowBotAutoJump: " + formatBool(config.allowBotAutoJump)), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 驻留设置
@@ -288,6 +299,9 @@ public class BotModCommand {
                     ctx.getSource().sendSuccess(() -> Component.literal("§e兼容模式已禁用，可使用 /botmod config set enableBotFeature true 启用假人功能"), false);
                 }
                 break;
+            case "allowBotAutoJump":
+                config.allowBotAutoJump = value;
+                break;
         }
         
         config.save();
@@ -357,6 +371,7 @@ public class BotModCommand {
             case "botPersistence" -> formatBool(config.botPersistence);
             case "preserveBotState" -> formatBool(config.preserveBotState);
             case "carpetModCompatibility" -> formatBool(config.carpetModCompatibility);
+            case "allowBotAutoJump" -> formatBool(config.allowBotAutoJump);
             default -> "§c未知配置项";
         };
         

@@ -31,6 +31,9 @@ public class BotSkinManager {
     // 皮肤缓存
     private static final Map<String, Property> skinCache = new HashMap<>();
     
+    // 负面缓存：已知没有 Mojang 皮肤的玩家名（避免重复阻塞 HTTP 请求）
+    private static final Set<String> negativeCache = new HashSet<>();
+    
     // 皮肤文件夹路径（在游戏目录下）
     private static File skinFolder = null;
     
@@ -61,15 +64,21 @@ public class BotSkinManager {
                 return;
             }
             
-            // 尝试从 Mojang API 获取正版玩家皮肤
-            Property skin = fetchSkinFromMojang(botName);
-            if (skin != null) {
-                // 清除现有的纹理属性
-                profile.getProperties().removeAll("textures");
-                profile.getProperties().put("textures", skin);
-                skinCache.put(botName.toLowerCase(), skin);
-                MyBotMod.LOGGER.info("从 Mojang API 为假人 {} 获取皮肤", botName);
-                return;
+            // 检查负面缓存（已知没有 Mojang 皮肤的名字，避免重复 HTTP 请求）
+            if (!negativeCache.contains(botName.toLowerCase())) {
+                // 尝试从 Mojang API 获取正版玩家皮肤
+                Property skin = fetchSkinFromMojang(botName);
+                if (skin != null) {
+                    // 清除现有的纹理属性
+                    profile.getProperties().removeAll("textures");
+                    profile.getProperties().put("textures", skin);
+                    skinCache.put(botName.toLowerCase(), skin);
+                    MyBotMod.LOGGER.info("从 Mojang API 为假人 {} 获取皮肤", botName);
+                    return;
+                } else {
+                    // 记录到负面缓存，下次不再尝试
+                    negativeCache.add(botName.toLowerCase());
+                }
             }
             
             // 如果获取失败，优先使用 PNG 文件

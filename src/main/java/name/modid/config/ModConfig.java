@@ -112,6 +112,13 @@ public class ModConfig {
      */
     public boolean carpetModCompatibility = true;
     
+    // ========== 动作设置 ==========
+    /**
+     * 假人自动跳跃
+     * 启用后，假人在移动时遇到1格高障碍物会自动跳跃（与真实玩家行为一致）
+     */
+    public boolean allowBotAutoJump = true;
+    
     // ========== 关于信息 ==========
     /**
      * 模组名称
@@ -121,7 +128,7 @@ public class ModConfig {
     /**
      * 模组版本
      */
-    public final String modVersion = "1.2.0";
+    public final String modVersion = "1.2.1";
     
     /**
      * 作者信息
@@ -175,8 +182,10 @@ public class ModConfig {
             try (FileReader reader = new FileReader(CONFIG_FILE)) {
                 ModConfig config = GSON.fromJson(reader, ModConfig.class);
                 if (config != null) {
-                    // 初始化默认的骑乘白名单
-                    if (config.mountWhitelist.isEmpty()) {
+                    // 只在白名单为 null 时初始化默认值（JSON 解析失败）
+                    // 空白名单 [] 是用户有意清空，不应被覆盖
+                    if (config.mountWhitelist == null) {
+                        config.mountWhitelist = new ArrayList<>();
                         config.initDefaultMountWhitelist();
                     }
                     return config;
@@ -244,6 +253,7 @@ public class ModConfig {
         botPersistence = false;
         preserveBotState = false;
         carpetModCompatibility = true;
+        allowBotAutoJump = true;
         
         mountWhitelist.clear();
         initDefaultMountWhitelist();

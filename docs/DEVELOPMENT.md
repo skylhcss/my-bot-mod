@@ -25,6 +25,7 @@ my-bot-mod/
 │   │   │   │   ├── BotPlayer.java      # 假人实体
 │   │   │   │   ├── BotActionController.java  # 动作控制
 │   │   │   │   ├── BotManager.java     # 假人管理
+│   │   │   │   ├── BotPathfinder.java  # A*寻路系统（v1.2.1 新增）
 │   │   │   │   ├── BotSkinManager.java # 皮肤管理
 │   │   │   │   ├── BotPersistenceManager.java  # 驻留系统（v1.1.1a 重构）
 │   │   │   │   └── FakeServerGamePacketListenerImpl.java  # 网络连接
@@ -109,6 +110,28 @@ my-bot-mod/
 - `strafing`：左右移动值
 - `attacking`：攻击状态
 - `using`：使用状态
+
+---
+
+### 2.5 BotPathfinder（寻路系统）
+
+**v1.2.1 新增**
+
+**职责**：
+- A* 算法网格寻路
+- 路径跟随和路标管理
+- 卡住检测和自动重寻路
+
+**关键方法**：
+- `pathTo(BlockPos)`：开始寻路
+- `tick()`：每tick更新路径跟随
+- `cancelPath()`：取消寻路
+- `findPath()`：A* 核心算法
+
+**关键字段**：
+- `currentPath`：当前路径（List<BlockPos>）
+- `target`：目标位置
+- `isPathfinding`：是否在寻路
 
 ---
 

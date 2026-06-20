@@ -107,18 +107,25 @@ public class BotSkinTextureLoader {
     }
     
     /**
-     * 清除纹理缓存
+     * 清除纹理缓存（释放 GPU 纹理资源）
      */
     public static void clearCache() {
+        var textureManager = Minecraft.getInstance().getTextureManager();
+        for (ResourceLocation location : pngSkinTextures.values()) {
+            textureManager.release(location);
+        }
         pngSkinTextures.clear();
-        MyBotMod.LOGGER.info("已清除 PNG 皮肤纹理缓存");
+        MyBotMod.LOGGER.info("已清除 PNG 皮肤纹理缓存（已释放 GPU 资源）");
     }
     
     /**
-     * 移除特定假人的纹理缓存
+     * 移除特定假人的纹理缓存（释放 GPU 纹理资源）
      * @param botUUID 假人 UUID
      */
     public static void removeCache(UUID botUUID) {
-        pngSkinTextures.remove(botUUID);
+        ResourceLocation location = pngSkinTextures.remove(botUUID);
+        if (location != null) {
+            Minecraft.getInstance().getTextureManager().release(location);
+        }
     }
 }

@@ -50,6 +50,12 @@ public class SurvivalPage extends ConfigPage {
             config.autoRespawnOnDeath = false; config.save(); autoRespawn.setSelected(false);
         }));
         
+        ModernCheckbox autoJump = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("自动跳跃"), config.allowBotAutoJump);
+        autoJump.setOnChanged(() -> { config.allowBotAutoJump = autoJump.selected(); config.save(); });
+        attrSection.addItem(autoJump, new ResetButton(0, 0, () -> {
+            config.allowBotAutoJump = true; config.save(); autoJump.setSelected(true);
+        }));
+        
         // Section 2: 骑乘设置
         SectionCard mountSection = addSection("骑乘设置");
         

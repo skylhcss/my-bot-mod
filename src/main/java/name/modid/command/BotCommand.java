@@ -11,7 +11,9 @@ import name.modid.bot.BotManager;
 import name.modid.bot.BotPlayer;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.GameType;
@@ -158,6 +160,15 @@ public class BotCommand {
                     )
                     .then(Commands.literal("stop")
                         .executes(ctx -> moveBot(ctx, "stop"))
+                    )
+                )
+                // /bot <name> goto <x> <y> <z> - 自动寻路
+                .then(Commands.literal("goto")
+                    .then(Commands.argument("position", BlockPosArgument.blockPos())
+                        .executes(BotCommand::gotoPosition)
+                    )
+                    .then(Commands.literal("stop")
+                        .executes(BotCommand::cancelGoto)
                     )
                 )
                 // /bot <name> drop - 丢弃物品
@@ -523,6 +534,58 @@ public class BotCommand {
         String actionName = direction.equals("stop") ? "停止移动" : "向" + getDirectionName(direction) + "移动";
         String finalActionName = actionName;
         ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " " + finalActionName), true);
+        return 1;
+    }
+
+    /**
+     * 假人寻路到指定位置
+     */
+    private static int gotoPosition(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            return 0;
+        }
+
+        BlockPos target = BlockPosArgument.getLoadedBlockPos(ctx, "position");
+
+        // 远距离警告（不再硬限制距离，但提示用户可能较慢）
+        double distance = bot.position().distanceTo(Vec3.atCenterOf(target));
+        if (distance > 500) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "§e目标距离较远（" + String.format("%.0f", distance) + "格），寻路可能需要较长时间"), false);
+        }
+
+        boolean success = bot.getActionController().pathTo(target);
+        if (success) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "假人 " + botName + " 开始寻路到 " + 
+                target.getX() + ", " + target.getY() + ", " + target.getZ()), true);
+            return 1;
+        } else {
+            ctx.getSource().sendFailure(Component.literal(
+                "无法找到到 " + target.getX() + ", " + target.getY() + ", " + target.getZ() + " 的路径"));
+            return 0;
+        }
+    }
+
+    /**
+     * 取消假人寻路
+     */
+    private static int cancelGoto(CommandContext<CommandSourceStack> ctx) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            return 0;
+        }
+
+        bot.getActionController().cancelPath();
+        ctx.getSource().sendSuccess(() -> Component.literal(
+            "假人 " + botName + " 已取消寻路"), true);
         return 1;
     }
 

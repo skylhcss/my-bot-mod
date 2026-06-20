@@ -115,9 +115,9 @@ public class BotPlayer extends ServerPlayer {
                 this.getFoodData().setFoodLevel(20);
                 this.getFoodData().setSaturation(20.0F);
             }
-        } catch (NullPointerException ignored) {
-            // Carpet Mod 的做法：捕获可能的 NPE
-            // 这可能发生在某些服务器实现中
+        } catch (NullPointerException e) {
+            // 记录 NPE 以便调试，而非静默吞掉
+            name.modid.MyBotMod.LOGGER.warn("假人 {} tick 时发生 NPE: {}", this.getName().getString(), e.getMessage());
         }
     }
     
@@ -136,6 +136,10 @@ public class BotPlayer extends ServerPlayer {
             this.level().getServer().tell(new net.minecraft.server.TickTask(
                 this.level().getServer().getTickCount() + 20,
                 () -> {
+                    // 安全检查：确保假人尚未被移除
+                    if (this.isRemoved() || BotManager.getBot(this.getName().getString()) == null) {
+                        return;
+                    }
                     // 重生假人
                     this.setHealth(this.getMaxHealth());
                     this.getFoodData().setFoodLevel(20);

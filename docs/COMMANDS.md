@@ -6,6 +6,7 @@
 - [基础命令](#基础命令)
 - [动作控制](#动作控制)
 - [移动控制](#移动控制)
+- [自动寻路](#自动寻路)
 - [视角控制](#视角控制)
 - [物品操作](#物品操作)
 - [骑乘控制](#骑乘控制)
@@ -294,6 +295,44 @@
 
 ---
 
+## 自动寻路
+
+> **v1.2.1 新增**：使用 A* 算法自动寻路到指定坐标。
+
+### 寻路到指定位置
+```
+/bot <名字> goto <x> <y> <z>
+```
+假人会自动计算路径并走向目标位置。
+
+**示例**：
+```
+/bot Steve goto 100 64 200
+/bot Steve goto ~10 ~ ~10
+```
+
+**特性**：
+- 自动跳过1格高障碍（需启用自动跳跃）
+- 最大寻路距离256格
+- 每5秒自动重新计算路径
+- 卡住时自动重新寻路
+- 支持跳跃1格高障碍、下落最多3格
+
+---
+
+### 取消寻路
+```
+/bot <名字> goto stop
+```
+停止假人的寻路行为。
+
+**示例**：
+```
+/bot Steve goto stop
+```
+
+---
+
 ## 视角控制
 
 ### 看向基本方向
@@ -559,6 +598,7 @@
 /botmod config set botPersistence false
 /botmod config set preserveBotState false
 /botmod config set carpetModCompatibility true
+/botmod config set allowBotAutoJump true
 ```
 
 **数值配置项**：

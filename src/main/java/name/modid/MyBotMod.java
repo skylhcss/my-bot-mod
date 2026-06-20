@@ -67,6 +67,7 @@ public class MyBotMod implements ModInitializer {
 			LOGGER.info("服务器正在关闭，正在保存驻留假人...");
 			BotPersistenceManager.saveAllBots(server);
 			BotPersistenceManager.clearAllChunkTickets(server);
+			BotPersistenceManager.clearAllLoadedFlags();
 			// 清理假人内存记录，确保下次启动时可以正确加载
 			BotManager.clearAllBots();
 		});

@@ -3,7 +3,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)](https://www.minecraft.net/)
 [![Fabric](https://img.shields.io/badge/Fabric-0.92.8-blue.svg)](https://fabricmc.net/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.1.1a-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.1-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
 [![GitHub](https://img.shields.io/badge/GitHub-skylhcss%2Fmy--bot--mod-blue.svg)](https://github.com/skylhcss/my-bot-mod)
 
 一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric。
@@ -20,6 +20,8 @@
 - ⚔️ **攻击系统**：射线追踪 + 方块破坏 + 杀戮光环
 - ⏱️ **间隔模式**：支持 once、continuous、interval 三种模式
 - 💾 **假人驻留**：退出世界后假人依然存在（可选）
+- 🦘 **自动跳跃**：移动时自动检测并跳过1格高障碍
+- 🗺️ **自动寻路**：A* 算法寻路到指定坐标
 - ⚙️ **配置系统**：完整的图形化配置界面
 - 🔧 **Carpet Mod 兼容**：自动检测并避免冲突
 
@@ -31,11 +33,12 @@
 | 攻击/使用       | ✅        | ✅          |
 | 间隔模式        | ✅        | ✅          |
 | 皮肤系统        | ✅        | ✅          |
+| 自动寻路        | ✅        | ❌          |
 | 配置界面        | ✅        | 只在其附属mod中有 |
 | 假人驻留        | ✅        | 只在其附属mod中有 |
 | Carpet 兼容   | ✅        | N/A        |
 | Scarpet 集成  | ❌        | ✅          |
-| **覆盖率**     | **~90%** | **80%**    |
+| **覆盖率**     | **~95%** | **80%**    |
 
 **兼容性说明**：
 - 默认启用 Carpet Mod 兼容模式
@@ -66,6 +69,7 @@
 ```
 /bot <名字> attack continuous    # 持续攻击
 /bot <名字> move forward         # 向前移动
+/bot <名字> goto <x> <y> <z>   # 寻路到指定位置
 /bot <名字> look up              # 看向上方
 /bot <名字> sneak                # 潜行
 /bot <名字> jump                 # 跳跃
@@ -146,7 +150,17 @@
 
 ## 📝 更新日志
 
-### v1.1.2 (2026-05-05) - 假人驻留系统完全重写
+### v1.2.1 (2026-06-20) - 自动跳跃与寻路系统
+- 🦘 新增假人自动跳跃功能（移动时自动跳过1格障碍）
+- 🗺️ 新增 A* 寻路系统（`/bot <name> goto` 命令）
+- ⚙️ 新增 `allowBotAutoJump` 配置项
+
+### v1.2.0 (2026-06-14) - UI 全面重写 + use 命令重构
+- 🎨 配置界面全新全屏面板布局，Section 卡片分组
+- ✨ `/bot use` 模拟完整右键交互（放置方块、实体交互、使用物品）
+- 🐛 修复滑动条、交互、Tab状态、Checkbox反射等 11 个 Bug
+
+### v1.1.1a (2026-05-05) - 假人驻留系统完全重写
 - 🔄 **假人驻留系统完全重写**，参考 GugleCarpetAddition (GCA) 的实现
   - 使用 SavedData 系统持久化假人数据
   - 添加区块加载票据（Chunk Ticket）机制，确保假人所在区块保持加载

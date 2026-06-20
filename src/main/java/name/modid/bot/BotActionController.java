@@ -1,6 +1,9 @@
 package name.modid.bot;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -32,6 +35,9 @@ public class BotActionController {
     private int attackIntervalCounter = 0;  // 攻击间隔计数器
     private int useInterval = 0;  // 使用间隔（tick）
     private int useIntervalCounter = 0;  // 使用间隔计数器
+    
+    // 寻路系统
+    private BotPathfinder pathfinder = null;
     
     public BotActionController(BotPlayer bot) {
         this.bot = bot;
@@ -97,6 +103,11 @@ public class BotActionController {
         // 使用 setJumping() 而不是直接调用 jumpFromGround()
         // 这样可以让游戏的物理引擎正确处理跳跃
         bot.setJumping(jumping);
+        
+        // 更新寻路系统
+        if (pathfinder != null && pathfinder.isPathfinding()) {
+            pathfinder.tick();
+        }
     }
     
     /**
@@ -110,20 +121,21 @@ public class BotActionController {
         
         // 从配置获取攻击距离
         var config = name.modid.config.ModConfig.getInstance();
-        double reachDistance = bot.gameMode.getGameModeForPlayer().isCreative() 
-            ? config.creativeAttackReachDistance 
-            : config.attackReachDistance;
         
-        // 如果启用了杀戮光环
+        // 如果启用了杀戮光环，直接执行（跳过不必要的射线追踪）
         if (config.enableKillAura) {
             performKillAura(config.killAuraRange);
             return;
         }
         
+        double reachDistance = bot.gameMode.getGameModeForPlayer().isCreative() 
+            ? config.creativeAttackReachDistance 
+            : config.attackReachDistance;
+        
         // 执行射线追踪
         var hitResult = bot.pick(reachDistance, 0.0F, false);
         
-        // 检查是否击中实体（此处 killAura 已在上方 return，无需分支判断）
+        // 检查是否击中实体
         var entityHitResult = getEntityHitResult(bot, reachDistance);
         
         if (entityHitResult != null && entityHitResult.getEntity() instanceof net.minecraft.world.entity.LivingEntity) {
@@ -137,15 +149,19 @@ public class BotActionController {
             
             // 只有在非空气方块时才尝试破坏
             if (!blockState.isAir()) {
-                // 尝试破坏方块
-                // 在创造模式下直接破坏，在生存模式下需要持续挖掘
                 if (bot.gameMode.getGameModeForPlayer().isCreative()) {
                     // 创造模式：直接破坏
                     bot.gameMode.destroyBlock(blockPos);
                 } else {
-                    // 生存模式：持续挖掘
-                    // 使用 continueDestroyBlock 来模拟持续挖掘
-                    bot.gameMode.destroyBlock(blockPos);
+                    // 生存模式：通过 handleBlockBreakAction 启动挖掘
+                    // 每个 tick 都会调用，直到方块被破坏
+                    bot.gameMode.handleBlockBreakAction(
+                        blockPos,
+                        net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK,
+                        blockHitResult.getDirection(),
+                        320,   // maxY: 主世界最大建筑高度
+                        0      // sequence
+                    );
                 }
             }
         }
@@ -153,19 +169,40 @@ public class BotActionController {
     
     /**
      * 执行杀戮光环（攻击范围内所有实体）
+     * 修复：添加攻击冷却检查 + 排除友方实体（其他假人、创建者）
      * @param range 攻击范围
      */
     private void performKillAura(double range) {
-        // 查找范围内的所有生物实体
+        // 检查攻击冷却（与真实玩家行为一致）
+        if (bot.getAttackStrengthScale(0.5F) < 0.9F) return;
+        
+        // 查找范围内的生物实体（排除自身、旁观者、其他假人和创建者）
+        var creatorUUID = bot.getCreatorUUID();
         var entities = bot.level().getEntitiesOfClass(
             net.minecraft.world.entity.LivingEntity.class,
             bot.getBoundingBox().inflate(range),
-            entity -> entity != bot && !entity.isSpectator()
+            entity -> {
+                if (entity == bot || entity.isSpectator()) return false;
+                // 排除其他假人
+                if (entity instanceof BotPlayer) return false;
+                // 排除创建者
+                if (entity instanceof ServerPlayer sp && sp.getUUID().equals(creatorUUID)) return false;
+                return true;
+            }
         );
         
-        // 攻击所有实体
+        // 攻击最近的实体（而非全部，与攻击冷却配合）
+        net.minecraft.world.entity.LivingEntity closest = null;
+        double closestDist = Double.MAX_VALUE;
         for (var entity : entities) {
-            bot.attack(entity);
+            double dist = entity.distanceToSqr(bot);
+            if (dist < closestDist) {
+                closestDist = dist;
+                closest = entity;
+            }
+        }
+        if (closest != null) {
+            bot.attack(closest);
         }
     }
     
@@ -259,6 +296,63 @@ public class BotActionController {
         // 对于假人，始终更新这些值
         bot.zza = forward * vel;
         bot.xxa = strafing * vel;
+        
+        // 自动跳跃逻辑：在移动时遇到1格高障碍物自动跳跃
+        if (shouldAutoJump()) {
+            bot.setJumping(true);
+        }
+    }
+    
+    /**
+     * 判断是否应该自动跳跃
+     * 条件：
+     * 1. allowBotAutoJump 配置为 true
+     * 2. 假人正在向前移动或有寻路目标
+     * 3. 假人在地面上
+     * 4. 前方1格处有1格高障碍物，且障碍物上方有空间
+     */
+    private boolean shouldAutoJump() {
+        var config = name.modid.config.ModConfig.getInstance();
+        if (!config.allowBotAutoJump) return false;
+        
+        // 只在向前移动或有寻路目标时触发
+        if (forward <= 0 && !hasPathfindingTarget()) return false;
+        
+        // 必须在地面上才能跳跃
+        if (!bot.onGround()) return false;
+        
+        // 计算移动方向（基于假人朝向）
+        float yawRad = bot.getYRot() * ((float) Math.PI / 180.0F);
+        double moveX = -Math.sin(yawRad);
+        double moveZ = Math.cos(yawRad);
+        
+        // 检测前方1格处的方块
+        BlockPos checkPos = bot.blockPosition().offset(
+            (int) Math.round(moveX),
+            0,
+            (int) Math.round(moveZ)
+        );
+        
+        // 脚部上方1格（1格高障碍物位置）
+        BlockPos obstaclePos = checkPos.above();
+        // 脚部上方2格（需要有空间才能落地）
+        BlockPos headPos = checkPos.above(2);
+        
+        BlockState obstacleState = bot.level().getBlockState(obstaclePos);
+        BlockState headState = bot.level().getBlockState(headPos);
+        
+        // 障碍物是固体 且 上方有空间
+        boolean hasObstacle = !obstacleState.isAir() && obstacleState.blocksMotion();
+        boolean hasSpace = headState.isAir() || !headState.blocksMotion();
+        
+        return hasObstacle && hasSpace;
+    }
+    
+    /**
+     * 检查是否有寻路目标（供自动跳跃判断使用）
+     */
+    boolean hasPathfindingTarget() {
+        return pathfinder != null && pathfinder.isPathfinding();
     }
 
     /**
@@ -474,6 +568,7 @@ public class BotActionController {
         setJump(false);
         setSprint(false);
         stopMovement();
+        cancelPath();
     }
 
     /**
@@ -562,4 +657,48 @@ public class BotActionController {
         bot.setXRot(newPitch);
         bot.setYHeadRot(newYaw);
     }
+
+    // ==================== 寻路系统 ====================
+
+    /**
+     * 开始寻路到指定位置
+     * @param target 目标坐标
+     * @return 是否成功找到路径
+     */
+    public boolean pathTo(BlockPos target) {
+        if (pathfinder == null) {
+            pathfinder = new BotPathfinder(bot);
+        }
+        // 先停止当前移动
+        stopMovement();
+        return pathfinder.pathTo(target);
+    }
+
+    /**
+     * 取消寻路
+     */
+    public void cancelPath() {
+        if (pathfinder != null) {
+            pathfinder.cancelPath();
+        }
+    }
+
+    /**
+     * 获取寻路器实例
+     */
+    public BotPathfinder getPathfinder() {
+        return pathfinder;
+    }
+
+    // ==================== 状态 Getter（替代反射） ====================
+
+    public boolean isAttacking() { return attacking; }
+    public boolean isUsing() { return using; }
+    public boolean isSneaking() { return sneaking; }
+    public boolean isJumping() { return jumping; }
+    public boolean isSprinting() { return sprinting; }
+    public float getForward() { return forward; }
+    public float getStrafing() { return strafing; }
+    public int getAttackInterval() { return attackInterval; }
+    public int getUseInterval() { return useInterval; }
 }
