@@ -3,7 +3,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)](https://www.minecraft.net/)
 [![Fabric](https://img.shields.io/badge/Fabric-0.92.8-blue.svg)](https://fabricmc.net/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.2.1-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.1a-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
 [![GitHub](https://img.shields.io/badge/GitHub-skylhcss%2Fmy--bot--mod-blue.svg)](https://github.com/skylhcss/my-bot-mod)
 
 一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric。
@@ -150,12 +150,12 @@
 
 ## 📝 更新日志
 
-### v1.2.1 (2026-06-20) - 自动跳跃与寻路系统
-- 🦘 新增假人自动跳跃功能（移动时自动跳过1格障碍）
-- 🗺️ 新增 A* 寻路系统（`/bot <name> goto` 命令，无距离硬限制）
+### v1.2.1a (2026-06-20) - 自动跳跃与寻路系统
+- 🦘 新增假人自动跳跃功能（使用 `horizontalCollision` 碰撞检测，与玩家一致）
+- 🗺️ 新增 A* 寻路系统（借鉴 Baritone 设计，`/bot <name> goto` 命令）
 - ⚙️ 新增 `allowBotAutoJump` 配置项
-- 🐛 修复 killAura 伤害异常、友军误伤、生存挖掘、反射、内存泄漏等 14 个 Bug
-- 🔧 物品栏/末影箱/药水效果完整驻留支持
+- 🐛 修复 killAura 伤害异常、友军误伤、生存挖掘、反射、内存泄漏等 18 个 Bug
+- 🔧 BotPathfinder 完全重写 + 物品栏/末影箱/药水效果完整驻留支持
 
 ### v1.2.0 (2026-06-14) - UI 全面重写 + use 命令重构
 - 🎨 配置界面全新全屏面板布局，Section 卡片分组

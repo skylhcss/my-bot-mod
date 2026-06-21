@@ -297,55 +297,14 @@ public class BotActionController {
         bot.zza = forward * vel;
         bot.xxa = strafing * vel;
         
-        // 自动跳跃逻辑：在移动时遇到1格高障碍物自动跳跃
-        if (shouldAutoJump()) {
+        // 自动跳跃：与玩家完全一致的逻辑
+        // 当假人在向前移动时撞上水平方向的障碍物，且站在地面上，则触发跳跃
+        // 使用 Minecraft 内置的 horizontalCollision 碰撞检测，无需手动计算方块位置
+        // 这与玩家按空格键跳跃的效果完全相同
+        var config = name.modid.config.ModConfig.getInstance();
+        if (config.allowBotAutoJump && forward > 0 && bot.onGround() && bot.horizontalCollision) {
             bot.setJumping(true);
         }
-    }
-    
-    /**
-     * 判断是否应该自动跳跃
-     * 条件：
-     * 1. allowBotAutoJump 配置为 true
-     * 2. 假人正在向前移动或有寻路目标
-     * 3. 假人在地面上
-     * 4. 前方1格处有1格高障碍物，且障碍物上方有空间
-     */
-    private boolean shouldAutoJump() {
-        var config = name.modid.config.ModConfig.getInstance();
-        if (!config.allowBotAutoJump) return false;
-        
-        // 只在向前移动或有寻路目标时触发
-        if (forward <= 0 && !hasPathfindingTarget()) return false;
-        
-        // 必须在地面上才能跳跃
-        if (!bot.onGround()) return false;
-        
-        // 计算移动方向（基于假人朝向）
-        float yawRad = bot.getYRot() * ((float) Math.PI / 180.0F);
-        double moveX = -Math.sin(yawRad);
-        double moveZ = Math.cos(yawRad);
-        
-        // 检测前方1格处的方块
-        BlockPos checkPos = bot.blockPosition().offset(
-            (int) Math.round(moveX),
-            0,
-            (int) Math.round(moveZ)
-        );
-        
-        // 脚部上方1格（1格高障碍物位置）
-        BlockPos obstaclePos = checkPos.above();
-        // 脚部上方2格（需要有空间才能落地）
-        BlockPos headPos = checkPos.above(2);
-        
-        BlockState obstacleState = bot.level().getBlockState(obstaclePos);
-        BlockState headState = bot.level().getBlockState(headPos);
-        
-        // 障碍物是固体 且 上方有空间
-        boolean hasObstacle = !obstacleState.isAir() && obstacleState.blocksMotion();
-        boolean hasSpace = headState.isAir() || !headState.blocksMotion();
-        
-        return hasObstacle && hasSpace;
     }
     
     /**

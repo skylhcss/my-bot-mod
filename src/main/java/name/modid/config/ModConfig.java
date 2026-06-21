@@ -128,7 +128,7 @@ public class ModConfig {
     /**
      * 模组版本
      */
-    public final String modVersion = "1.2.1";
+    public final String modVersion = "1.2.1a";
     
     /**
      * 作者信息
