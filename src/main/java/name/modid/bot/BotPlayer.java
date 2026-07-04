@@ -116,8 +116,8 @@ public class BotPlayer extends ServerPlayer {
                 this.getFoodData().setSaturation(20.0F);
             }
         } catch (NullPointerException e) {
-            // 记录 NPE 以便调试，而非静默吞掉
-            name.modid.MyBotMod.LOGGER.warn("假人 {} tick 时发生 NPE: {}", this.getName().getString(), e.getMessage());
+            // 记录完整堆栈以便调试
+            name.modid.MyBotMod.LOGGER.error("假人 {} tick 时发生 NPE", this.getName().getString(), e);
         }
     }
     

@@ -3,7 +3,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)](https://www.minecraft.net/)
 [![Fabric](https://img.shields.io/badge/Fabric-0.92.8-blue.svg)](https://fabricmc.net/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.2.1a-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.1b-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
 [![GitHub](https://img.shields.io/badge/GitHub-skylhcss%2Fmy--bot--mod-blue.svg)](https://github.com/skylhcss/my-bot-mod)
 
 一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric。
@@ -149,6 +149,15 @@
 详见 [开发文档](docs/DEVELOPMENT.md)
 
 ## 📝 更新日志
+
+### v1.2.1b (2026-07-04) - 寻路碰撞重写 + 持久化修复 + 配置原子写入
+- 🐛 寻路碰撞检测使用 VoxelShape 重写，正确处理地毯/雪层/半砖/活板门等不完整方块
+- 🐛 新增危险方块避让（岩浆、火焰、仙人掌、岩浆块）
+- 🐛 修复站在半砖等不完整方块上无法进行 2 格跳跃
+- 🐛 修复生存模式挖掘进度每 tick 重置（跟踪 miningTarget）
+- 🔧 持久化健壮性改进：维度跟踪 Map 修复、延迟加载防断连、UUID 持久化恢复
+- 🔧 ModConfig 配置文件原子写入（临时文件+重命名防损坏）
+- 🔧 寻路参数调优（重算间隔 100→40 tick，卡住阈值 30→20 tick，到达阈值 0.6→0.5）
 
 ### v1.2.1a (2026-06-20) - 自动跳跃与寻路系统
 - 🦘 新增假人自动跳跃功能（使用 `horizontalCollision` 碰撞检测，与玩家一致）

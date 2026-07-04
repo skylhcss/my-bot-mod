@@ -61,6 +61,9 @@ public class BotPersistenceManager extends SavedData {
     // 存储假人的区块加载票据（假人名 -> 区块位置）
     private final Map<String, ChunkPos> botChunkTickets = new ConcurrentHashMap<>();
     
+    // 存储假人票据对应的维度（防止跨维度移动时旧票据泄漏）
+    private final Map<String, net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>> botChunkTicketDimensions = new ConcurrentHashMap<>();
+    
     /**
      * 假人数据类
      * 存储假人的所有持久化信息
@@ -335,8 +338,10 @@ public class BotPersistenceManager extends SavedData {
         // 添加区块加载票据
         level.getChunkSource().addRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
         
-        // 记录票据
-        botChunkTickets.put(botName.toLowerCase(), chunkPos);
+        // 记录票据和维度
+        String key = botName.toLowerCase();
+        botChunkTickets.put(key, chunkPos);
+        botChunkTicketDimensions.put(key, level.dimension());
         
         MyBotMod.LOGGER.info("为假人 {} 添加区块加载票据: {}", botName, chunkPos);
     }
@@ -385,14 +390,20 @@ public class BotPersistenceManager extends SavedData {
             return;
         }
         
-        // 移除旧票据
+        // 移除旧票据（使用存储的维度，而非当前维度，防止跨维度泄漏）
         if (oldChunkPos != null) {
-            bot.serverLevel().getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, oldChunkPos, 2, oldChunkPos);
+            var oldDimension = manager.botChunkTicketDimensions.get(botName.toLowerCase());
+            ServerLevel oldLevel = oldDimension != null ? server.getLevel(oldDimension) : bot.serverLevel();
+            if (oldLevel != null) {
+                oldLevel.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, oldChunkPos, 2, oldChunkPos);
+            }
         }
         
         // 添加新票据
         bot.serverLevel().getChunkSource().addRegionTicket(BOT_CHUNK_TICKET, newChunkPos, 2, newChunkPos);
-        manager.botChunkTickets.put(botName.toLowerCase(), newChunkPos);
+        String key = botName.toLowerCase();
+        manager.botChunkTickets.put(key, newChunkPos);
+        manager.botChunkTicketDimensions.put(key, bot.serverLevel().dimension());
     }
     
     /**
@@ -445,9 +456,18 @@ public class BotPersistenceManager extends SavedData {
         
         // 延迟加载，确保玩家完全加入世界
         // 参考 GCA：延迟 40 tick（2秒）
+        final java.util.UUID playerId = player.getUUID();
         server.tell(new net.minecraft.server.TickTask(
             server.getTickCount() + 40,
-            () -> loadAllBotsForPlayer(server, player)
+            () -> {
+                // 重新获取玩家引用，防止原玩家已断开连接
+                ServerPlayer currentPlayer = server.getPlayerList().getPlayer(playerId);
+                if (currentPlayer == null) {
+                    MyBotMod.LOGGER.warn("玩家已断开连接，跳过假人加载");
+                    return;
+                }
+                loadAllBotsForPlayer(server, currentPlayer);
+            }
         ));
     }
     
@@ -531,7 +551,7 @@ public class BotPersistenceManager extends SavedData {
                 GameType gameMode = GameType.byName(data.gameMode, GameType.SURVIVAL);
                 
                 MyBotMod.LOGGER.info("调用 BotManager.createBot() 创建假人 {}", data.name);
-                BotPlayer bot = BotManager.createBot(server, creator, data.name, position, gameMode);
+                BotPlayer bot = BotManager.createBot(server, creator, data.name, position, gameMode, data.uuid);
                 
                 if (bot != null) {
                     MyBotMod.LOGGER.info("假人 {} 创建成功，正在设置属性...", data.name);
@@ -785,28 +805,22 @@ public class BotPersistenceManager extends SavedData {
             String botName = entry.getKey();
             ChunkPos chunkPos = entry.getValue();
             
-            // 尝试从 botsData 获取维度，如果不可用则遍历所有维度
-            BotData data = manager.botsData.get(botName);
-            if (data != null) {
-                ServerLevel level = server.getLevel(
-                    net.minecraft.resources.ResourceKey.create(
-                        net.minecraft.core.registries.Registries.DIMENSION,
-                        new net.minecraft.resources.ResourceLocation(data.dimension)
-                    )
-                );
-                
-                if (level != null) {
-                    level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
-                }
+            // 优先使用维度跟踪 Map
+            var dimension = manager.botChunkTicketDimensions.get(botName);
+            ServerLevel level = dimension != null ? server.getLevel(dimension) : null;
+            
+            if (level != null) {
+                level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
             } else {
-                // botsData 不可用时，遍历所有维度尝试移除票据
-                for (ServerLevel level : server.getAllLevels()) {
-                    level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
+                // 维度不可用时，遍历所有维度尝试移除票据
+                for (ServerLevel lvl : server.getAllLevels()) {
+                    lvl.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
                 }
             }
         }
         
         manager.botChunkTickets.clear();
+        manager.botChunkTicketDimensions.clear();
         MyBotMod.LOGGER.info("清理了所有区块加载票据");
     }
     

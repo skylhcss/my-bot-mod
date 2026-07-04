@@ -33,6 +33,13 @@ public class BotManager {
      * @return 创建的假人，如果失败则返回null
      */
     public static BotPlayer createBot(MinecraftServer server, ServerPlayer creator, String botName, Vec3 position, GameType gameMode) {
+        return createBot(server, creator, botName, position, gameMode, null);
+    }
+
+    /**
+     * 创建并召唤一个假人（支持指定 UUID，用于持久化恢复）
+     */
+    public static BotPlayer createBot(MinecraftServer server, ServerPlayer creator, String botName, Vec3 position, GameType gameMode, UUID specificUUID) {
         try {
             var config = name.modid.config.ModConfig.getInstance();
             
@@ -62,7 +69,8 @@ public class BotManager {
             }
 
             // 创建游戏档案
-            GameProfile profile = new GameProfile(UUID.randomUUID(), botName);
+            GameProfile profile = new GameProfile(
+                specificUUID != null ? specificUUID : UUID.randomUUID(), botName);
             
             // 应用皮肤
             BotSkinManager.applySkin(profile, botName);
