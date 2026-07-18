@@ -119,14 +119,41 @@ public class ModConfig {
      */
     public boolean allowBotAutoJump = true;
     
-    // ========== 关于信息（transient 防止 Gson 序列化/反序列化 final 字段） ==========
-    public transient final String modName = "我的机器人";
-    public transient final String modVersion = "1.2.1b";
-    public transient final String author = "Skyline_hcss";
-    public transient final String email = "Skyline.hcss@gmail.com";
-    public transient final String githubRepo = "https://github.com/skylhcss/my-bot-mod";
-    public transient final String description = "一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric";
-    public transient final String license = "MIT License";
+    // ========== 关于信息 ==========
+    /**
+     * 模组名称
+     */
+    public final String modName = "我的机器人";
+    
+    /**
+     * 模组版本
+     */
+    public final String modVersion = "1.2.1a";
+    
+    /**
+     * 作者信息
+     */
+    public final String author = "Skyline_hcss";
+    
+    /**
+     * 作者邮箱
+     */
+    public final String email = "Skyline.hcss@gmail.com";
+    
+    /**
+     * GitHub 仓库地址
+     */
+    public final String githubRepo = "https://github.com/skylhcss/my-bot-mod";
+    
+    /**
+     * 模组描述
+     */
+    public final String description = "一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric";
+    
+    /**
+     * 许可证
+     */
+    public final String license = "MIT License";
     
     /**
      * 获取配置实例
@@ -198,24 +225,12 @@ public class ModConfig {
             // 确保配置目录存在
             CONFIG_FILE.getParentFile().mkdirs();
             
-            // 原子写入：先写临时文件，再重命名，避免写入中途崩溃导致配置损坏
-            File tempFile = new File(CONFIG_FILE.getParentFile(), CONFIG_FILE.getName() + ".tmp");
-            try (FileWriter writer = new FileWriter(tempFile)) {
+            // 写入配置文件
+            try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
                 GSON.toJson(this, writer);
             }
-            // 重命名（在同一文件系统上是原子操作）
-            if (CONFIG_FILE.exists()) {
-                CONFIG_FILE.delete();
-            }
-            if (!tempFile.renameTo(CONFIG_FILE)) {
-                // 重命名失败时回退为直接写入
-                try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
-                    GSON.toJson(this, writer);
-                }
-                tempFile.delete();
-            }
         } catch (IOException e) {
-            name.modid.MyBotMod.LOGGER.error("无法保存配置文件: {}", e.getMessage());
+            System.err.println("无法保存配置文件: " + e.getMessage());
         }
     }
     

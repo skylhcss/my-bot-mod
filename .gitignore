@@ -55,7 +55,6 @@ mods/
 
 # project specific
 
-.qoder/
 MEMORY.md.backup
 *.tmp
 *.bak

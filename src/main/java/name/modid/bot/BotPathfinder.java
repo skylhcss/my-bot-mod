@@ -4,7 +4,6 @@ import name.modid.MyBotMod;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
-import net.minecraft.world.phys.shapes.VoxelShape;
 
 import java.util.*;
 
@@ -27,16 +26,16 @@ public class BotPathfinder {
     private static final int MAX_OPEN_SET_SIZE = 25000;
 
     /** 到达路标点的水平距离阈值 */
-    private static final double WAYPOINT_REACH_DISTANCE = 0.5;
+    private static final double WAYPOINT_REACH_DISTANCE = 0.6;
 
     /** 到达终点的水平距离阈值 */
     private static final double TARGET_REACH_DISTANCE = 1.5;
 
-    /** 路径重算间隔（tick），缩短以应对实体碰撞等不确定性 */
-    private static final int PATH_RECALC_INTERVAL = 40;
+    /** 路径重算间隔（tick） */
+    private static final int PATH_RECALC_INTERVAL = 100;
 
     /** 卡住检测阈值（tick） */
-    private static final int STUCK_THRESHOLD = 20;
+    private static final int STUCK_THRESHOLD = 30;
 
     /** 卡住时的最小水平移动距离 */
     private static final double STUCK_MOVE_THRESHOLD = 0.15;
@@ -260,27 +259,19 @@ public class BotPathfinder {
 
     /**
      * 检查一个位置是否为有效站立位置
-     * 条件：脚下方块有固体碰撞 + 脚部无完整方块碰撞 + 头部无完整方块碰撞 + 无危险
+     * 条件：脚下方块固体 + 脚部空气 + 头部空气 + 脚下无流体
      */
     private boolean isValidStandingPos(BlockPos pos) {
-        // 脚下必须有固体方块
-        if (!isCollisionFullBlock(pos.below()) && !bot.level().getBlockState(pos.below()).blocksMotion()) {
-            return false;
-        }
-        // 脚下不能有危险流体
-        if (isDangerous(pos.below())) return false;
+        BlockPos below = pos.below();
+        BlockState belowState = bot.level().getBlockState(below);
+        if (!belowState.blocksMotion()) return false;
 
-        // 脚部位置不能有完整方块碰撞（不完整方块如地毯/雪层可以通过）
-        if (isCollisionFullBlock(pos)) return false;
-        // 脚部不能有危险
-        if (isDangerous(pos)) return false;
+        BlockState footState = bot.level().getBlockState(pos);
+        if (footState.blocksMotion()) return false;
+        if (!footState.getFluidState().isEmpty()) return false;
 
-        // 头部位置不能有完整方块碰撞
-        if (isCollisionFullBlock(pos.above())) return false;
-        // 头部不能有危险
-        if (isDangerous(pos.above())) return false;
-
-        return true;
+        BlockState headState = bot.level().getBlockState(pos.above());
+        return !headState.blocksMotion();
     }
 
     // ==================== A* 寻路算法 ====================
@@ -359,21 +350,11 @@ public class BotPathfinder {
                 continue;
             }
 
-            // 2. 跳跃上1格（前方有全方块碰撞箱的固体方块作为台阶）
+            // 2. 跳跃上1格
             BlockPos up = adj.above();
             if (isValidStandingPos(up) && canClimb(adj)) {
                 neighbors.add(up);
                 continue;
-            }
-
-            // 2b. 跳跃上2格（站在不完整方块如半砖上时，实际起跳点更高）
-            // 玩家跳跃高度约1.25格，从半砖(+0.5)起跳可到达+1.75，约等于2格
-            if (!isValidStandingPos(up) && isClear(adj)) {
-                BlockPos up2 = adj.above(2);
-                if (isValidStandingPos(up2) && isClear(up) && canClimb(adj)) {
-                    neighbors.add(up2);
-                    continue;
-                }
             }
 
             // 3. 下落1格
@@ -413,53 +394,16 @@ public class BotPathfinder {
         return neighbors;
     }
 
-    /** 检查位置是否可攀登（前方有全方块碰撞箱的固体方块作为台阶） */
+    /** 检查位置是否可攀登（前方有固体方块作为台阶） */
     private boolean canClimb(BlockPos pos) {
-        return isCollisionFullBlock(pos);
+        return bot.level().getBlockState(pos).blocksMotion();
     }
 
-    /**
-     * 检查位置是否通畅
-     * 使用碰撞形状而非 blocksMotion()，正确处理不完整方块（地毯、雪层、活板门等）
-     * 同时检测危险方块（岩浆、火焰）
-     */
+    /** 检查位置是否通畅（非阻挡方块 + 无流体） */
     private boolean isClear(BlockPos pos) {
-        if (isDangerous(pos)) return false;
         BlockState state = bot.level().getBlockState(pos);
-        // 只有碰撞箱为完整方块的才阻挡实体通过
-        // 不完整方块（地毯、雪层、半砖、活板门等）碰撞箱较小，实体可以越过
-        return !isCollisionFullBlock(pos);
-    }
-
-    /**
-     * 检查方块是否有完整的 1×1×1 碰撞箱
-     * 石头、泥土等返回 true；地毯、雪层、半砖、活板门等返回 false
-     */
-    private boolean isCollisionFullBlock(BlockPos pos) {
-        BlockState state = bot.level().getBlockState(pos);
-        if (state.isAir()) return false;
-        VoxelShape shape = state.getCollisionShape(bot.level(), pos);
-        if (shape.isEmpty()) return false;
-        // 检查碰撞箱是否近似完整的 1×1×1 方块
-        var bounds = shape.bounds();
-        return bounds.minX <= 0.001 && bounds.minY <= 0.001 && bounds.minZ <= 0.001
-            && bounds.maxX >= 0.999 && bounds.maxY >= 0.999 && bounds.maxZ >= 0.999;
-    }
-
-    /**
-     * 检查位置是否有危险（岩浆、火焰等）
-     */
-    private boolean isDangerous(BlockPos pos) {
-        BlockState state = bot.level().getBlockState(pos);
-        // 岩浆
-        if (state.getFluidState().is(net.minecraft.tags.FluidTags.LAVA)) return true;
-        // 火焰
-        if (state.is(net.minecraft.tags.BlockTags.FIRE)) return true;
-        // 危险方块（仙人掌、岩浆块等）
-        var block = state.getBlock();
-        if (block instanceof net.minecraft.world.level.block.CactusBlock) return true;
-        if (block instanceof net.minecraft.world.level.block.MagmaBlock) return true;
-        return false;
+        if (state.blocksMotion()) return false;
+        return state.getFluidState().isEmpty();
     }
 
     // ==================== 代价和启发式 ====================

@@ -37,8 +37,7 @@ public class PlayerInfoMixin {
     private void onGetSkinLocation(CallbackInfoReturnable<ResourceLocation> cir) {
         try {
             // 检查是否有纹理属性
-            if (profile.getProperties().containsKey("textures")
-                && !profile.getProperties().get("textures").isEmpty()) {
+            if (profile.getProperties().containsKey("textures")) {
                 Property textureProperty = profile.getProperties().get("textures").iterator().next();
                 String textureValue = textureProperty.getValue();
                 

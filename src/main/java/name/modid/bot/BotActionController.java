@@ -39,9 +39,6 @@ public class BotActionController {
     // 寻路系统
     private BotPathfinder pathfinder = null;
     
-    // 挖掘状态跟踪（避免每个 tick 重置挖掘进度）
-    private net.minecraft.core.BlockPos miningTarget = null;
-    
     public BotActionController(BotPlayer bot) {
         this.bot = bot;
     }
@@ -156,27 +153,15 @@ public class BotActionController {
                     // 创造模式：直接破坏
                     bot.gameMode.destroyBlock(blockPos);
                 } else {
-                    // 生存模式：渐进式挖掘
-                    // 只在目标方块变化时发送 START_DESTROY_BLOCK，避免每 tick 重置挖掘进度
-                    if (!blockPos.equals(miningTarget)) {
-                        // 先中止之前的挖掘
-                        if (miningTarget != null) {
-                            bot.gameMode.handleBlockBreakAction(
-                                miningTarget,
-                                net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK,
-                                net.minecraft.core.Direction.UP,
-                                320, 0
-                            );
-                        }
-                        miningTarget = blockPos;
-                        bot.gameMode.handleBlockBreakAction(
-                            blockPos,
-                            net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK,
-                            blockHitResult.getDirection(),
-                            320, 0
-                        );
-                    }
-                    // 后续 tick 不发送任何动作，让 ServerPlayerGameMode 内部累加挖掘进度
+                    // 生存模式：通过 handleBlockBreakAction 启动挖掘
+                    // 每个 tick 都会调用，直到方块被破坏
+                    bot.gameMode.handleBlockBreakAction(
+                        blockPos,
+                        net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK,
+                        blockHitResult.getDirection(),
+                        320,   // maxY: 主世界最大建筑高度
+                        0      // sequence
+                    );
                 }
             }
         }
@@ -371,16 +356,6 @@ public class BotActionController {
         this.attackingTicks = 0;
         this.attackInterval = 0;
         this.attackIntervalCounter = 0;
-        // 中止当前挖掘
-        if (miningTarget != null) {
-            bot.gameMode.handleBlockBreakAction(
-                miningTarget,
-                net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK,
-                net.minecraft.core.Direction.UP,
-                320, 0
-            );
-            miningTarget = null;
-        }
     }
 
     /**

@@ -2,30 +2,7 @@
 
 本文档记录 My Bot Mod 的所有版本更新历史。
 
-**最后更新**: 2026-07-04
-
----
-
-## [1.2.1b] - 2026-07-04
-
-### 🐛 Bug 修复
-- 修复寻路器碰撞检测不准确（使用 VoxelShape 替代 blocksMotion，正确处理地毯/雪层/半砖/活板门等不完整方块）
-- 修复寻路时未避开危险方块（岩浆、火焰、仙人掌、岩浆块）
-- 修复站在半砖等不完整方块上无法进行 2 格跳跃
-- 修复生存模式挖掘进度每 tick 重置（跟踪 miningTarget 避免重复重置）
-- 修复持久化维度跟踪 Map 导致票据清理异常
-- 修复延迟加载假人时玩家引用失效导致断连
-- 修复命令闭包捕获过期 config 引用（改为每次检查时获取最新实例）
-- 修复假人因 keep-alive 超时被踢出（覆盖 FakeServerGamePacketListenerImpl.tick()）
-- 修复皮肤 textures 属性空集合导致异常（增加非空检查）
-- 修复 BotPlayer NPE 日志信息不完整（改为完整堆栈 error 级别）
-
-### 🔧 技术改进
-- BotPathfinder 寻路参数调优：重算间隔 100→40 tick，卡住阈值 30→20 tick，到达阈值 0.6→0.5
-- ModConfig 配置文件原子写入：临时文件+重命名防止崩溃损坏
-- ModConfig 关于信息字段改为 transient，防止 Gson 序列化
-- BotPersistenceManager 支持 UUID 持久化恢复
-- 配置写入失败时使用 LOGGER 替代 System.err 输出错误
+**最后更新**: 2026-06-20
 
 ---
 

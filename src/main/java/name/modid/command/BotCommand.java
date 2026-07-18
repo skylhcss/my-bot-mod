@@ -29,13 +29,15 @@ public class BotCommand {
      * 注册命令
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        var config = name.modid.config.ModConfig.getInstance();
+        
         dispatcher.register(Commands.literal("bot")
             .requires(source -> {
-                // 每次检查时获取最新配置实例，避免闭包捕获过期引用
-                var cfg = name.modid.config.ModConfig.getInstance();
-                if (cfg.allowNonOpCreateBot) {
+                // 如果允许非 OP 创建假人，则所有玩家都可以使用
+                if (config.allowNonOpCreateBot) {
                     return true;
                 }
+                // 否则需要 OP 权限（等级 2）
                 return source.hasPermission(2);
             })
             .then(Commands.argument("botName", StringArgumentType.word())

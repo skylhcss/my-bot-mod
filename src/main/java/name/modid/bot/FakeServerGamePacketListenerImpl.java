@@ -16,9 +16,6 @@ public class FakeServerGamePacketListenerImpl extends ServerGamePacketListenerIm
         super(server, connection, player);
     }
 
-    // 覆盖 tick 方法，防止父类的 keep-alive 超时检测踢出假人
-    @Override public void tick() {}
-
     // 覆盖所有方法，使其不执行任何操作
     @Override public void handlePlayerInput(ServerboundPlayerInputPacket packet) {}
     @Override public void handleMoveVehicle(ServerboundMoveVehiclePacket packet) {}
