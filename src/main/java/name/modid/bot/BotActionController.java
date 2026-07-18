@@ -122,8 +122,8 @@ public class BotActionController {
         // 从配置获取攻击距离
         var config = name.modid.config.ModConfig.getInstance();
         
-        // 如果启用了杀戮光环，直接执行（跳过不必要的射线追踪）
-        if (config.enableKillAura) {
+        // 如果启用了杀戮光环，直接执行（跳过不必要的射线追踪）；假人个人配置优先于全局配置
+        if (BotSettings.resolve(bot.getSettings().killAura, config.enableKillAura)) {
             performKillAura(config.killAuraRange);
             return;
         }
@@ -302,7 +302,7 @@ public class BotActionController {
         // 使用 Minecraft 内置的 horizontalCollision 碰撞检测，无需手动计算方块位置
         // 这与玩家按空格键跳跃的效果完全相同
         var config = name.modid.config.ModConfig.getInstance();
-        if (config.allowBotAutoJump && forward > 0 && bot.onGround() && bot.horizontalCollision) {
+        if (BotSettings.resolve(bot.getSettings().autoJump, config.allowBotAutoJump) && forward > 0 && bot.onGround() && bot.horizontalCollision) {
             bot.setJumping(true);
         }
     }

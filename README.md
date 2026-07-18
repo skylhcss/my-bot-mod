@@ -3,7 +3,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)](https://www.minecraft.net/)
 [![Fabric](https://img.shields.io/badge/Fabric-0.92.8-blue.svg)](https://fabricmc.net/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.2.1a-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
+[![Version](https://img.shields.io/badge/Version-1.3.0-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
 [![GitHub](https://img.shields.io/badge/GitHub-skylhcss%2Fmy--bot--mod-blue.svg)](https://github.com/skylhcss/my-bot-mod)
 
 一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric。
@@ -15,6 +15,8 @@
 - 🎮 **动作控制**：攻击、使用物品、移动、跳跃、潜行、疾跑
 - 👀 **视角控制**：看向指定方向或位置
 - 🎒 **物品操作**：丢弃物品、交换主副手
+- 🎒 **背包/末影箱**：对着假人右键打开设置面板，可编辑背包（主物品栏+盔甲+副手+手持槽位）与末影箱，改动实时同步
+- 🖥️ **每假人设置面板**：右键假人打开，切换游戏模式/手持槽位，快速传送、停止、删除
 - 🐴 **骑乘系统**：骑乘实体（支持白名单）
 - 🎨 **皮肤系统**：三级优先级（Mojang API → PNG → 默认）
 - ⚔️ **攻击系统**：射线追踪 + 方块破坏 + 杀戮光环
@@ -90,6 +92,20 @@
 /botmod info                     # 显示模组信息
 ```
 
+### 假人背包 / 末影箱 / 设置面板
+**对着假人右键**即可打开该假人的设置面板（全局配置界面风格，左侧为操作、右侧为个人配置），面板内可：
+- 打开背包（可编辑：主物品栏、盔甲、副手，并设置手持槽位；界面左侧显示假人模型）
+- 打开末影箱（可编辑）
+- 切换游戏模式、设置手持槽位、停止动作、传送到我、删除假人
+- 右侧个人配置（受伤/饥饿/死亡重生/自动跳跃/杀戮光环，三态：继承/开/关，**优先于全局配置**）
+
+也可在全局配置界面（B 键）的"假人"标签页点击假人打开其设置面板。也可用命令：
+```
+/bot <名字> inventory     # 打开背包
+/bot <名字> enderchest    # 打开末影箱
+/bot <名字> panel         # 打开设置面板
+```
+
 ### 打开配置界面
 - 按 **B** 键打开配置菜单
 - 或使用 Minecraft 设置 > 控制 > 按键绑定
@@ -150,6 +166,16 @@
 
 ## 📝 更新日志
 
+### v1.3.0 (2026-07-18) - 背包 / 末影箱 / 设置面板
+- 🎒 新增可编辑的假人背包界面（主物品栏 + 盔甲 + 副手 + 手持槽位，原版风格，左侧渲染假人模型）
+- 🧰 新增可编辑的假人末影箱界面
+- 🖥️ 新增每个假人独立的设置面板（右键假人打开）
+- 🖱️ 打开方式：对着假人右键
+- ⚙️ 设置面板为全局配置界面风格：左侧操作，右侧假人个人配置（三态，优先于全局）
+- 🗂️ 全局配置界面支持折叠分类，新增"假人"标签页（点击假人打开其设置）
+- 🐛 修复皮肤请求阻塞主线程、死亡自动重生不可靠、命令权限使用过期配置、PNG 纹理泄漏等 Bug
+- 🔧 新增 inventory/enderchest/panel/slot/gamemode/tphere 命令
+
 ### v1.2.1a (2026-06-20) - 自动跳跃与寻路系统
 - 🦘 新增假人自动跳跃功能（使用 `horizontalCollision` 碰撞检测，与玩家一致）
 - 🗺️ 新增 A* 寻路系统（借鉴 Baritone 设计，`/bot <name> goto` 命令）
@@ -184,14 +210,6 @@
   - 详细说明假人驻留的工作原理
   - 添加区块加载机制的说明
   - 更新配置文档
-
-### v1.1.1a (2026-05-05)
-- 🔄 假人驻留系统全面重构（参考 GugleCarpetAddition，改为玩家加入时加载）
-- 🔄 滑块组件完全重写，彻底解决互相干扰和拖动问题
-- 🎨 简化配置界面，删除所有黄色标题和说明文字
-- 🎨 为每个配置项添加单独的重置按钮，移除总重置按钮
-- ✅ 修复假人驻留功能在同名存档和单人存档中的问题
-- ✅ 修复滑块联动、无法连续拖动、文字重叠、完成按钮失灵、按钮跳转等问题
 
 详见 [CHANGELOG](CHANGELOG.md) 文件。
 

@@ -89,6 +89,12 @@ public class BotPersistenceManager extends SavedData {
         // 末影箱数据
         public String enderChestData;
         
+        // 当前手持（选中）快捷栏槽位（0-8）
+        public int selectedSlot;
+        
+        // 假人个人配置（覆盖全局配置）
+        public BotSettings settings;
+        
         /**
          * 假人状态类
          * 存储假人的动作和生存状态
@@ -235,14 +241,22 @@ public class BotPersistenceManager extends SavedData {
             // 游戏模式
             data.gameMode = bot.gameMode.getGameModeForPlayer().getName();
             
-            // 保存物品栏（使用 NBT → SNBT 字符串）
+            // 保存物品栏（包裹在 CompoundTag 中，以便 SNBT 解析）
             try {
+                CompoundTag invCompound = new CompoundTag();
                 ListTag inventoryList = new ListTag();
                 bot.getInventory().save(inventoryList);
-                data.inventoryData = inventoryList.toString();
+                invCompound.put("Items", inventoryList);
+                data.inventoryData = invCompound.toString();
             } catch (Exception e) {
                 MyBotMod.LOGGER.error("无法保存假人 {} 的物品栏: {}", data.name, e.getMessage());
             }
+            
+            // 保存当前手持槽位
+            data.selectedSlot = bot.getInventory().selected;
+            
+            // 保存假人个人配置
+            data.settings = bot.getSettings();
             
             // 保存末影箱
             try {
@@ -541,6 +555,11 @@ public class BotPersistenceManager extends SavedData {
                     bot.setXRot(data.pitch);
                     bot.setYHeadRot(data.yaw);
                     
+                    // 恢复假人个人配置
+                    if (data.settings != null) {
+                        bot.getSettings().copyFrom(data.settings);
+                    }
+                    
                     // 区块加载票据已在 BotManager.createBot() 中添加，无需重复添加
                     
                     // 如果启用了保留状态，恢复假人状态
@@ -557,9 +576,19 @@ public class BotPersistenceManager extends SavedData {
                     // 恢复物品栏（如果有数据）
                     if (data.inventoryData != null && !data.inventoryData.isEmpty()) {
                         try {
-                            net.minecraft.nbt.Tag inventoryTag = TagParser.parseTag(data.inventoryData);
-                            if (inventoryTag instanceof ListTag inventoryList) {
+                            String invStr = data.inventoryData.trim();
+                            CompoundTag invCompound;
+                            if (invStr.startsWith("[")) {
+                                // 兼容旧版本的 list 格式（[...]），包裹为 {Items:[...]}
+                                invCompound = TagParser.parseTag("{Items:" + invStr + "}");
+                            } else {
+                                invCompound = TagParser.parseTag(invStr);
+                            }
+                            if (invCompound.contains("Items")) {
+                                ListTag inventoryList = invCompound.getList("Items", 10);
                                 bot.getInventory().load(inventoryList);
+                                // 恢复手持槽位（限制在 0-8）
+                                bot.getInventory().selected = Math.max(0, Math.min(8, data.selectedSlot));
                                 MyBotMod.LOGGER.info("成功恢复假人 {} 的物品栏", data.name);
                             }
                         } catch (Exception e) {

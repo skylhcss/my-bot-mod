@@ -1,9 +1,17 @@
 package name.modid.client;
 
+import name.modid.client.menu.BotInventoryScreen;
+import name.modid.client.screen.BotPanelScreen;
 import name.modid.client.screen.ModernConfigScreen;
 import name.modid.config.ModConfig;
+import name.modid.menu.ModMenus;
+import name.modid.net.BotNetworking;
+import name.modid.net.BotPanelData;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.gui.screens.MenuScreens;
 import org.lwjgl.glfw.GLFW;
 
 /**
@@ -18,6 +26,38 @@ public class MyBotModClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ModConfig.getInstance();
+
+        // 注册假人背包界面
+        MenuScreens.register(ModMenus.BOT_INVENTORY, BotInventoryScreen::new);
+
+        // 注册 S2C：右键假人时打开设置面板
+        ClientPlayNetworking.registerGlobalReceiver(BotNetworking.OPEN_BOT_PANEL,
+            (client, handler, buf, responseSender) -> {
+                BotPanelData data = BotPanelData.read(buf);
+                client.execute(() -> client.setScreen(new BotPanelScreen(data)));
+            });
+
+        // 注册 S2C：假人列表同步
+        ClientPlayNetworking.registerGlobalReceiver(BotNetworking.BOT_LIST,
+            (client, handler, buf, responseSender) -> {
+                int count = buf.readVarInt();
+                java.util.List<BotClientData.Entry> list = new java.util.ArrayList<>();
+                for (int i = 0; i < count; i++) {
+                    String name = buf.readUtf();
+                    String dim = buf.readUtf();
+                    list.add(new BotClientData.Entry(name, dim));
+                }
+                client.execute(() -> {
+                    BotClientData.set(list);
+                    if (client.screen instanceof name.modid.client.screen.ModernConfigScreen ms) {
+                        ms.refreshCurrentPage();
+                    }
+                });
+            });
+
+        // 断开连接时释放 PNG 皮肤动态纹理，避免跨存档累积
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
+            client.execute(BotSkinTextureLoader::clearCache));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.screen != null) {

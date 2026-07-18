@@ -59,3 +59,6 @@ MEMORY.md.backup
 *.tmp
 *.bak
 *~
+
+# qoder
+.qoder/

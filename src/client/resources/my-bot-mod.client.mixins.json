@@ -3,6 +3,7 @@
 	"package": "name.modid.client.mixin",
 	"compatibilityLevel": "JAVA_17",
 	"client": [
+		"ClientPacketListenerMixin",
 		"PlayerInfoMixin"
 	],
 	"injectors": {

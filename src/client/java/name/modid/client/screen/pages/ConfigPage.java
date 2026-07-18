@@ -222,6 +222,15 @@ public abstract class ConfigPage {
 
         double adjustedMouseY = mouseY + scrollOffset;
 
+        // 2a) 标题栏点击 -> 折叠/展开
+        for (SectionCard card : sections) {
+            if (card.isTitleClicked(mouseX, adjustedMouseY)) {
+                card.toggleCollapsed();
+                layoutSections();
+                return true;
+            }
+        }
+
         for (SectionCard card : sections) {
             for (AbstractWidget widget : card.getAllWidgets()) {
                 if (widget.isMouseOver(mouseX, adjustedMouseY) && widget.mouseClicked(mouseX, adjustedMouseY, button)) {

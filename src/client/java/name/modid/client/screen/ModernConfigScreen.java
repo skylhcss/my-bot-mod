@@ -6,6 +6,9 @@ import name.modid.client.screen.widget.ModernButton;
 import name.modid.client.screen.widget.TabButton;
 import name.modid.client.screen.widget.UI;
 import name.modid.config.ModConfig;
+import name.modid.net.BotNetworking;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -74,6 +77,7 @@ public class ModernConfigScreen extends Screen {
         pages.add(new CombatPage(this, config));
         pages.add(new SurvivalPage(this, config));
         pages.add(new AdvancedPage(this, config));
+        pages.add(new BotsPage(this, config));
 
         // 创建 Tab 栏（均匀分布，留出卡片左右内边距宽度）
         int tabCount = pages.size();
@@ -114,6 +118,20 @@ public class ModernConfigScreen extends Screen {
                 button -> { config.save(); this.minecraft.setScreen(parent); }
             )
         );
+
+        // 打开界面时请求最新假人列表（供"假人"标签页展示）
+        if (this.minecraft != null && this.minecraft.getConnection() != null) {
+            ClientPlayNetworking.send(BotNetworking.REQUEST_BOT_LIST, PacketByteBufs.create());
+        }
+    }
+
+    /**
+     * 重新初始化当前页面（假人列表 S2C 到达后由客户端调用，用于刷新"假人"标签页）
+     */
+    public void refreshCurrentPage() {
+        if (currentPage instanceof name.modid.client.screen.pages.BotsPage) {
+            initCurrentPage();
+        }
     }
 
     private void initCurrentPage() {

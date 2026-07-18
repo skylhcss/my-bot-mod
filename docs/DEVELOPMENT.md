@@ -27,12 +27,19 @@ my-bot-mod/
 │   │   │   │   ├── BotManager.java     # 假人管理
 │   │   │   │   ├── BotPathfinder.java  # A*寻路系统（v1.2.1 新增）
 │   │   │   │   ├── BotSkinManager.java # 皮肤管理
+│   │   │   │   ├── BotSettings.java    # 假人个人配置三态覆盖（v1.3.0）
 │   │   │   │   ├── BotPersistenceManager.java  # 驻留系统（v1.1.1a 重构）
 │   │   │   │   └── FakeServerGamePacketListenerImpl.java  # 网络连接
 │   │   │   ├── command/
 │   │   │   │   └── BotCommand.java     # 命令系统
 │   │   │   ├── config/
 │   │   │   │   └── ModConfig.java      # 配置系统
+│   │   │   ├── menu/                   # 容器菜单（v1.3.0）
+│   │   │   │   ├── BotInventoryMenu.java   # 假人背包菜单
+│   │   │   │   └── ModMenus.java           # 菜单注册
+│   │   │   ├── net/                    # 网络同步（v1.3.0）
+│   │   │   │   ├── BotNetworking.java      # S2C 打开面板
+│   │   │   │   └── BotPanelData.java       # 面板快照数据
 │   │   │   ├── mixin/
 │   │   │   │   └── ServerPlayerMixin.java  # 核心 Mixin
 │   │   │   └── MyBotMod.java           # 主类
@@ -43,23 +50,28 @@ my-bot-mod/
 │       ├── java/name/modid/client/
 │       │   ├── screen/                 # 配置界面
 │       │   │   ├── ModernConfigScreen.java  # 主配置界面
-│       │   │   ├── pages/              # 配置页面（v1.1.1a 简化）
-│       │   │   │   ├── ConfigPage.java      # 页面基类
-│       │   │   │   ├── GeneralPage.java     # 通用设置
-│       │   │   │   ├── AttackPage.java      # 攻击设置
+│       │   │   ├── pages/              # 配置页面
+│       │   │   │   ├── ConfigPage.java      # 页面基类（支持折叠）
+│       │   │   │   ├── GeneralPage.java     # 基础设置
+│       │   │   │   ├── CombatPage.java      # 战斗设置
 │       │   │   │   ├── SurvivalPage.java    # 生存设置
-│       │   │   │   ├── MountPage.java       # 骑乘设置
-│       │   │   │   └── AdvancedPage.java    # 高级设置
+│       │   │   │   ├── AdvancedPage.java    # 高级设置
+│       │   │   │   └── BotsPage.java        # 假人列表（v1.3.0）
 │       │   │   ├── widget/             # UI 组件（v1.1.1a 重写）
 │       │   │   │   ├── ModernButton.java
 │       │   │   │   ├── ModernCheckbox.java
 │       │   │   │   └── ModernSlider.java    # 滑块（完全重写）
 │       │   │   ├── KeybindConfigScreen.java
 │       │   │   ├── AboutScreen.java
-│       │   │   └── MountWhitelistScreen.java
+│       │   │   ├── MountWhitelistScreen.java
+│       │   │   └── BotPanelScreen.java  # 每假人设置面板（v1.3.0）
+│       │   ├── menu/                   # 背包界面（v1.3.0）
+│       │   │   └── BotInventoryScreen.java
 │       │   ├── mixin/
+│       │   │   ├── ClientPacketListenerMixin.java  # 皮肤纹理清理（v1.3.0）
 │       │   │   └── PlayerInfoMixin.java  # 皮肤渲染 Mixin
 │       │   ├── BotSkinTextureLoader.java  # 皮肤加载
+│       │   ├── BotClientData.java  # 假人列表客户端缓存（v1.3.0）
 │       │   └── MyBotModClient.java     # 客户端主类
 │       └── resources/
 │           └── my-bot-mod.client.mixins.json
@@ -191,6 +203,26 @@ public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
 
 ---
 
+### 5. 背包 / 末影箱 / 设置面板（v1.3.0）
+
+**打开方式**：对着假人右键 → 服务端 `UseEntityCallback` 拦截 → 下发 S2C `open_bot_panel` → 客户端打开 `BotPanelScreen`。
+
+**关键类**：
+- `menu/BotInventoryMenu`：`ExtendedScreenHandlerType` 容器菜单，直接以假人 `Inventory`（41 格）为后端，含盔甲/副手与查看者物品栏；`clickMenuButton` 设置手持槽位；`DataSlot` 同步手持槽位；`quickMoveStack` 实现 Shift 转移。
+- `menu/ModMenus`：注册 `BOT_INVENTORY` 菜单类型（主初始化调用）。
+- `net/BotNetworking` + `net/BotPanelData`：S2C `open_bot_panel` 数据包与快照。
+- `client/menu/BotInventoryScreen`：原版风格容器界面，程序化绘制槽位，`InventoryScreen.renderEntityInInventoryFollowsMouse` 渲染假人模型，3x3 手持槽位选择板。
+- `client/screen/BotPanelScreen`：全局配置界面风格设置面板（左侧操作/右侧个人配置），操作按钮通过 `sendCommand` 调用 `/bot` 命令，个人配置通过 C2S 包更新。
+- 末影箱：直接复用原版 `ChestMenu.threeRows` 绑定 `bot.getEnderChestInventory()`。
+- `client/mixin/ClientPacketListenerMixin`：玩家信息移除时释放 PNG 皮肤动态纹理，修复 GPU 纹理泄漏。
+- `bot/BotSettings`：假人个人配置（三态覆盖，优先于全局），由 BotPlayer/BotActionController 解析，BotPersistenceManager 驻留。
+- `client/screen/pages/BotsPage` + `client/BotClientData`：全局配置"假人"标签页与列表缓存（S2C `bot_list`）；SectionCard 支持标题栏折叠。
+- 新增网络通道：S2C `bot_list`、C2S `update_bot_setting`（更新个人配置）、C2S `request_bot_list`。
+
+**新增命令**：`inventory`、`enderchest`、`panel`、`slot`、`gamemode`、`tphere`（见 [COMMANDS.md](COMMANDS.md)）。
+
+---
+
 ## v1.1.1a 重构说明
 
 ### 假人驻留系统重构
@@ -314,7 +346,7 @@ ModernSlider slider = new ModernSlider(...); // 只保留配置项
 ### 输出文件
 构建后的 JAR 文件位于：
 ```
-build/libs/my-bot-mod-1.1.1a.jar
+build/libs/my-bot-mod-1.3.0.jar
 ```
 
 ---

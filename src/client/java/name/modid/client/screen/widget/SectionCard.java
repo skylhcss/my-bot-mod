@@ -18,11 +18,26 @@ public class SectionCard {
     private int x, y;
     private int width;
     private int height;
+    private boolean collapsed = false;
     private final List<AbstractWidget> items = new ArrayList<>();
     private final List<ResetButton> resets = new ArrayList<>();
     
     public SectionCard(String title) {
         this.title = title;
+    }
+    
+    public boolean isCollapsed() { return collapsed; }
+    public void setCollapsed(boolean collapsed) { this.collapsed = collapsed; }
+    public void toggleCollapsed() { this.collapsed = !this.collapsed; }
+    
+    /** 标题栏（可点击折叠）高度 */
+    public int headerHeight() {
+        return DesignTokens.CARD_V_PADDING + DesignTokens.CARD_TITLE_HEIGHT + DesignTokens.CARD_TITLE_GAP;
+    }
+    
+    /** 判断坐标是否命中标题栏（虚拟坐标） */
+    public boolean isTitleClicked(double mouseX, double mouseY) {
+        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + headerHeight();
     }
     
     /**
@@ -46,6 +61,12 @@ public class SectionCard {
         this.x = cardX;
         this.y = cardY;
         this.width = cardWidth;
+
+        // 折叠时仅保留标题行高度
+        if (collapsed) {
+            this.height = DesignTokens.CARD_V_PADDING + DesignTokens.CARD_TITLE_HEIGHT + DesignTokens.CARD_V_PADDING;
+            return this.height;
+        }
 
         int currentY = cardY + DesignTokens.CARD_V_PADDING + DesignTokens.CARD_TITLE_HEIGHT + DesignTokens.CARD_TITLE_GAP;
         // 留出右侧一个 reset 按钮的宽度（reset 紧贴右内边距），控件文字居中时不会被 reset 遮挡
@@ -91,14 +112,20 @@ public class SectionCard {
         // 绘制边框
         drawRoundedBorder(graphics, x, y, width, height, DesignTokens.CARD_BORDER);
         
-        // 绘制标题（小号字体）
+        // 绘制标题（小号字体），前缀折叠箭头
+        String arrow = collapsed ? "▶ " : "▼ ";
         UI.drawScaled(graphics,
             Minecraft.getInstance().font,
-            Component.literal(title),
+            Component.literal(arrow + title),
             x + DesignTokens.CARD_H_PADDING,
             y + DesignTokens.CARD_V_PADDING,
             DesignTokens.TEXT_SCALE,
             DesignTokens.CARD_TITLE_COLOR);
+        
+        // 折叠时不渲染子项
+        if (collapsed) {
+            return;
+        }
         
         // 渲染子项
         for (AbstractWidget item : items) {
@@ -115,7 +142,12 @@ public class SectionCard {
      * 获取所有子 widget（含 ResetButton）
      */
     public List<AbstractWidget> getAllWidgets() {
-        List<AbstractWidget> all = new ArrayList<>(items);
+        List<AbstractWidget> all = new ArrayList<>();
+        // 折叠时不暴露子控件，避免隐藏控件被点击
+        if (collapsed) {
+            return all;
+        }
+        all.addAll(items);
         for (ResetButton r : resets) {
             if (r != null) all.add(r);
         }

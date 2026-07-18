@@ -33,6 +33,11 @@ public class BotPlayer extends ServerPlayer {
     private final String creatorName;
 
     /**
+     * 假人个人配置（覆盖全局配置）
+     */
+    private final BotSettings settings = new BotSettings();
+
+    /**
      * 构造函数
      * @param server 服务器实例
      * @param level 世界
@@ -78,6 +83,13 @@ public class BotPlayer extends ServerPlayer {
     }
 
     /**
+     * 获取假人个人配置（覆盖全局配置）
+     */
+    public BotSettings getSettings() {
+        return settings;
+    }
+
+    /**
      * 每tick更新假人状态
      * 参考 Carpet Mod 的 EntityPlayerMPFake.tick()
      */
@@ -108,9 +120,9 @@ public class BotPlayer extends ServerPlayer {
             // 这是 Carpet Mod 的做法，确保所有玩家逻辑都被处理
             this.doTick();
             
-            // 处理饥饿系统
+            // 处理饥饿系统（假人个人配置优先于全局配置）
             var config = name.modid.config.ModConfig.getInstance();
-            if (!config.botHunger) {
+            if (!BotSettings.resolve(settings.hunger, config.botHunger)) {
                 // 如果禁用饥饿，保持满饱食度
                 this.getFoodData().setFoodLevel(20);
                 this.getFoodData().setSaturation(20.0F);
@@ -131,24 +143,35 @@ public class BotPlayer extends ServerPlayer {
         
         var config = name.modid.config.ModConfig.getInstance();
         
-        if (config.autoRespawnOnDeath) {
-            // 自动重生：延迟 20 tick（1秒）后重生
+        if (BotSettings.resolve(settings.autoRespawn, config.autoRespawnOnDeath)) {
+            // 自动重生：延迟 10 tick 后复活
+            // 注意：必须在 deathTime 达到 20（LivingEntity 自动移除阀值）之前复活
             this.level().getServer().tell(new net.minecraft.server.TickTask(
-                this.level().getServer().getTickCount() + 20,
+                this.level().getServer().getTickCount() + 10,
                 () -> {
-                    // 安全检查：确保假人尚未被移除
+                    // 安全检查：确保假人尚未被移除且仍在管理器中
                     if (this.isRemoved() || BotManager.getBot(this.getName().getString()) == null) {
                         return;
                     }
-                    // 重生假人
+                    // 复活：重置死亡标志、死亡计时、血量、饱食度、效果与着火
+                    // 仅重置血量不够：若不清除 dead 标志，isDeadOrDying() 仍为 true 导致被移除
+                    this.dead = false;
+                    this.deathTime = 0;
                     this.setHealth(this.getMaxHealth());
                     this.getFoodData().setFoodLevel(20);
+                    this.getFoodData().setSaturation(5.0F);
                     this.removeAllEffects();
+                    this.clearFire();
                     
-                    // 传送回重生点或创建者位置
+                    // 传送回重生点；若未设置则回退到创建者位置，否则留在原地
                     var respawnPos = this.getRespawnPosition();
                     if (respawnPos != null) {
-                        this.teleportTo(respawnPos.getX(), respawnPos.getY(), respawnPos.getZ());
+                        this.teleportTo(respawnPos.getX() + 0.5, respawnPos.getY(), respawnPos.getZ() + 0.5);
+                    } else {
+                        ServerPlayer creator = this.level().getServer().getPlayerList().getPlayer(this.creatorUUID);
+                        if (creator != null && creator.level() == this.level()) {
+                            this.teleportTo(creator.getX(), creator.getY(), creator.getZ());
+                        }
                     }
                 }
             ));
@@ -166,8 +189,8 @@ public class BotPlayer extends ServerPlayer {
     public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
         var config = name.modid.config.ModConfig.getInstance();
         
-        // 如果配置为不受伤害，则忽略所有伤害
-        if (!config.botTakeDamage) {
+        // 如果配置为不受伤害，则忽略所有伤害（假人个人配置优先于全局配置）
+        if (!BotSettings.resolve(settings.takeDamage, config.botTakeDamage)) {
             return false;
         }
         

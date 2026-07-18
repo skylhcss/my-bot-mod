@@ -111,6 +111,12 @@ public class BotManager {
             bots.put(botName.toLowerCase(), bot);
             botsByUUID.put(bot.getUUID(), bot);
             
+            // 异步获取 Mojang 正版皮肤（避免阻塞服务器线程），成功后刷新客户端显示
+            BotSkinManager.fetchMojangSkinAsync(server, bot, botName);
+            
+            // 向客户端广播更新后的假人列表
+            name.modid.net.BotNetworking.broadcastBotList(server);
+            
             // 如果启用了驻留功能，添加区块加载票据
             if (config.botPersistence) {
                 BotPersistenceManager manager = BotPersistenceManager.get(server);
@@ -121,7 +127,7 @@ public class BotManager {
             
             return bot;
         } catch (Exception e) {
-            e.printStackTrace();
+            MyBotMod.LOGGER.error("创建假人 {} 时发生错误: {}", botName, e.getMessage(), e);
             return null;
         }
     }
@@ -169,6 +175,9 @@ public class BotManager {
             
             // 删除驻留数据
             BotPersistenceManager.deleteBot(bot.getServer(), botName);
+            
+            // 向客户端广播更新后的假人列表
+            name.modid.net.BotNetworking.broadcastBotList(bot.getServer());
             
             return true;
         }

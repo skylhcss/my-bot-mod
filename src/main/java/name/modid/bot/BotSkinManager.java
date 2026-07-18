@@ -5,12 +5,17 @@ import com.google.gson.JsonParser;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import name.modid.MyBotMod;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 假人皮肤管理器
@@ -28,11 +33,11 @@ public class BotSkinManager {
     // PNG 皮肤文件列表
     private static final List<File> PNG_SKIN_FILES = new ArrayList<>();
     
-    // 皮肤缓存
-    private static final Map<String, Property> skinCache = new HashMap<>();
+    // 皮肤缓存（可能被后台线程写入，使用并发容器）
+    private static final Map<String, Property> skinCache = new ConcurrentHashMap<>();
     
-    // 负面缓存：已知没有 Mojang 皮肤的玩家名（避免重复阻塞 HTTP 请求）
-    private static final Set<String> negativeCache = new HashSet<>();
+    // 负面缓存：已知没有 Mojang 皮肤的玩家名（避免重复发起 HTTP 请求）
+    private static final Set<String> negativeCache = ConcurrentHashMap.newKeySet();
     
     // 皮肤文件夹路径（在游戏目录下）
     private static File skinFolder = null;
@@ -48,57 +53,42 @@ public class BotSkinManager {
     }
 
     /**
-     * 为假人设置皮肤
+     * 为假人设置皮肤（非阻塞）
+     * 优先使用缓存（可能是之前异步获取到的 Mojang 皮肤），否则使用本地 PNG / Base64 / 空纹理。
+     * Mojang 正版皮肤通过 {@link #fetchMojangSkinAsync} 在后台异步获取，避免阻塞服务器线程。
      * @param profile 游戏档案
      * @param botName 假人名字
      */
     public static void applySkin(GameProfile profile, String botName) {
         try {
-            // 首先尝试从缓存获取
-            if (skinCache.containsKey(botName.toLowerCase())) {
-                Property skin = skinCache.get(botName.toLowerCase());
-                // 清除现有的纹理属性
+            String key = botName.toLowerCase();
+
+            // 首先尝试从缓存获取（缓存中可能已有异步获取到的 Mojang 皮肤）
+            Property cached = skinCache.get(key);
+            if (cached != null) {
                 profile.getProperties().removeAll("textures");
-                profile.getProperties().put("textures", skin);
+                profile.getProperties().put("textures", cached);
                 MyBotMod.LOGGER.info("从缓存为假人 {} 应用皮肤", botName);
                 return;
             }
-            
-            // 检查负面缓存（已知没有 Mojang 皮肤的名字，避免重复 HTTP 请求）
-            if (!negativeCache.contains(botName.toLowerCase())) {
-                // 尝试从 Mojang API 获取正版玩家皮肤
-                Property skin = fetchSkinFromMojang(botName);
-                if (skin != null) {
-                    // 清除现有的纹理属性
-                    profile.getProperties().removeAll("textures");
-                    profile.getProperties().put("textures", skin);
-                    skinCache.put(botName.toLowerCase(), skin);
-                    MyBotMod.LOGGER.info("从 Mojang API 为假人 {} 获取皮肤", botName);
-                    return;
-                } else {
-                    // 记录到负面缓存，下次不再尝试
-                    negativeCache.add(botName.toLowerCase());
-                }
-            }
-            
-            // 如果获取失败，优先使用 PNG 文件
+
+            // 缓存未命中：立即使用本地回退皮肤，Mojang 皮肤稍后异步替换
+            // 优先使用 PNG 文件
             if (!PNG_SKIN_FILES.isEmpty()) {
                 File pngFile = PNG_SKIN_FILES.get(new Random().nextInt(PNG_SKIN_FILES.size()));
                 // PNG 文件需要在客户端加载，这里我们生成一个特殊的标记
                 // 实际的纹理加载会在客户端的 mixin 中处理
                 String pngMarker = "PNG:" + pngFile.getName();
                 Property pngSkin = new Property("textures", pngMarker, "");
-                // 清除现有的纹理属性
                 profile.getProperties().removeAll("textures");
                 profile.getProperties().put("textures", pngSkin);
                 MyBotMod.LOGGER.info("为假人 {} 标记使用 PNG 皮肤: {}", botName, pngFile.getName());
                 return;
             }
-            
-            // 最后使用 Base64 编码的 .txt 文件
+
+            // 其次使用 Base64 编码的 .txt 文件
             if (!DEFAULT_SKINS.isEmpty()) {
                 Property defaultSkin = DEFAULT_SKINS.get(new Random().nextInt(DEFAULT_SKINS.size()));
-                // 清除现有的纹理属性
                 profile.getProperties().removeAll("textures");
                 profile.getProperties().put("textures", defaultSkin);
                 MyBotMod.LOGGER.info("为假人 {} 应用 run/skins 文件夹中的随机 Base64 皮肤", botName);
@@ -110,9 +100,67 @@ public class BotSkinManager {
                 profile.getProperties().put("textures", emptyTexture);
                 MyBotMod.LOGGER.warn("没有可用的皮肤文件，假人 {} 将使用 Minecraft 默认皮肤", botName);
             }
-            
+
         } catch (Exception e) {
             MyBotMod.LOGGER.error("为假人 {} 设置皮肤时出错: {}", botName, e.getMessage());
+        }
+    }
+
+    /**
+     * 在后台线程异步获取 Mojang 正版皮肤，成功后回到服务器线程更新假人并刷新客户端显示。
+     * 若名字已在缓存或负面缓存中则跳过（缓存皮肤已由 {@link #applySkin} 同步应用）。
+     * @param server 服务器实例
+     * @param bot 已生成的假人实体
+     * @param botName 假人名字
+     */
+    public static void fetchMojangSkinAsync(MinecraftServer server, ServerPlayer bot, String botName) {
+        String key = botName.toLowerCase();
+        // 缓存已命中（applySkin 已应用）或已知无正版皮肤，无需再次请求
+        if (skinCache.containsKey(key) || negativeCache.contains(key)) {
+            return;
+        }
+
+        Thread thread = new Thread(() -> {
+            try {
+                Property skin = fetchSkinFromMojang(botName);
+                if (skin != null) {
+                    skinCache.put(key, skin);
+                    // 回到服务器线程更新档案并刷新客户端
+                    server.execute(() -> applyAndRefreshSkin(server, bot, botName, skin));
+                } else {
+                    // 记录到负面缓存，下次不再尝试
+                    negativeCache.add(key);
+                }
+            } catch (Exception e) {
+                MyBotMod.LOGGER.debug("异步获取假人 {} 的 Mojang 皮肤失败: {}", botName, e.getMessage());
+            }
+        }, "bot-skin-fetch-" + botName);
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    /**
+     * 在服务器线程更新假人的皮肤属性并重新广播玩家信息，使客户端重新渲染皮肤。
+     */
+    private static void applyAndRefreshSkin(MinecraftServer server, ServerPlayer bot, String botName, Property skin) {
+        try {
+            if (bot.isRemoved()) {
+                return;
+            }
+            var properties = bot.getGameProfile().getProperties();
+            properties.removeAll("textures");
+            properties.put("textures", skin);
+
+            // 移除并重新添加玩家列表条目，触发客户端重新解析皮肤纹理
+            server.getPlayerList().broadcastAll(
+                new ClientboundPlayerInfoRemovePacket(List.of(bot.getUUID())));
+            server.getPlayerList().broadcastAll(
+                new ClientboundPlayerInfoUpdatePacket(
+                    ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER, bot));
+
+            MyBotMod.LOGGER.info("已为假人 {} 异步应用 Mojang 皮肤", botName);
+        } catch (Exception e) {
+            MyBotMod.LOGGER.error("刷新假人 {} 的皮肤时出错: {}", botName, e.getMessage());
         }
     }
     

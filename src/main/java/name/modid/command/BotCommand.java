@@ -9,13 +9,22 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import name.modid.bot.BotActionController;
 import name.modid.bot.BotManager;
 import name.modid.bot.BotPlayer;
+import name.modid.menu.BotInventoryMenu;
+import name.modid.net.BotNetworking;
+import net.fabricmc.fabric.api.screenhandler.v1.ExtendedScreenHandlerFactory;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.phys.Vec3;
 
@@ -29,12 +38,11 @@ public class BotCommand {
      * 注册命令
      */
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-        var config = name.modid.config.ModConfig.getInstance();
-        
         dispatcher.register(Commands.literal("bot")
             .requires(source -> {
+                // 实时读取配置，避免 /botmod config reload|reset 替换单例后使用过期实例
                 // 如果允许非 OP 创建假人，则所有玩家都可以使用
-                if (config.allowNonOpCreateBot) {
+                if (name.modid.config.ModConfig.getInstance().allowNonOpCreateBot) {
                     return true;
                 }
                 // 否则需要 OP 权限（等级 2）
@@ -198,6 +206,39 @@ public class BotCommand {
                             .executes(BotCommand::turnBot)
                         )
                     )
+                )
+                // /bot <name> inventory - 打开假人背包
+                .then(Commands.literal("inventory")
+                    .executes(BotCommand::openInventory)
+                )
+                // /bot <name> enderchest - 打开假人末影箱
+                .then(Commands.literal("enderchest")
+                    .executes(BotCommand::openEnderChest)
+                )
+                // /bot <name> panel - 打开假人设置面板
+                .then(Commands.literal("panel")
+                    .executes(BotCommand::openPanel)
+                )
+                // /bot <name> slot <0-8> - 设置手持槽位
+                .then(Commands.literal("slot")
+                    .then(Commands.argument("index", IntegerArgumentType.integer(0, 8))
+                        .executes(BotCommand::setHeldSlot)
+                    )
+                )
+                // /bot <name> gamemode <mode> - 设置游戏模式
+                .then(Commands.literal("gamemode")
+                    .then(Commands.literal("survival")
+                        .executes(ctx -> setBotGameMode(ctx, GameType.SURVIVAL)))
+                    .then(Commands.literal("creative")
+                        .executes(ctx -> setBotGameMode(ctx, GameType.CREATIVE)))
+                    .then(Commands.literal("adventure")
+                        .executes(ctx -> setBotGameMode(ctx, GameType.ADVENTURE)))
+                    .then(Commands.literal("spectator")
+                        .executes(ctx -> setBotGameMode(ctx, GameType.SPECTATOR)))
+                )
+                // /bot <name> tphere - 将假人传送到执行者身边
+                .then(Commands.literal("tphere")
+                    .executes(BotCommand::teleportHere)
                 )
             )
             // /bot list
@@ -739,6 +780,117 @@ public class BotCommand {
         bot.getActionController().turn(yaw, pitch);
         ctx.getSource().sendSuccess(() -> Component.literal(
             "假人 " + botName + " 旋转了视角 (偏航: " + yaw + "°, 俯仰: " + pitch + "°)"), true);
+        return 1;
+    }
+
+    /**
+     * 打开假人背包（原版风格容器界面，可编辑，含盔甲/副手/手持槽位）
+     */
+    private static int openInventory(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            return 0;
+        }
+        player.openMenu(new ExtendedScreenHandlerFactory() {
+            @Override
+            public AbstractContainerMenu createMenu(int id, Inventory inv, Player p) {
+                return new BotInventoryMenu(id, inv, bot.getInventory(), bot);
+            }
+
+            @Override
+            public Component getDisplayName() {
+                return Component.literal(botName + " 的背包");
+            }
+
+            @Override
+            public void writeScreenOpeningData(ServerPlayer p, FriendlyByteBuf buf) {
+                buf.writeUUID(bot.getUUID());
+                buf.writeVarInt(bot.getInventory().selected);
+            }
+        });
+        return 1;
+    }
+
+    /**
+     * 打开假人末影箱（原版三行箱子界面，可编辑）
+     */
+    private static int openEnderChest(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            return 0;
+        }
+        player.openMenu(new SimpleMenuProvider(
+            (id, inv, p) -> ChestMenu.threeRows(id, inv, bot.getEnderChestInventory()),
+            Component.literal(botName + " 的末影箱")
+        ));
+        return 1;
+    }
+
+    /**
+     * 打开假人设置面板（通过网络包触发客户端界面）
+     */
+    private static int openPanel(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            return 0;
+        }
+        BotNetworking.sendOpenPanel(player, bot);
+        return 1;
+    }
+
+    /**
+     * 设置假人手持槽位（0-8）
+     */
+    private static int setHeldSlot(CommandContext<CommandSourceStack> ctx) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            return 0;
+        }
+        int index = IntegerArgumentType.getInteger(ctx, "index");
+        bot.getInventory().selected = index;
+        // 切换手持槽位不弹出聊天提示
+        return 1;
+    }
+
+    /**
+     * 设置假人游戏模式
+     */
+    private static int setBotGameMode(CommandContext<CommandSourceStack> ctx, GameType mode) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            return 0;
+        }
+        bot.setGameMode(mode);
+        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 游戏模式设为 " + mode.getName()), true);
+        return 1;
+    }
+
+    /**
+     * 将假人传送到执行者身边
+     */
+    private static int teleportHere(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = ctx.getSource().getPlayerOrException();
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            return 0;
+        }
+        bot.teleportTo(player.serverLevel(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 已传送到你身边"), true);
         return 1;
     }
 

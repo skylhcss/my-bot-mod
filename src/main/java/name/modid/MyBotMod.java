@@ -2,11 +2,18 @@ package name.modid;
 
 import name.modid.bot.BotManager;
 import name.modid.bot.BotPersistenceManager;
+import name.modid.bot.BotPlayer;
 import name.modid.bot.BotSkinManager;
 import name.modid.command.BotCommand;
+import name.modid.menu.ModMenus;
+import name.modid.net.BotNetworking;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.player.UseEntityCallback;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,6 +41,27 @@ public class MyBotMod implements ModInitializer {
 		// 初始化 run/skins 文件夹
 		BotSkinManager.initializeSkinFolder();
 
+		// 注册自定义容器菜单（假人背包）
+		ModMenus.register();
+
+		// 注册网络接收器（更新假人个人配置、请求假人列表）
+		BotNetworking.registerServerReceivers();
+
+		// 注册右键假人打开设置面板（服务端拦截实体交互，下发打开面板数据包）
+		UseEntityCallback.EVENT.register((player, level, hand, entity, hitResult) -> {
+			if (!level.isClientSide()
+					&& hand == InteractionHand.MAIN_HAND
+					&& entity instanceof BotPlayer bot
+					&& player instanceof ServerPlayer serverPlayer) {
+				var config = name.modid.config.ModConfig.getInstance();
+				if (config.allowNonOpCreateBot || serverPlayer.hasPermissions(2)) {
+					BotNetworking.sendOpenPanel(serverPlayer, bot);
+					return InteractionResult.SUCCESS;
+				}
+			}
+			return InteractionResult.PASS;
+		});
+
 		// 注册命令
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			BotCommand.register(dispatcher);
@@ -45,6 +73,8 @@ public class MyBotMod implements ModInitializer {
 		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
 			LOGGER.info("玩家 {} 加入，触发假人加载检查", handler.getPlayer().getName().getString());
 			BotPersistenceManager.onPlayerJoin(server, handler.getPlayer());
+			// 向加入的玩家下发当前假人列表
+			BotNetworking.sendBotList(handler.getPlayer());
 		});
 		
 		// 注册服务器 tick 事件，用于定期刷新区块加载票据
