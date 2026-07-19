@@ -1,4 +1,30 @@
 {
   "key.categories.my-bot-mod": "My Bot Mod",
-  "key.my-bot-mod.config_menu": "打开配置菜单"
+  "key.my-bot-mod.config_menu": "打开配置菜单",
+
+  "item.my-bot-mod.command_baton": "指挥棒",
+  "tooltip.my-bot-mod.command_baton.line1": "手持时屏幕四周显示假人信息",
+  "tooltip.my-bot-mod.command_baton.line2": "Ctrl+滚轮切换模式 · Alt+右键/滚轮选择假人 · 右键地点下令",
+
+  "gui.my-bot-mod.baton.title": "指挥棒",
+  "gui.my-bot-mod.baton.mode_label": "模式: ",
+  "gui.my-bot-mod.baton.mode.pathfind": "指挥寻路模式",
+  "gui.my-bot-mod.baton.mode.teleport": "传送模式",
+  "gui.my-bot-mod.baton.switch_hint": "Ctrl+滚轮 切换模式",
+  "gui.my-bot-mod.baton.select_hint": "Alt+滚轮 / Alt+右键 选择假人",
+  "gui.my-bot-mod.baton.action.pathfind": "右键地点：命令假人前往",
+  "gui.my-bot-mod.baton.action.teleport": "右键地点：传送假人至此",
+  "gui.my-bot-mod.baton.no_selection": "未选择假人",
+  "gui.my-bot-mod.baton.selected": "已选假人",
+  "gui.my-bot-mod.baton.not_nearby": "假人不在附近",
+  "gui.my-bot-mod.baton.no_bots": "没有可用假人",
+  "gui.my-bot-mod.baton.bots": "假人列表",
+  "gui.my-bot-mod.baton.health": "血量",
+  "gui.my-bot-mod.baton.distance": "距离",
+  "gui.my-bot-mod.baton.pos": "坐标",
+  "gui.my-bot-mod.baton.dimension": "维度",
+  "gui.my-bot-mod.baton.state_label": "状态: ",
+  "gui.my-bot-mod.baton.state_near": "在附近",
+  "gui.my-bot-mod.baton.state_swim": "游泳中",
+  "gui.my-bot-mod.baton.tp_warn": "当前不可传送（需创造模式或开启配置）"
 }

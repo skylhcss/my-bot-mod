@@ -30,6 +30,10 @@ public class MyBotModClient implements ClientModInitializer {
         // 注册假人背包界面
         MenuScreens.register(ModMenus.BOT_INVENTORY, BotInventoryScreen::new);
 
+        // 注册指挥棒输入回调（选人 / 下令）与手持 HUD
+        name.modid.client.baton.BatonInputHandler.register();
+        name.modid.client.baton.BatonHudOverlay.register();
+
         // 注册 S2C：右键假人时打开设置面板
         ClientPlayNetworking.registerGlobalReceiver(BotNetworking.OPEN_BOT_PANEL,
             (client, handler, buf, responseSender) -> {
@@ -55,9 +59,12 @@ public class MyBotModClient implements ClientModInitializer {
                 });
             });
 
-        // 断开连接时释放 PNG 皮肤动态纹理，避免跨存档累积
+        // 断开连接时释放 PNG 皮肤动态纹理，避免跨存档累积；并重置指挥棒状态
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
-            client.execute(BotSkinTextureLoader::clearCache));
+            client.execute(() -> {
+                BotSkinTextureLoader.clearCache();
+                name.modid.client.baton.BatonClientState.reset();
+            }));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (client.screen != null) {
@@ -109,15 +116,10 @@ public class MyBotModClient implements ClientModInitializer {
         // 检测主键当前是否按下
         boolean mainKeyPressed = GLFW.glfwGetKey(window, mainKey) == GLFW.GLFW_PRESS;
 
-        // 边沿检测：只在按下瞬间触发（从 false 变为 true）
         if (!mainKeyPressed) {
             wasMainKeyPressed = false;
             return false;
         }
-        if (wasMainKeyPressed) {
-            return false; // 已在上一帧触发，不重复
-        }
-        wasMainKeyPressed = true;
 
         // 检测修饰键状态
         boolean ctrlDown = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_CONTROL) == GLFW.GLFW_PRESS
@@ -129,7 +131,18 @@ public class MyBotModClient implements ClientModInitializer {
 
         // 精确匹配：配置的修饰键需求必须与实际按键状态完全一致
         // 单键（无修饰键）时，Ctrl/Shift/Alt 都不能按下
-        return needCtrl == ctrlDown && needShift == shiftDown && needAlt == altDown;
+        boolean match = needCtrl == ctrlDown && needShift == shiftDown && needAlt == altDown;
+
+        // 边沿检测放在修饰键匹配之后：修饰键不满足时不消费触发沿，
+        // 允许“先按主键后补按修饰键”的组合键触发；已触发则在松开主键前不重复
+        if (!match) {
+            return false;
+        }
+        if (wasMainKeyPressed) {
+            return false;
+        }
+        wasMainKeyPressed = true;
+        return true;
     }
 
     private static int nameToGlfw(String name) {
@@ -161,6 +174,12 @@ public class MyBotModClient implements ClientModInitializer {
             case "space" -> GLFW.GLFW_KEY_SPACE;
             case "enter" -> GLFW.GLFW_KEY_ENTER;
             case "tab" -> GLFW.GLFW_KEY_TAB;
+            case "backspace" -> GLFW.GLFW_KEY_BACKSPACE;
+            case "delete" -> GLFW.GLFW_KEY_DELETE;
+            case "up" -> GLFW.GLFW_KEY_UP;
+            case "down" -> GLFW.GLFW_KEY_DOWN;
+            case "left" -> GLFW.GLFW_KEY_LEFT;
+            case "right" -> GLFW.GLFW_KEY_RIGHT;
             default -> -1;
         };
     }

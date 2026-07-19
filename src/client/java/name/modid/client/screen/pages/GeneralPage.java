@@ -56,10 +56,10 @@ public class GeneralPage extends ConfigPage {
             config.maxBotCount = 0; config.save(); maxBotSlider.setCurrentValue(0);
         }));
         
-        ModernCheckbox nonOpCreate = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("允许非 OP 创建假人"), config.allowNonOpCreateBot);
-        nonOpCreate.setOnChanged(() -> { config.allowNonOpCreateBot = nonOpCreate.selected(); config.save(); });
+        ModernCheckbox nonOpCreate = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("允许非 OP 控制假人"), config.allowNonOpControlBot);
+        nonOpCreate.setOnChanged(() -> { config.allowNonOpControlBot = nonOpCreate.selected(); config.save(); });
         serverSection.addItem(nonOpCreate, new ResetButton(0, 0, () -> {
-            config.allowNonOpCreateBot = false; config.save(); nonOpCreate.setSelected(false);
+            config.allowNonOpControlBot = false; config.save(); nonOpCreate.setSelected(false);
         }));
     }
 }

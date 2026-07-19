@@ -199,5 +199,9 @@ public class BotInventoryMenu extends AbstractContainerMenu {
     public void removed(Player player) {
         super.removed(player);
         this.botInventory.stopOpen(player);
+        // 关闭背包时保存假人数据（saveBot 内部按 botPersistence 判断），减少改动丢失窗口
+        if (bot != null) {
+            name.modid.bot.BotPersistenceManager.saveBot(bot);
+        }
     }
 }

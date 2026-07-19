@@ -1,4 +1,30 @@
 {
   "key.categories.my-bot-mod": "My Bot Mod",
-  "key.my-bot-mod.config_menu": "Open Config Menu"
+  "key.my-bot-mod.config_menu": "Open Config Menu",
+
+  "item.my-bot-mod.command_baton": "Command Baton",
+  "tooltip.my-bot-mod.command_baton.line1": "Shows bot info around the screen while held",
+  "tooltip.my-bot-mod.command_baton.line2": "Ctrl+Scroll: mode · Alt+Right-click/Scroll: select bot · Right-click: command",
+
+  "gui.my-bot-mod.baton.title": "Command Baton",
+  "gui.my-bot-mod.baton.mode_label": "Mode: ",
+  "gui.my-bot-mod.baton.mode.pathfind": "Pathfind Mode",
+  "gui.my-bot-mod.baton.mode.teleport": "Teleport Mode",
+  "gui.my-bot-mod.baton.switch_hint": "Ctrl+Scroll to switch mode",
+  "gui.my-bot-mod.baton.select_hint": "Alt+Scroll / Alt+Right-click to select bot",
+  "gui.my-bot-mod.baton.action.pathfind": "Right-click a spot: send bot there",
+  "gui.my-bot-mod.baton.action.teleport": "Right-click a spot: teleport bot here",
+  "gui.my-bot-mod.baton.no_selection": "No bot selected",
+  "gui.my-bot-mod.baton.selected": "Selected bot",
+  "gui.my-bot-mod.baton.not_nearby": "Bot not nearby",
+  "gui.my-bot-mod.baton.no_bots": "No bots available",
+  "gui.my-bot-mod.baton.bots": "Bots",
+  "gui.my-bot-mod.baton.health": "HP",
+  "gui.my-bot-mod.baton.distance": "Dist",
+  "gui.my-bot-mod.baton.pos": "Pos",
+  "gui.my-bot-mod.baton.dimension": "Dim",
+  "gui.my-bot-mod.baton.state_label": "State: ",
+  "gui.my-bot-mod.baton.state_near": "Nearby",
+  "gui.my-bot-mod.baton.state_swim": "Swimming",
+  "gui.my-bot-mod.baton.tp_warn": "Teleport unavailable (needs creative or config)"
 }

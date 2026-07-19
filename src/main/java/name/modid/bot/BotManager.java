@@ -86,22 +86,17 @@ public class BotManager {
             GameType mode = gameMode != null ? gameMode : creator.gameMode.getGameModeForPlayer();
             bot.setGameMode(mode);
             
-            // 第一步：先发送玩家信息包到所有客户端（这样客户端才能识别这个玩家）
-            server.getPlayerList().broadcastAll(
-                new net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket(
-                    net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER,
-                    bot
-                )
-            );
-            
-            // 第二步：将假人添加到玩家列表
-            server.getPlayerList().getPlayers().add(bot);
-            
-            // 第三步：将假人添加到世界（这会触发实体生成包的发送）
-            level.addFreshEntity(bot);
-            
-            // 第四步：发送头部旋转包，确保皮肤朝向正确
-            // 这是 Carpet Mod 的做法，确保客户端正确渲染假人的头部朝向
+            // 规范注册：使用 PlayerList.placeNewPlayer 加入玩家列表（含 playersByUUID）、
+            // 生成实体并下发玩家信息包，保证 getPlayer(UUID)、计分板等原版逻辑正常
+            // 参考 Carpet Mod 的 EntityPlayerMPFake 做法
+            server.getPlayerList().placeNewPlayer(connection, bot);
+
+            // placeNewPlayer 可能按存档/出生点重置位置，纠正到目标位置与朝向
+            bot.teleportTo(level, spawnPos.x, spawnPos.y, spawnPos.z, yaw, pitch);
+            bot.setYHeadRot(yaw);
+            bot.setHealth(bot.getMaxHealth());
+
+            // 发送头部旋转包，确保客户端正确渲染假人的头部朝向
             server.getPlayerList().broadcastAll(
                 new net.minecraft.network.protocol.game.ClientboundRotateHeadPacket(bot, (byte) (yaw * 256 / 360)),
                 level.dimension()
@@ -157,28 +152,18 @@ public class BotManager {
         BotPlayer bot = bots.remove(botName.toLowerCase());
         if (bot != null) {
             botsByUUID.remove(bot.getUUID());
-            
-            // 从玩家列表中移除
-            bot.serverLevel().getServer().getPlayerList().getPlayers().remove(bot);
-            
-            // 从世界中移除（如果还没有被移除）
-            if (!bot.isRemoved()) {
-                bot.remove(net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
-            }
-            
-            // 发送玩家移除信息包
-            bot.serverLevel().getServer().getPlayerList().broadcastAll(
-                new net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket(
-                    java.util.List.of(bot.getUUID())
-                )
-            );
-            
+            MinecraftServer server = bot.getServer();
+
+            // 规范移除：触发连接断开，走原版 PlayerList.remove 完整清理
+            // （保存数据、退出队伍、从 playersByUUID 移除、从世界移除实体、广播移除信息包）
+            bot.connection.onDisconnect(net.minecraft.network.chat.Component.literal("假人已移除"));
+
             // 删除驻留数据
-            BotPersistenceManager.deleteBot(bot.getServer(), botName);
-            
+            BotPersistenceManager.deleteBot(server, botName);
+
             // 向客户端广播更新后的假人列表
-            name.modid.net.BotNetworking.broadcastBotList(bot.getServer());
-            
+            name.modid.net.BotNetworking.broadcastBotList(server);
+
             return true;
         }
         return false;

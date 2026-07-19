@@ -39,6 +39,14 @@ public class BotSkinManager {
     // 负面缓存：已知没有 Mojang 皮肤的玩家名（避免重复发起 HTTP 请求）
     private static final Set<String> negativeCache = ConcurrentHashMap.newKeySet();
     
+    // 皮肤异步获取线程池（共享有界，避免每次召唤都新建线程造成抖动）
+    private static final java.util.concurrent.ExecutorService SKIN_EXECUTOR =
+        java.util.concurrent.Executors.newFixedThreadPool(2, r -> {
+            Thread t = new Thread(r, "bot-skin-fetch");
+            t.setDaemon(true);
+            return t;
+        });
+    
     // 皮肤文件夹路径（在游戏目录下）
     private static File skinFolder = null;
     
@@ -120,7 +128,7 @@ public class BotSkinManager {
             return;
         }
 
-        Thread thread = new Thread(() -> {
+        SKIN_EXECUTOR.submit(() -> {
             try {
                 Property skin = fetchSkinFromMojang(botName);
                 if (skin != null) {
@@ -134,9 +142,7 @@ public class BotSkinManager {
             } catch (Exception e) {
                 MyBotMod.LOGGER.debug("异步获取假人 {} 的 Mojang 皮肤失败: {}", botName, e.getMessage());
             }
-        }, "bot-skin-fetch-" + botName);
-        thread.setDaemon(true);
-        thread.start();
+        });
     }
 
     /**
@@ -317,8 +323,7 @@ public class BotSkinManager {
             }
             
         } catch (Exception e) {
-            MyBotMod.LOGGER.error("加载默认皮肤时出错: {}", e.getMessage());
-            e.printStackTrace();
+            MyBotMod.LOGGER.error("加载默认皮肤时出错: {}", e.getMessage(), e);
         }
     }
 
@@ -329,6 +334,7 @@ public class BotSkinManager {
      */
     public static void clearCache() {
         skinCache.clear();
+        negativeCache.clear();
         MyBotMod.LOGGER.info("已清除皮肤缓存");
     }
 
@@ -385,8 +391,7 @@ public class BotSkinManager {
             loadDefaultSkins();
             
         } catch (Exception e) {
-            MyBotMod.LOGGER.error("初始化皮肤文件夹时出错: {}", e.getMessage());
-            e.printStackTrace();
+            MyBotMod.LOGGER.error("初始化皮肤文件夹时出错: {}", e.getMessage(), e);
         }
     }
 }

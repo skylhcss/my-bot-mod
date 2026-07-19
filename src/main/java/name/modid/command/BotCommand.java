@@ -42,7 +42,7 @@ public class BotCommand {
             .requires(source -> {
                 // 实时读取配置，避免 /botmod config reload|reset 替换单例后使用过期实例
                 // 如果允许非 OP 创建假人，则所有玩家都可以使用
-                if (name.modid.config.ModConfig.getInstance().allowNonOpCreateBot) {
+                if (name.modid.config.ModConfig.getInstance().allowNonOpControlBot) {
                     return true;
                 }
                 // 否则需要 OP 权限（等级 2）
@@ -826,7 +826,15 @@ public class BotCommand {
             return 0;
         }
         player.openMenu(new SimpleMenuProvider(
-            (id, inv, p) -> ChestMenu.threeRows(id, inv, bot.getEnderChestInventory()),
+            (id, inv, p) -> new ChestMenu(net.minecraft.world.inventory.MenuType.GENERIC_9x3,
+                    id, inv, bot.getEnderChestInventory(), 3) {
+                @Override
+                public void removed(Player pl) {
+                    super.removed(pl);
+                    // 关闭末影箱时保存假人数据（saveBot 内部按 botPersistence 判断）
+                    name.modid.bot.BotPersistenceManager.saveBot(bot);
+                }
+            },
             Component.literal(botName + " 的末影箱")
         ));
         return 1;

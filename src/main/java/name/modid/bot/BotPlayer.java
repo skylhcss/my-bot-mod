@@ -102,7 +102,8 @@ public class BotPlayer extends ServerPlayer {
         }
         
         // 每 200 tick（10秒）保存一次假人数据（如果启用了驻留功能）
-        if (this.level().getServer().getTickCount() % 200 == 0) {
+        // 按实体 id 错峰，避免所有假人在同一 tick 集中保存造成 I/O 峰值
+        if ((this.level().getServer().getTickCount() + Math.floorMod(this.getId(), 200)) % 200 == 0) {
             var config = name.modid.config.ModConfig.getInstance();
             if (config.botPersistence) {
                 BotPersistenceManager.saveBot(this);
@@ -163,14 +164,26 @@ public class BotPlayer extends ServerPlayer {
                     this.removeAllEffects();
                     this.clearFire();
                     
-                    // 传送回重生点；若未设置则回退到创建者位置，否则留在原地
+                    // 传送回重生点（含维度）；若未设置则回退到创建者位置，否则留在原地
                     var respawnPos = this.getRespawnPosition();
                     if (respawnPos != null) {
-                        this.teleportTo(respawnPos.getX() + 0.5, respawnPos.getY(), respawnPos.getZ() + 0.5);
+                        net.minecraft.server.level.ServerLevel respawnLevel =
+                            this.level().getServer().getLevel(this.getRespawnDimension());
+                        double rx = respawnPos.getX() + 0.5, ry = respawnPos.getY(), rz = respawnPos.getZ() + 0.5;
+                        if (respawnLevel != null && respawnLevel != this.serverLevel()) {
+                            // 重生点在其他维度：跨维度传送
+                            this.teleportTo(respawnLevel, rx, ry, rz, this.getYRot(), this.getXRot());
+                        } else {
+                            this.teleportTo(rx, ry, rz);
+                        }
                     } else {
                         ServerPlayer creator = this.level().getServer().getPlayerList().getPlayer(this.creatorUUID);
-                        if (creator != null && creator.level() == this.level()) {
-                            this.teleportTo(creator.getX(), creator.getY(), creator.getZ());
+                        if (creator != null) {
+                            if (creator.level() != this.level()) {
+                                this.teleportTo(creator.serverLevel(), creator.getX(), creator.getY(), creator.getZ(), creator.getYRot(), creator.getXRot());
+                            } else {
+                                this.teleportTo(creator.getX(), creator.getY(), creator.getZ());
+                            }
                         }
                     }
                 }

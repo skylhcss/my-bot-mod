@@ -59,7 +59,10 @@ public class BotPersistenceManager extends SavedData {
     private final Map<String, BotData> botsData = new ConcurrentHashMap<>();
     
     // 存储假人的区块加载票据（假人名 -> 区块位置）
-    private final Map<String, ChunkPos> botChunkTickets = new ConcurrentHashMap<>();
+    /** 票据位置：维度 + 区块坐标（用于跨维度精确移除/刷新票据） */
+    private record TicketLoc(net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dimension, ChunkPos pos) {}
+
+    private final Map<String, TicketLoc> botChunkTickets = new ConcurrentHashMap<>();
     
     /**
      * 假人数据类
@@ -156,8 +159,7 @@ public class BotPersistenceManager extends SavedData {
                         manager.botsData.put(name.toLowerCase(), data);
                     }
                 } catch (Exception e) {
-                    MyBotMod.LOGGER.error("无法加载假人数据: {}", name);
-                    e.printStackTrace();
+                    MyBotMod.LOGGER.error("无法加载假人数据: {}", name, e);
                 }
             }
         }
@@ -316,11 +318,10 @@ public class BotPersistenceManager extends SavedData {
             manager.botsData.put(data.name.toLowerCase(), data);
             manager.setDirty();
             
-            MyBotMod.LOGGER.info("保存假人数据: {} 在 {}", data.name, data.dimension);
+            MyBotMod.LOGGER.debug("保存假人数据: {} 在 {}", data.name, data.dimension);
             
         } catch (Exception e) {
-            MyBotMod.LOGGER.error("无法保存假人数据: {}", e.getMessage());
-            e.printStackTrace();
+            MyBotMod.LOGGER.error("无法保存假人数据: {}", e.getMessage(), e);
         }
     }
     
@@ -349,32 +350,22 @@ public class BotPersistenceManager extends SavedData {
         // 添加区块加载票据
         level.getChunkSource().addRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
         
-        // 记录票据
-        botChunkTickets.put(botName.toLowerCase(), chunkPos);
+        // 记录票据（含维度，便于跨维度精确移除）
+        botChunkTickets.put(botName.toLowerCase(), new TicketLoc(level.dimension(), chunkPos));
         
-        MyBotMod.LOGGER.info("为假人 {} 添加区块加载票据: {}", botName, chunkPos);
+        MyBotMod.LOGGER.info("为假人 {} 添加区块加载票据: {} @ {}", botName, chunkPos, level.dimension().location());
     }
     
     /**
      * 移除假人的区块加载票据
      */
     public void removeChunkTicket(MinecraftServer server, String botName) {
-        ChunkPos chunkPos = botChunkTickets.remove(botName.toLowerCase());
-        if (chunkPos != null) {
-            // 获取假人所在的世界
-            BotData data = botsData.get(botName.toLowerCase());
-            if (data != null) {
-                ServerLevel level = server.getLevel(
-                    net.minecraft.resources.ResourceKey.create(
-                        net.minecraft.core.registries.Registries.DIMENSION,
-                        new net.minecraft.resources.ResourceLocation(data.dimension)
-                    )
-                );
-                
-                if (level != null) {
-                    level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
-                    MyBotMod.LOGGER.info("移除假人 {} 的区块加载票据: {}", botName, chunkPos);
-                }
+        TicketLoc loc = botChunkTickets.remove(botName.toLowerCase());
+        if (loc != null) {
+            ServerLevel level = server.getLevel(loc.dimension());
+            if (level != null) {
+                level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, loc.pos(), 2, loc.pos());
+                MyBotMod.LOGGER.info("移除假人 {} 的区块加载票据: {}", botName, loc.pos());
             }
         }
     }
@@ -384,29 +375,36 @@ public class BotPersistenceManager extends SavedData {
      * 当假人移动到新区块时调用
      */
     public static void updateChunkTicket(BotPlayer bot) {
+        refreshTicket(bot);
+    }
+
+    /**
+     * 刷新假人的区块加载票据：
+     * - 无条件重新添加当前区块票据（刷新有效期，防止 300tick 过期导致静止假人区块被卸载）
+     * - 维度或区块变化时，先从“旧维度”精确移除旧票据（修复跨维度票据泄漏）
+     */
+    private static void refreshTicket(BotPlayer bot) {
         MinecraftServer server = bot.getServer();
         if (server == null) return;
         
         BotPersistenceManager manager = get(server);
         if (manager == null) return;
         
-        String botName = bot.getName().getString();
-        ChunkPos oldChunkPos = manager.botChunkTickets.get(botName.toLowerCase());
-        ChunkPos newChunkPos = new ChunkPos(bot.blockPosition());
+        String key = bot.getName().getString().toLowerCase();
+        ServerLevel level = bot.serverLevel();
+        net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> newDim = level.dimension();
+        ChunkPos newChunk = new ChunkPos(bot.blockPosition());
         
-        // 如果区块没有变化，不需要更新
-        if (oldChunkPos != null && oldChunkPos.equals(newChunkPos)) {
-            return;
+        TicketLoc old = manager.botChunkTickets.get(key);
+        if (old != null && (!old.dimension().equals(newDim) || !old.pos().equals(newChunk))) {
+            ServerLevel oldLevel = server.getLevel(old.dimension());
+            if (oldLevel != null) {
+                oldLevel.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, old.pos(), 2, old.pos());
+            }
         }
         
-        // 移除旧票据
-        if (oldChunkPos != null) {
-            bot.serverLevel().getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, oldChunkPos, 2, oldChunkPos);
-        }
-        
-        // 添加新票据
-        bot.serverLevel().getChunkSource().addRegionTicket(BOT_CHUNK_TICKET, newChunkPos, 2, newChunkPos);
-        manager.botChunkTickets.put(botName.toLowerCase(), newChunkPos);
+        level.getChunkSource().addRegionTicket(BOT_CHUNK_TICKET, newChunk, 2, newChunk);
+        manager.botChunkTickets.put(key, new TicketLoc(newDim, newChunk));
     }
     
     /**
@@ -631,8 +629,7 @@ public class BotPersistenceManager extends SavedData {
                     failedCount++;
                 }
             } catch (Exception e) {
-                MyBotMod.LOGGER.error("✗ 加载假人 {} 时发生错误: {}", data.name, e.getMessage());
-                e.printStackTrace();
+                MyBotMod.LOGGER.error("✗ 加载假人 {} 时发生错误: {}", data.name, e.getMessage(), e);
                 failedCount++;
             }
         }
@@ -728,8 +725,7 @@ public class BotPersistenceManager extends SavedData {
             MyBotMod.LOGGER.info("成功恢复假人 {} 的状态", bot.getName().getString());
             
         } catch (Exception e) {
-            MyBotMod.LOGGER.error("恢复假人状态时发生错误: {}", e.getMessage());
-            e.printStackTrace();
+            MyBotMod.LOGGER.error("恢复假人状态时发生错误: {}", e.getMessage(), e);
         }
     }
     
@@ -783,16 +779,10 @@ public class BotPersistenceManager extends SavedData {
             return;
         }
         
-        // 刷新所有在线假人的区块票据
+        // 无条件刷新所有在线假人的区块票据（刷新有效期，防止静止假人票据过期）
         for (BotPlayer bot : BotManager.getAllBots()) {
             try {
-                ChunkPos chunkPos = new ChunkPos(bot.blockPosition());
-                ChunkPos oldChunkPos = manager.botChunkTickets.get(bot.getName().getString().toLowerCase());
-                
-                // 如果假人移动到了新区块，更新票据
-                if (oldChunkPos == null || !oldChunkPos.equals(chunkPos)) {
-                    updateChunkTicket(bot);
-                }
+                refreshTicket(bot);
             } catch (Exception e) {
                 MyBotMod.LOGGER.error("刷新假人 {} 的区块票据时发生错误: {}", bot.getName().getString(), e.getMessage());
             }
@@ -810,27 +800,15 @@ public class BotPersistenceManager extends SavedData {
             return;
         }
         
-        for (Map.Entry<String, ChunkPos> entry : manager.botChunkTickets.entrySet()) {
-            String botName = entry.getKey();
-            ChunkPos chunkPos = entry.getValue();
-            
-            // 尝试从 botsData 获取维度，如果不可用则遍历所有维度
-            BotData data = manager.botsData.get(botName);
-            if (data != null) {
-                ServerLevel level = server.getLevel(
-                    net.minecraft.resources.ResourceKey.create(
-                        net.minecraft.core.registries.Registries.DIMENSION,
-                        new net.minecraft.resources.ResourceLocation(data.dimension)
-                    )
-                );
-                
-                if (level != null) {
-                    level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
-                }
+        for (Map.Entry<String, TicketLoc> entry : manager.botChunkTickets.entrySet()) {
+            TicketLoc loc = entry.getValue();
+            ServerLevel level = server.getLevel(loc.dimension());
+            if (level != null) {
+                level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, loc.pos(), 2, loc.pos());
             } else {
-                // botsData 不可用时，遍历所有维度尝试移除票据
-                for (ServerLevel level : server.getAllLevels()) {
-                    level.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, chunkPos, 2, chunkPos);
+                // 维度不可用时，遍历所有维度兜底移除
+                for (ServerLevel l : server.getAllLevels()) {
+                    l.getChunkSource().removeRegionTicket(BOT_CHUNK_TICKET, loc.pos(), 2, loc.pos());
                 }
             }
         }

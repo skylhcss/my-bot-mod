@@ -57,9 +57,9 @@ public class BotModCommand {
                             .executes(ctx -> setBoolConfig(ctx, "allowMountOtherBots"))
                         )
                     )
-                    .then(Commands.literal("allowNonOpCreateBot")
+                    .then(Commands.literal("allowNonOpControlBot")
                         .then(Commands.argument("value", BoolArgumentType.bool())
-                            .executes(ctx -> setBoolConfig(ctx, "allowNonOpCreateBot"))
+                            .executes(ctx -> setBoolConfig(ctx, "allowNonOpControlBot"))
                         )
                     )
                     .then(Commands.literal("autoRespawnOnDeath")
@@ -97,6 +97,11 @@ public class BotModCommand {
                             .executes(ctx -> setBoolConfig(ctx, "allowBotAutoJump"))
                         )
                     )
+                    .then(Commands.literal("allowBatonTeleportNonCreative")
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                            .executes(ctx -> setBoolConfig(ctx, "allowBatonTeleportNonCreative"))
+                        )
+                    )
                     
                     // 数值配置
                     .then(Commands.literal("attackReachDistance")
@@ -132,7 +137,7 @@ public class BotModCommand {
                             builder.suggest("killAuraRange");
                             builder.suggest("allowMountOtherBots");
                             builder.suggest("maxBotCount");
-                            builder.suggest("allowNonOpCreateBot");
+                            builder.suggest("allowNonOpControlBot");
                             builder.suggest("autoRespawnOnDeath");
                             builder.suggest("botTakeDamage");
                             builder.suggest("botHunger");
@@ -140,6 +145,7 @@ public class BotModCommand {
                             builder.suggest("preserveBotState");
                             builder.suggest("carpetModCompatibility");
                             builder.suggest("allowBotAutoJump");
+                            builder.suggest("allowBatonTeleportNonCreative");
                             return builder.buildFuture();
                         })
                         .executes(BotModCommand::getConfig)
@@ -205,7 +211,7 @@ public class BotModCommand {
         // 生存设置
         ctx.getSource().sendSuccess(() -> Component.literal("§6生存设置:"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  maxBotCount: " + config.maxBotCount + " (0=无限)"), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  allowNonOpCreateBot: " + formatBool(config.allowNonOpCreateBot)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  allowNonOpControlBot: " + formatBool(config.allowNonOpControlBot)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  autoRespawnOnDeath: " + formatBool(config.autoRespawnOnDeath)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  botTakeDamage: " + formatBool(config.botTakeDamage)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  botHunger: " + formatBool(config.botHunger)), false);
@@ -214,6 +220,11 @@ public class BotModCommand {
         // 动作设置
         ctx.getSource().sendSuccess(() -> Component.literal("§6动作设置:"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  allowBotAutoJump: " + formatBool(config.allowBotAutoJump)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
+        
+        // 指挥棒设置
+        ctx.getSource().sendSuccess(() -> Component.literal("§6指挥棒设置:"), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  allowBatonTeleportNonCreative: " + formatBool(config.allowBatonTeleportNonCreative)), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 驻留设置
@@ -269,8 +280,8 @@ public class BotModCommand {
             case "allowMountOtherBots":
                 config.allowMountOtherBots = value;
                 break;
-            case "allowNonOpCreateBot":
-                config.allowNonOpCreateBot = value;
+            case "allowNonOpControlBot":
+                config.allowNonOpControlBot = value;
                 break;
             case "autoRespawnOnDeath":
                 config.autoRespawnOnDeath = value;
@@ -301,6 +312,9 @@ public class BotModCommand {
                 break;
             case "allowBotAutoJump":
                 config.allowBotAutoJump = value;
+                break;
+            case "allowBatonTeleportNonCreative":
+                config.allowBatonTeleportNonCreative = value;
                 break;
         }
         
@@ -364,7 +378,7 @@ public class BotModCommand {
             case "killAuraRange" -> String.valueOf(config.killAuraRange);
             case "allowMountOtherBots" -> formatBool(config.allowMountOtherBots);
             case "maxBotCount" -> String.valueOf(config.maxBotCount);
-            case "allowNonOpCreateBot" -> formatBool(config.allowNonOpCreateBot);
+            case "allowNonOpControlBot" -> formatBool(config.allowNonOpControlBot);
             case "autoRespawnOnDeath" -> formatBool(config.autoRespawnOnDeath);
             case "botTakeDamage" -> formatBool(config.botTakeDamage);
             case "botHunger" -> formatBool(config.botHunger);
@@ -372,6 +386,7 @@ public class BotModCommand {
             case "preserveBotState" -> formatBool(config.preserveBotState);
             case "carpetModCompatibility" -> formatBool(config.carpetModCompatibility);
             case "allowBotAutoJump" -> formatBool(config.allowBotAutoJump);
+            case "allowBatonTeleportNonCreative" -> formatBool(config.allowBatonTeleportNonCreative);
             default -> "§c未知配置项";
         };
         

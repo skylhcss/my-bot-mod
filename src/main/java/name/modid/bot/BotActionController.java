@@ -36,6 +36,9 @@ public class BotActionController {
     private int useInterval = 0;  // 使用间隔（tick）
     private int useIntervalCounter = 0;  // 使用间隔计数器
     
+    // 当前正在挖掘的方块（生存模式；避免每 tick 重发 START 重置挖掘进度）
+    private net.minecraft.core.BlockPos miningPos = null;
+
     // 寻路系统
     private BotPathfinder pathfinder = null;
     
@@ -67,6 +70,7 @@ public class BotActionController {
                 attacking = false;
                 attackInterval = 0;
                 attackIntervalCounter = 0;
+                abortMining();
             }
         }
         
@@ -124,6 +128,7 @@ public class BotActionController {
         
         // 如果启用了杀戮光环，直接执行（跳过不必要的射线追踪）；假人个人配置优先于全局配置
         if (BotSettings.resolve(bot.getSettings().killAura, config.enableKillAura)) {
+            abortMining();
             performKillAura(config.killAuraRange);
             return;
         }
@@ -140,6 +145,7 @@ public class BotActionController {
         
         if (entityHitResult != null && entityHitResult.getEntity() instanceof net.minecraft.world.entity.LivingEntity) {
             // 攻击实体
+            abortMining();
             bot.attack(entityHitResult.getEntity());
         } else if (hitResult.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
             // 挖掘方块
@@ -148,22 +154,47 @@ public class BotActionController {
             var blockState = bot.level().getBlockState(blockPos);
             
             // 只有在非空气方块时才尝试破坏
-            if (!blockState.isAir()) {
-                if (bot.gameMode.getGameModeForPlayer().isCreative()) {
-                    // 创造模式：直接破坏
-                    bot.gameMode.destroyBlock(blockPos);
-                } else {
-                    // 生存模式：通过 handleBlockBreakAction 启动挖掘
-                    // 每个 tick 都会调用，直到方块被破坏
+            if (blockState.isAir()) {
+                abortMining();
+                return;
+            }
+            if (bot.gameMode.getGameModeForPlayer().isCreative()) {
+                // 创造模式：直接破坏
+                abortMining();
+                bot.gameMode.destroyBlock(blockPos);
+            } else {
+                // 生存模式：仅在开始/切换目标方块时发送一次 START，
+                // 之后依赖 gameMode.tick() 累积挖掘进度（每 tick 重发 START 会把进度重置，永远挖不动）
+                if (!blockPos.equals(miningPos)) {
+                    abortMining();
                     bot.gameMode.handleBlockBreakAction(
                         blockPos,
                         net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK,
                         blockHitResult.getDirection(),
-                        320,   // maxY: 主世界最大建筑高度
+                        bot.level().getMaxBuildHeight(),   // 按当前维度建筑高度，而非硬编码 320
                         0      // sequence
                     );
+                    miningPos = blockPos.immutable();
                 }
             }
+        } else {
+            abortMining();
+        }
+    }
+
+    /**
+     * 中止当前挖掘（对上一目标发送 ABORT），供切换目标/停止攻击/攻击结束时调用
+     */
+    private void abortMining() {
+        if (miningPos != null) {
+            bot.gameMode.handleBlockBreakAction(
+                miningPos,
+                net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK,
+                net.minecraft.core.Direction.DOWN,
+                bot.level().getMaxBuildHeight(),
+                0
+            );
+            miningPos = null;
         }
     }
     
@@ -356,6 +387,7 @@ public class BotActionController {
         this.attackingTicks = 0;
         this.attackInterval = 0;
         this.attackIntervalCounter = 0;
+        abortMining();
     }
 
     /**

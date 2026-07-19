@@ -45,7 +45,16 @@ public class AdvancedPage extends ConfigPage {
             config.preserveBotState = false; config.save(); preserveState.setSelected(false);
         }));
         
-        // Section 2: 其他
+        // Section 2: 指挥棒
+        SectionCard batonSection = addSection("指挥棒");
+        
+        ModernCheckbox batonTeleport = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("非创造模式允许传送"), config.allowBatonTeleportNonCreative);
+        batonTeleport.setOnChanged(() -> { config.allowBatonTeleportNonCreative = batonTeleport.selected(); config.save(); });
+        batonSection.addItem(batonTeleport, new ResetButton(0, 0, () -> {
+            config.allowBatonTeleportNonCreative = false; config.save(); batonTeleport.setSelected(false);
+        }));
+        
+        // Section 3: 其他
         SectionCard otherSection = addSection("其他");
         
         ModernButton keybindBtn = new ModernButton(0, 0, 0, DesignTokens.ROW_HEIGHT,

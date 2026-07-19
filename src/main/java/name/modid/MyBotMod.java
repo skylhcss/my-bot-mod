@@ -41,6 +41,9 @@ public class MyBotMod implements ModInitializer {
 		// 初始化 run/skins 文件夹
 		BotSkinManager.initializeSkinFolder();
 
+		// 注册物品（指挥棒）
+		name.modid.item.ModItems.register();
+
 		// 注册自定义容器菜单（假人背包）
 		ModMenus.register();
 
@@ -54,7 +57,7 @@ public class MyBotMod implements ModInitializer {
 					&& entity instanceof BotPlayer bot
 					&& player instanceof ServerPlayer serverPlayer) {
 				var config = name.modid.config.ModConfig.getInstance();
-				if (config.allowNonOpCreateBot || serverPlayer.hasPermissions(2)) {
+				if (config.allowNonOpControlBot || serverPlayer.hasPermissions(2)) {
 					BotNetworking.sendOpenPanel(serverPlayer, bot);
 					return InteractionResult.SUCCESS;
 				}

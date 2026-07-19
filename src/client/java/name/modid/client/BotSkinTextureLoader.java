@@ -20,6 +20,9 @@ public class BotSkinTextureLoader {
     
     // PNG 皮肤纹理缓存
     private static final Map<UUID, ResourceLocation> pngSkinTextures = new HashMap<>();
+
+    // 加载失败的 PNG 皮肤（负缓存，避免渲染热路径每帧重复 IO 与刷屏日志）
+    private static final java.util.Set<UUID> failedSkins = new java.util.HashSet<>();
     
     // 解析后的皮肤文件夹路径（延迟初始化）
     private static File resolvedSkinFolder = null;
@@ -65,12 +68,17 @@ public class BotSkinTextureLoader {
             if (pngSkinTextures.containsKey(botUUID)) {
                 return pngSkinTextures.get(botUUID);
             }
+            // 负缓存：此前加载失败则不再重试（getSkinLocation 是每帧渲染热路径）
+            if (failedSkins.contains(botUUID)) {
+                return null;
+            }
             
             // 查找 PNG 文件
             File skinFolder = resolveSkinFolder();
             File pngFile = new File(skinFolder, pngFileName);
             if (!pngFile.exists()) {
                 MyBotMod.LOGGER.error("PNG 皮肤文件不存在: {}", pngFileName);
+                failedSkins.add(botUUID);
                 return null;
             }
             
@@ -83,6 +91,7 @@ public class BotSkinTextureLoader {
                     MyBotMod.LOGGER.error("PNG 皮肤文件尺寸不正确: {} ({}x{}), 应该是 64x64 或 64x32", 
                         pngFileName, image.getWidth(), image.getHeight());
                     image.close();
+                    failedSkins.add(botUUID);
                     return null;
                 }
                 
@@ -102,6 +111,7 @@ public class BotSkinTextureLoader {
             
         } catch (Exception e) {
             MyBotMod.LOGGER.error("加载 PNG 皮肤时出错: {}", e.getMessage(), e);
+            failedSkins.add(botUUID);
             return null;
         }
     }
@@ -115,6 +125,7 @@ public class BotSkinTextureLoader {
             textureManager.release(location);
         }
         pngSkinTextures.clear();
+        failedSkins.clear();
         MyBotMod.LOGGER.info("已清除 PNG 皮肤纹理缓存（已释放 GPU 资源）");
     }
     
@@ -123,6 +134,7 @@ public class BotSkinTextureLoader {
      * @param botUUID 假人 UUID
      */
     public static void removeCache(UUID botUUID) {
+        failedSkins.remove(botUUID);
         ResourceLocation location = pngSkinTextures.remove(botUUID);
         if (location != null) {
             Minecraft.getInstance().getTextureManager().release(location);

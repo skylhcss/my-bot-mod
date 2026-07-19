@@ -39,7 +39,8 @@ public class ModernSlider extends AbstractWidget {
         this.messageProvider = messageProvider;
         this.onValueChange = onValueChange;
 
-        this.value = Mth.clamp((currentValue - minValue) / (maxValue - minValue), 0.0, 1.0);
+        double span = maxValue - minValue;
+        this.value = span <= 0 ? 0.0 : Mth.clamp((currentValue - minValue) / span, 0.0, 1.0);
         this.lastAppliedValue = this.minValue + (this.maxValue - this.minValue) * this.value;
         this.updateMessage();
     }
@@ -60,7 +61,8 @@ public class ModernSlider extends AbstractWidget {
     }
 
     public void setCurrentValue(double val) {
-        this.value = Mth.clamp((val - this.minValue) / (this.maxValue - this.minValue), 0.0, 1.0);
+        double span = this.maxValue - this.minValue;
+        this.value = span <= 0 ? 0.0 : Mth.clamp((val - this.minValue) / span, 0.0, 1.0);
         this.lastAppliedValue = val;
         this.updateMessage();
     }

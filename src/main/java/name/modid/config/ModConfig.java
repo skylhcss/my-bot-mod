@@ -23,7 +23,7 @@ public class ModConfig {
         "my-bot-mod.json"
     );
     
-    private static ModConfig INSTANCE = null;
+    private static volatile ModConfig INSTANCE = null;
     
     // ========== 总开关 ==========
     /**
@@ -77,9 +77,10 @@ public class ModConfig {
     public int maxBotCount = 0;
     
     /**
-     * 是否允许非 OP 玩家创建假人
+     * 是否允许非 OP 玩家创建并控制假人（完整权限：创建/删除/传送/背包/指挥等）
      */
-    public boolean allowNonOpCreateBot = false;
+    @com.google.gson.annotations.SerializedName(value = "allowNonOpControlBot", alternate = {"allowNonOpCreateBot"})
+    public boolean allowNonOpControlBot = false;
     
     /**
      * 假人死亡后是否自动重生
@@ -118,51 +119,66 @@ public class ModConfig {
      * 启用后，假人在移动时遇到1格高障碍物会自动跳跃（与真实玩家行为一致）
      */
     public boolean allowBotAutoJump = true;
+
+    // ========== 指挥棒设置 ==========
+    /**
+     * 传送模式是否允许非创造模式使用
+     * 默认 false：仅当手持指挥棒的玩家处于创造模式时才能使用传送模式；
+     * 启用后，任意游戏模式的玩家都可使用传送模式。
+     */
+    public boolean allowBatonTeleportNonCreative = false;
     
     // ========== 关于信息 ==========
     /**
      * 模组名称
      */
-    public final String modName = "我的机器人";
+    public final transient String modName = "我的机器人";
     
     /**
      * 模组版本
      */
-    public final String modVersion = "1.3.0";
+    public final transient String modVersion = "1.3.1";
     
     /**
      * 作者信息
      */
-    public final String author = "Skyline_hcss";
+    public final transient String author = "Skyline_hcss";
     
     /**
      * 作者邮箱
      */
-    public final String email = "Skyline.hcss@gmail.com";
+    public final transient String email = "Skyline.hcss@gmail.com";
     
     /**
      * GitHub 仓库地址
      */
-    public final String githubRepo = "https://github.com/skylhcss/my-bot-mod";
+    public final transient String githubRepo = "https://github.com/skylhcss/my-bot-mod";
     
     /**
      * 模组描述
      */
-    public final String description = "一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric";
+    public final transient String description = "一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric";
     
     /**
      * 许可证
      */
-    public final String license = "MIT License";
+    public final transient String license = "MIT License";
     
     /**
      * 获取配置实例
      */
     public static ModConfig getInstance() {
-        if (INSTANCE == null) {
-            INSTANCE = load();
+        ModConfig result = INSTANCE;
+        if (result == null) {
+            synchronized (ModConfig.class) {
+                result = INSTANCE;
+                if (result == null) {
+                    result = load();
+                    INSTANCE = result;
+                }
+            }
         }
-        return INSTANCE;
+        return result;
     }
     
     /**
@@ -190,8 +206,8 @@ public class ModConfig {
                     }
                     return config;
                 }
-            } catch (IOException e) {
-                System.err.println("无法加载配置文件: " + e.getMessage());
+            } catch (IOException | com.google.gson.JsonParseException e) {
+                System.err.println("无法加载配置文件，将使用默认配置: " + e.getMessage());
             }
         }
         
@@ -246,7 +262,6 @@ public class ModConfig {
         killAuraRange = 3.0;
         allowMountOtherBots = false;
         maxBotCount = 0;
-        allowNonOpCreateBot = false;
         autoRespawnOnDeath = false;
         botTakeDamage = true;
         botHunger = true;
@@ -254,6 +269,8 @@ public class ModConfig {
         preserveBotState = false;
         carpetModCompatibility = true;
         allowBotAutoJump = true;
+        allowBatonTeleportNonCreative = false;
+        allowNonOpControlBot = false;
         
         mountWhitelist.clear();
         initDefaultMountWhitelist();

@@ -139,19 +139,21 @@ public class MountWhitelistScreen extends Screen {
     
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // 检查是否点击了列表项
-        int startY = 60;
-        int lineHeight = 20;
-        int maxVisible = (this.height - 150) / lineHeight;
-        
-        for (int i = scrollOffset; i < Math.min(tempWhitelist.size(), scrollOffset + maxVisible); i++) {
-            int y = startY + (i - scrollOffset) * lineHeight;
-            
-            if (mouseX >= this.width / 2 - 100 && mouseX <= this.width / 2 + 100 &&
-                mouseY >= y && mouseY <= y + lineHeight) {
-                // 删除该项
-                tempWhitelist.remove(i);
-                return true;
+        // 仅左键删除列表项（避免右键/中键误删）
+        if (button == 0) {
+            int startY = 60;
+            int lineHeight = 20;
+            int maxVisible = (this.height - 150) / lineHeight;
+
+            for (int i = scrollOffset; i < Math.min(tempWhitelist.size(), scrollOffset + maxVisible); i++) {
+                int y = startY + (i - scrollOffset) * lineHeight;
+
+                if (mouseX >= this.width / 2 - 100 && mouseX <= this.width / 2 + 100 &&
+                    mouseY >= y && mouseY <= y + lineHeight) {
+                    // 删除该项
+                    tempWhitelist.remove(i);
+                    return true;
+                }
             }
         }
         
@@ -162,6 +164,11 @@ public class MountWhitelistScreen extends Screen {
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) {
         int maxVisible = (this.height - 150) / 20;
         int maxScroll = Math.max(0, tempWhitelist.size() - maxVisible);
+        
+        // 无可滚动内容时不吞掉滚轮事件
+        if (maxScroll <= 0) {
+            return super.mouseScrolled(mouseX, mouseY, scrollDelta);
+        }
         
         scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) scrollDelta));
         
