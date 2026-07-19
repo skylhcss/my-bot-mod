@@ -80,7 +80,7 @@
 
 ## 📄 许可证
 
-MIT License。作者：Skyline_hcss、Kiro AI。
+MIT License。作者：Skyline_hcss。
 
 ---
 
