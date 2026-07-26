@@ -1,12 +1,12 @@
 # My Bot Mod · 我的机器人
 
-[![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)](https://www.minecraft.net/)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.20--1.20.4-green.svg)](https://www.minecraft.net/)
 [![Fabric](https://img.shields.io/badge/Fabric-0.92.8-blue.svg)](https://fabricmc.net/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-1.3.2-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
 
-> A Carpet-style **fake player (bot)** mod for **Minecraft 1.20.1 (Fabric)**.
-> 一个类似 Carpet Mod 的**假人（机器人玩家）**模组，用于 **Minecraft 1.20.1 Fabric**。
+> A Carpet-style **fake player (bot)** mod for **Minecraft 1.20–1.20.4 (Fabric)**.
+> 一个类似 Carpet Mod 的**假人（机器人玩家）**模组，用于 **Minecraft 1.20–1.20.4 Fabric**。
 
 **English** | [简体中文](#简体中文)
 
@@ -14,7 +14,7 @@
 
 ## English
 
-Spawn player-like bots, control their actions, send them around with smart pathfinding, and keep them in your world across restarts.
+Spawn player-like bots, control their actions, send them around with smart pathfinding, and keep them in your world across restarts. One codebase, multiple Minecraft versions (via Stonecutter).
 
 ### ✨ Features
 - 🤖 **Bot management** — create, remove and control fake players (registered via the vanilla `placeNewPlayer` path, so scoreboards, teleporting and other vanilla logic work normally)
@@ -29,7 +29,7 @@ Spawn player-like bots, control their actions, send them around with smart pathf
 - 🔧 **Carpet compatible** — auto-detects and avoids conflicts
 
 ### 📦 Installation
-Requires **Minecraft 1.20.1**, **Fabric Loader 0.19.2+** and **Fabric API 0.92.8+**. Drop the JAR into `.minecraft/mods`.
+Supports **Minecraft 1.20–1.20.4** (pick the JAR matching your version: `+1.20.1` for 1.20–1.20.1, `+1.20.2` for 1.20.2, `+1.20.4` for 1.20.3–1.20.4). Requires **Fabric Loader 0.19.2+**, **Fabric API** and **Java 17+**. Drop the JAR into `.minecraft/mods`.
 
 ### 🚀 Quick start
 ```
@@ -74,7 +74,7 @@ MIT License. Author: **Skyline_hcss**. Bots are intended for singleplayer and pr
 <a id="简体中文"></a>
 ## 简体中文
 
-一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric。
+一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20–1.20.4 Fabric（单代码库多版本，Stonecutter 构建）。
 
 ### ✨ 功能特性
 - 🤖 **假人管理**：创建、删除、控制假人玩家（`placeNewPlayer` 规范注册，计分板/传送等原版逻辑正常）
@@ -89,7 +89,7 @@ MIT License. Author: **Skyline_hcss**. Bots are intended for singleplayer and pr
 - 🔧 **Carpet 兼容**：自动检测并避免冲突
 
 ### 📦 安装
-需要 **Minecraft 1.20.1** + **Fabric Loader 0.19.2+** + **Fabric API 0.92.8+**。将 JAR 放入 `.minecraft/mods` 即可。
+支持 **Minecraft 1.20–1.20.4**（按版本选对应 JAR：`+1.20.1` 适用 1.20–1.20.1，`+1.20.2` 适用 1.20.2，`+1.20.4` 适用 1.20.3–1.20.4）。需 **Fabric Loader 0.19.2+**、**Fabric API** 与 **Java 17+**。将 JAR 放入 `.minecraft/mods` 即可。
 
 ### 🚀 快速开始
 ```

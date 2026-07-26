@@ -180,11 +180,22 @@ public class BotPersistenceManager extends SavedData {
             return null;
         }
         
+        //? if >=1.20.2 {
+        /*// 1.20.2+ 改用 SavedData.Factory（DataFixTypes 传 null：模组数据无需升级链）
+        return overworld.getDataStorage().computeIfAbsent(
+            new net.minecraft.world.level.saveddata.SavedData.Factory<>(
+                BotPersistenceManager::new,
+                BotPersistenceManager::load,
+                null),
+            DATA_NAME
+        );
+        *///?} else {
         return overworld.getDataStorage().computeIfAbsent(
             BotPersistenceManager::load,
             BotPersistenceManager::new,
             DATA_NAME
         );
+        //?}
     }
     
     /**

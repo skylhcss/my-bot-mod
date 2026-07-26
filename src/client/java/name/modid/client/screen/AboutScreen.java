@@ -52,7 +52,11 @@ public class AboutScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        //? if >=1.20.2 {
+        /*this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        *///?} else {
         this.renderBackground(graphics);
+        //?}
 
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, DesignTokens.PANEL_BG);
         UI.border(graphics, panelX, panelY, panelWidth, panelHeight, DesignTokens.PANEL_BORDER);

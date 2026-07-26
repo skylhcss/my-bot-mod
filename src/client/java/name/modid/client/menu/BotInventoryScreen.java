@@ -56,7 +56,11 @@ public class BotInventoryScreen extends AbstractContainerScreen<BotInventoryMenu
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        //? if >=1.20.2 {
+        /*this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        *///?} else {
         this.renderBackground(graphics);
+        //?}
         super.render(graphics, mouseX, mouseY, partialTick);
         this.renderTooltip(graphics, mouseX, mouseY);
     }
@@ -109,11 +113,21 @@ public class BotInventoryScreen extends AbstractContainerScreen<BotInventoryMenu
         }
         int cx = this.leftPos + (MODEL_X1 + MODEL_X2) / 2;
         int bottom = this.topPos + MODEL_Y2 - 6;
+        //? if >=1.20.2 {
+        /*// 1.20.2+：改为矩形区域 + 绝对鼠标坐标的新签名
+        InventoryScreen.renderEntityInInventoryFollowsMouse(
+            graphics,
+            this.leftPos + MODEL_X1, this.topPos + MODEL_Y1,
+            this.leftPos + MODEL_X2, this.topPos + MODEL_Y2,
+            26, 0.0625F, mouseX, mouseY,
+            (LivingEntity) entity);
+        *///?} else {
         InventoryScreen.renderEntityInInventoryFollowsMouse(
             graphics, cx, bottom, 26,
             (float) cx - mouseX,
             (float) (this.topPos + (MODEL_Y1 + MODEL_Y2) / 2) - mouseY,
             (LivingEntity) entity);
+        //?}
     }
 
     /**

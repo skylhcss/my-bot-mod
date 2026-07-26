@@ -4,9 +4,27 @@ pluginManagement {
 			name = 'Fabric'
 			url = 'https://maven.fabricmc.net/'
 		}
+		maven {
+			name = 'Stonecutter'
+			url = 'https://maven.kikugie.dev/releases'
+		}
 		mavenCentral()
 		gradlePluginPortal()
 	}
+}
+
+plugins {
+	id 'dev.kikugie.stonecutter' version '0.5.1'
+}
+
+// 多版本构建：单代码库经 Stonecutter 预处理产出各 Minecraft 版本 JAR
+stonecutter {
+	centralScript = 'build.gradle'
+	shared {
+		versions '1.20.1', '1.20.2', '1.20.4'
+		vcsVersion = '1.20.1'
+	}
+	create rootProject
 }
 
 // Should match your modid

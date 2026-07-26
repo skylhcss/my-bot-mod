@@ -146,7 +146,11 @@ public class BotPanelScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        //? if >=1.20.2 {
+        /*this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        *///?} else {
         this.renderBackground(graphics);
+        //?}
 
         // 面板背景 + 边框（全局配置界面风格）
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, DesignTokens.PANEL_BG);

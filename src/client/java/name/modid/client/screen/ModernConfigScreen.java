@@ -326,7 +326,11 @@ public class ModernConfigScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        //? if >=1.20.2 {
+        /*this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        *///?} else {
         this.renderBackground(graphics);
+        //?}
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, DesignTokens.PANEL_BG);
         UI.border(graphics, panelX, panelY, panelWidth, panelHeight, DesignTokens.PANEL_BORDER);
 
@@ -402,11 +406,19 @@ public class ModernConfigScreen extends Screen {
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
+    //? if >=1.20.2 {
+    /*@Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double delta) {
+        if (activeCategory >= 0 && currentPage != null && currentPage.mouseScrolled(mouseX, mouseY, 0, delta)) return true;
+        return super.mouseScrolled(mouseX, mouseY, scrollX, delta);
+    }
+    *///?} else {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         if (activeCategory >= 0 && currentPage != null && currentPage.mouseScrolled(mouseX, mouseY, 0, delta)) return true;
         return super.mouseScrolled(mouseX, mouseY, delta);
     }
+    //?}
 
     @Override
     public void onClose() {

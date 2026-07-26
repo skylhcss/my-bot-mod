@@ -46,8 +46,14 @@ public class BotPlayer extends ServerPlayer {
      * @param creatorName 创建假人的玩家名字
      */
     public BotPlayer(MinecraftServer server, ServerLevel level, GameProfile profile, Connection connection, java.util.UUID creatorUUID, String creatorName) {
+        //? if >=1.20.2 {
+        /*super(server, level, profile, net.minecraft.server.level.ClientInformation.createDefault());
+        this.connection = new FakeServerGamePacketListenerImpl(server, connection, this,
+            net.minecraft.server.network.CommonListenerCookie.createInitial(profile));
+        *///?} else {
         super(server, level, profile);
         this.connection = new FakeServerGamePacketListenerImpl(server, connection, this);
+        //?}
         this.creatorUUID = creatorUUID;
         this.creatorName = creatorName;
         this.actionController = new BotActionController(this);

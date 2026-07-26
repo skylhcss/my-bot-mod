@@ -115,7 +115,12 @@ public class BotManager {
             // 规范注册：使用 PlayerList.placeNewPlayer 加入玩家列表（含 playersByUUID）、
             // 生成实体并下发玩家信息包，保证 getPlayer(UUID)、计分板等原版逻辑正常
             // 参考 Carpet Mod 的 EntityPlayerMPFake 做法
+            //? if >=1.20.2 {
+            /*server.getPlayerList().placeNewPlayer(connection, bot,
+                net.minecraft.server.network.CommonListenerCookie.createInitial(profile));
+            *///?} else {
             server.getPlayerList().placeNewPlayer(connection, bot);
+            //?}
 
             // placeNewPlayer 可能按存档/出生点重置位置，纠正到目标位置与朝向
             bot.teleportTo(level, spawnPos.x, spawnPos.y, spawnPos.z, yaw, pitch);

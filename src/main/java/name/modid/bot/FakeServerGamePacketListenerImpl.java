@@ -12,9 +12,16 @@ import net.minecraft.server.network.ServerGamePacketListenerImpl;
  */
 public class FakeServerGamePacketListenerImpl extends ServerGamePacketListenerImpl {
 
+    //? if >=1.20.2 {
+    /*public FakeServerGamePacketListenerImpl(MinecraftServer server, Connection connection, ServerPlayer player,
+            net.minecraft.server.network.CommonListenerCookie cookie) {
+        super(server, connection, player, cookie);
+    }
+    *///?} else {
     public FakeServerGamePacketListenerImpl(MinecraftServer server, Connection connection, ServerPlayer player) {
         super(server, connection, player);
     }
+    //?}
 
     /**
      * 假人无真实网络连接：覆盖父类 tick，跳过 keepalive/超时检测，避免被误判超时而断连。
@@ -49,9 +56,7 @@ public class FakeServerGamePacketListenerImpl extends ServerGamePacketListenerIm
     @Override public void handleUseItemOn(ServerboundUseItemOnPacket packet) {}
     @Override public void handleUseItem(ServerboundUseItemPacket packet) {}
     @Override public void handleTeleportToEntityPacket(ServerboundTeleportToEntityPacket packet) {}
-    @Override public void handleResourcePackResponse(ServerboundResourcePackPacket packet) {}
     @Override public void handlePaddleBoat(ServerboundPaddleBoatPacket packet) {}
-    @Override public void handlePong(ServerboundPongPacket packet) {}
     @Override public void handleClientCommand(ServerboundClientCommandPacket packet) {}
     @Override public void handleContainerClose(ServerboundContainerClosePacket packet) {}
     @Override public void handleContainerClick(ServerboundContainerClickPacket packet) {}
@@ -70,7 +75,18 @@ public class FakeServerGamePacketListenerImpl extends ServerGamePacketListenerIm
     @Override public void handleLockDifficulty(ServerboundLockDifficultyPacket packet) {}
     @Override public void handleSetCreativeModeSlot(ServerboundSetCreativeModeSlotPacket packet) {}
     @Override public void handleSignUpdate(ServerboundSignUpdatePacket packet) {}
+    // 以下包在 1.20.2+ 移至 common 协议包（由 ServerCommonPacketListenerImpl 声明）
+    //? if >=1.20.2 {
+    /*@Override public void handleKeepAlive(net.minecraft.network.protocol.common.ServerboundKeepAlivePacket packet) {}
+    @Override public void handlePong(net.minecraft.network.protocol.common.ServerboundPongPacket packet) {}
+    @Override public void handleCustomPayload(net.minecraft.network.protocol.common.ServerboundCustomPayloadPacket packet) {}
+    @Override public void handleClientInformation(net.minecraft.network.protocol.common.ServerboundClientInformationPacket packet) {}
+    @Override public void handleResourcePackResponse(net.minecraft.network.protocol.common.ServerboundResourcePackPacket packet) {}
+    *///?} else {
     @Override public void handleKeepAlive(ServerboundKeepAlivePacket packet) {}
+    @Override public void handlePong(ServerboundPongPacket packet) {}
     @Override public void handleCustomPayload(ServerboundCustomPayloadPacket packet) {}
     @Override public void handleClientInformation(ServerboundClientInformationPacket packet) {}
+    @Override public void handleResourcePackResponse(ServerboundResourcePackPacket packet) {}
+    //?}
 }

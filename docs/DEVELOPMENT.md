@@ -1,6 +1,6 @@
 # 开发文档
 
-面向想了解内部实现或贡献代码的开发者。基于 **Fabric 1.20.1 / Java 17 / Mojang mappings**。
+面向想了解内部实现或贡献代码的开发者。基于 **Fabric / Java 17 / Mojang mappings**，通过 **Stonecutter** 单代码库支持 **1.20–1.20.4** 多个 Minecraft 版本。
 
 ## 项目结构
 
@@ -46,15 +46,37 @@ src/client/java/name/modid/client/
 - **背包/面板**：右键假人 → 服务端 `UseEntityCallback` → S2C `open_bot_panel` → 客户端 `BotPanelScreen`；背包用 `ExtendedScreenHandlerType`（`BotInventoryMenu`）直接绑定假人 `Inventory`。
 - **驻留**：`BotPersistenceManager extends SavedData`，NBT 存于 `world/data/`，区块加载票据记录维度并无条件刷新。
 
-## 构建与运行
+## 构建与运行（多版本 / Stonecutter）
+
+项目采用 [Stonecutter](https://stonecutter.kikugie.dev/) 单代码库多版本构建，构建目标：
+
+| 构建目标 | 覆盖版本 | Java |
+|----------|----------|------|
+| `1.20.1` | 1.20–1.20.1 | 17 |
+| `1.20.2` | 1.20.2 | 17 |
+| `1.20.4` | 1.20.3–1.20.4 | 17 |
 
 ```bash
-./gradlew build       # 产物：build/libs/my-bot-mod-<version>.jar
-./gradlew runClient   # 运行客户端
-./gradlew runServer   # 运行服务端
+./gradlew chiseledBuild            # 一键构建所有版本，产物：versions/<mc>/build/libs/
+./gradlew "Set active project to 1.20.4"   # 切换 IDE/活动版本（就地翻转条件注释）
+./gradlew :1.20.4:build            # 只构建单个版本
+./gradlew :1.20.1:runClient        # 运行指定版本客户端（共用根目录 run/）
 ```
 
-GitHub Actions（`.github/workflows/build.yml`）在每次 push/PR 上构建并上传 artifact。
+- 各版本依赖（`minecraft_version`/`fabric_api_version`/`mc_dep`）定义在 `versions/<mc>/gradle.properties`。
+- 跨版本差异代码一律用 Stonecutter 条件注释包裹（活动版本分支为真实代码，其余分支为注释，切换时自动翻转）：
+
+```java
+//? if >=1.20.2 {
+/*server.getPlayerList().placeNewPlayer(connection, bot, CommonListenerCookie.createInitial(profile));
+*///?} else {
+server.getPlayerList().placeNewPlayer(connection, bot);
+//?}
+```
+
+- 已有的版本分支点：假人注册（`BotPlayer`/`BotManager`/`FakeServerGamePacketListenerImpl` 的 `CommonListenerCookie`）、`SavedData.Factory`（`BotPersistenceManager`）、皮肤 `PlayerSkin` record（`PlayerInfoMixin`）、`Screen.renderBackground` 签名（5 处界面）。
+
+GitHub Actions（`.github/workflows/build.yml`）在每次 push/PR 上执行 `chiseledBuild` 并上传全版本 artifact。
 
 ## 代码规范
 

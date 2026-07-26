@@ -1,0 +1,8 @@
+plugins.apply 'dev.kikugie.stonecutter'
+stonecutter.active "1.20.1" /* [SC] DO NOT EDIT */
+
+// 一键构建所有版本：gradle chiseledBuild
+stonecutter.registerChiseled tasks.register('chiseledBuild', stonecutter.chiseled) {
+	group = 'project'
+	ofTask 'build'
+}

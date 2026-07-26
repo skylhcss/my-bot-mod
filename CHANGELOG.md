@@ -8,6 +8,12 @@
 
 ## [1.3.2] - 2026-07-19
 
+### 🧱 多版本支持（1.20–1.20.4）
+- 接入 **Stonecutter** 单代码库多版本构建：构建目标 `1.20.1`（覆盖 1.20–1.20.1）、`1.20.2`、`1.20.4`（覆盖 1.20.3–1.20.4），`gradle chiseledBuild` 一键产出全部 JAR（产物名带 `+<mc>` 后缀）
+- 1.20.2+ 适配：假人注册链路（`ClientInformation`/`CommonListenerCookie`）、common 协议包监听器、`SavedData.Factory` 驻留存储、`PlayerSkin` record 皮肤 Mixin、`renderBackground` 新签名
+- CI 改为全版本构建并上传各版本产物
+- Modrinth 按 MC 版本拆分发布 JAR（`1.3.2+1.20.1 / 1.20.2 / 1.20.4`）
+
 ### 🖥️ 配置界面全面重构（ModernConfigScreen）
 - **浏览器式标签页**：分类以标签页打开，可单独关闭（✕）、点击切换，重开界面恢复上次打开的标签
 - **工作台风格主页**：灰色工作台面板 + 3×3 凹槽九宫格，每个分类一个物品图标槽位，点击即开

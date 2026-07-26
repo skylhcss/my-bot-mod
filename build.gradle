@@ -4,8 +4,14 @@ plugins {
 	id 'checkstyle'
 }
 
-version = project.mod_version
+// 多版本构建：产物名带 Minecraft 版本后缀，如 my-bot-mod-1.3.2+1.20.4.jar
+version = "${project.mod_version}+${project.minecraft_version}"
 group = project.maven_group
+
+base {
+	// 子项目名为 MC 版本号，需显式指定产物基名
+	archivesName = project.archives_base_name
+}
 
 repositories {
 	// Loom 自动添加 Minecraft/Fabric 仓库；mavenCentral 供 Checkstyle 等工具解析。
@@ -22,6 +28,10 @@ loom {
 		}
 	}
 
+	// 各版本子项目共用根目录 run/（复用已有存档与配置）
+	runConfigs.configureEach {
+		runDir "../../run"
+	}
 }
 
 fabricApi {
@@ -58,10 +68,12 @@ sourceSets {
 
 processResources {
 	def version = project.version
+	def mcDep = project.mc_dep
 	inputs.property "version", version
+	inputs.property "mc_dep", mcDep
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version
+		expand "version": version, "mc_dep": mcDep
 	}
 }
 

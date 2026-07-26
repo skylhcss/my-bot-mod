@@ -24,10 +24,10 @@ jobs:
           distribution: 'temurin'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew
-      - name: build
-        run: ./gradlew build check test
+      - name: build all versions (stonecutter)
+        run: ./gradlew chiseledBuild
       - name: capture build artifacts
         uses: actions/upload-artifact@v7
         with:
           name: Artifacts
-          path: build/libs/
+          path: versions/*/build/libs/

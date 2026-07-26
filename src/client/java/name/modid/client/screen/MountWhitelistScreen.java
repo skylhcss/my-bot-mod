@@ -86,7 +86,11 @@ public class MountWhitelistScreen extends Screen {
     
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        //? if >=1.20.2 {
+        /*this.renderBackground(graphics, mouseX, mouseY, partialTick);
+        *///?} else {
         this.renderBackground(graphics);
+        //?}
         
         graphics.drawCenteredString(this.font, this.title, this.width / 2, 20, 0xFFFFFF);
         
@@ -160,6 +164,22 @@ public class MountWhitelistScreen extends Screen {
         return super.mouseClicked(mouseX, mouseY, button);
     }
     
+    //? if >=1.20.2 {
+    /*@Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollDelta) {
+        int maxVisible = (this.height - 150) / 20;
+        int maxScroll = Math.max(0, tempWhitelist.size() - maxVisible);
+        
+        // 无可滚动内容时不吞掉滚轮事件
+        if (maxScroll <= 0) {
+            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollDelta);
+        }
+        
+        scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - (int) scrollDelta));
+        
+        return true;
+    }
+    *///?} else {
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollDelta) {
         int maxVisible = (this.height - 150) / 20;
@@ -174,6 +194,7 @@ public class MountWhitelistScreen extends Screen {
         
         return true;
     }
+    //?}
     
     @Override
     public void onClose() {
