@@ -3,7 +3,6 @@ package name.modid.bot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -76,12 +75,17 @@ public class BotActionController {
         
         // 处理使用物品动作
         if (using && usingTicks > 0) {
-            // 如果是间隔模式，检查间隔计数器
             if (useInterval > 0) {
+                // 间隔模式
                 useIntervalCounter++;
                 if (useIntervalCounter >= useInterval) {
                     useIntervalCounter = 0;
                     performUse();
+                } else {
+                    // 间隔未到：释放按住的物品（与 Carpet 一致: 每次间隔 触发→释放→再触发）
+                    if (bot.isUsingItem()) {
+                        bot.releaseUsingItem();
+                    }
                 }
             } else {
                 // 持续模式或单次模式
@@ -90,10 +94,19 @@ public class BotActionController {
             
             usingTicks--;
             if (usingTicks <= 0) {
+                // 动作结束：释放按住的物品（与 Carpet 一致: once 触发后立即释放，不会卡在拉弓状态）
+                if (bot.isUsingItem()) {
+                    bot.releaseUsingItem();
+                }
                 using = false;
                 useInterval = 0;
                 useIntervalCounter = 0;
             }
+        }
+        
+        // 先更新寻路：本 tick 计算移动/跳跃/疾跑意图，确保与朝向同帧生效（修复跳跃/疾跑滞后一帧）
+        if (pathfinder != null && pathfinder.isPathfinding()) {
+            pathfinder.tick();
         }
         
         // 更新潜行状态
@@ -107,11 +120,6 @@ public class BotActionController {
         // 使用 setJumping() 而不是直接调用 jumpFromGround()
         // 这样可以让游戏的物理引擎正确处理跳跃
         bot.setJumping(jumping);
-        
-        // 更新寻路系统
-        if (pathfinder != null && pathfinder.isPathfinding()) {
-            pathfinder.tick();
-        }
     }
     
     /**
@@ -283,6 +291,11 @@ public class BotActionController {
      * 优先级：实体交互 > 方块交互 > 使用物品
      */
     private void performUse() {
+        // 已在"按住"使用需持续的物品（食物/弓/盾/望远镜等）时，交由原版逐 tick 推进，
+        // 不要每 tick 重新触发（否则 useItemRemaining 每 tick 被重置，永远用不完/拉不满）
+        if (bot.isUsingItem()) {
+            return;
+        }
         bot.swing(InteractionHand.MAIN_HAND);
         
         var config = name.modid.config.ModConfig.getInstance();
@@ -428,6 +441,10 @@ public class BotActionController {
      * 停止使用物品
      */
     public void stopUse() {
+        // 若正在"按住"使用物品（拉弓/举盾/进食等），释放以正常结束（如射箭、收盾）
+        if (bot.isUsingItem()) {
+            bot.releaseUsingItem();
+        }
         this.using = false;
         this.usingTicks = 0;
         this.useInterval = 0;
@@ -687,6 +704,7 @@ public class BotActionController {
     public boolean isUsing() { return using; }
     public boolean isSneaking() { return sneaking; }
     public boolean isJumping() { return jumping; }
+    public boolean isPathfinding() { return hasPathfindingTarget(); }
     public boolean isSprinting() { return sprinting; }
     public float getForward() { return forward; }
     public float getStrafing() { return strafing; }

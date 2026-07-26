@@ -16,6 +16,14 @@ public class FakeServerGamePacketListenerImpl extends ServerGamePacketListenerIm
         super(server, connection, player);
     }
 
+    /**
+     * 假人无真实网络连接：覆盖父类 tick，跳过 keepalive/超时检测，避免被误判超时而断连。
+     */
+    @Override
+    public void tick() {
+        // no-op
+    }
+
     // 覆盖所有方法，使其不执行任何操作
     @Override public void handlePlayerInput(ServerboundPlayerInputPacket packet) {}
     @Override public void handleMoveVehicle(ServerboundMoveVehiclePacket packet) {}

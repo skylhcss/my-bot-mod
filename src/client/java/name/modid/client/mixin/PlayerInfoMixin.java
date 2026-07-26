@@ -41,23 +41,25 @@ public class PlayerInfoMixin {
                 Property textureProperty = profile.getProperties().get("textures").iterator().next();
                 String textureValue = textureProperty.getValue();
                 
-                // 检查是否是 PNG 皮肤标记
+                // 检查是否是 PNG 皮肤标记（"PNG:filename.png"）
                 if (BotSkinManager.isPngSkinMarker(textureValue)) {
                     String pngFileName = BotSkinManager.extractPngFileName(textureValue);
                     UUID playerUUID = profile.getId();
+                    if (playerUUID == null) {
+                        return;
+                    }
                     
                     // 使用客户端加载器加载 PNG 皮肤纹理
                     ResourceLocation skinLocation = BotSkinTextureLoader.loadPngSkinTexture(playerUUID, pngFileName);
                     
                     if (skinLocation != null) {
-                        MyBotMod.LOGGER.debug("为假人 {} 应用 PNG 皮肤: {}", profile.getName(), pngFileName);
                         cir.setReturnValue(skinLocation);
                     }
                 }
             }
         } catch (Exception e) {
             // 如果出错，让原方法继续执行
-            MyBotMod.LOGGER.error("加载假人 PNG 皮肤时出错: {}", e.getMessage(), e);
+            MyBotMod.LOGGER.error("加载假人 PNG 皮肤时出错: {}", e.getMessage());
         }
     }
 }

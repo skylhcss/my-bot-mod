@@ -128,16 +128,54 @@ public class ModConfig {
      */
     public boolean allowBatonTeleportNonCreative = false;
     
-    // ========== 关于信息 ==========
+    // ========== 外观与防护 ==========
     /**
-     * 模组名称
+     * 假人是否发光（创建时生效，便于在远处定位假人）
      */
-    public final transient String modName = "我的机器人";
+    public boolean botGlowing = false;
     
     /**
-     * 模组版本
+     * 假人是否免疫火焰/岩浆伤害
      */
-    public final transient String modVersion = "1.3.1";
+    public boolean botFireImmune = false;
+    
+    // ========== OP/权限系统 ==========
+    /**
+     * 每位玩家可创建的假人数量上限（0 = 无限制）
+     */
+    public int maxBotsPerPlayer = 0;
+    
+    /**
+     * 指挥棒是否需要 OP 权限（开启后非 OP 即使有 allowNonOpControlBot 也不能用指挥棒）
+     */
+    public boolean batonRequiresOp = false;
+    
+    // ========== 寻路系统 ==========
+    /**
+     * 最大寻路距离（格），超出直接拒绝寻路
+     */
+    public int maxPathfindingDistance = 256;
+    
+    /**
+     * 寻路允许跑酷跳跃（跨越 2-4 格裂谷）
+     */
+    public boolean pathfindingAllowParkour = true;
+    
+    /**
+     * 寻路允许游泳路线
+     */
+    public boolean pathfindingAllowSwim = true;
+    
+    // ========== 关于信息 ==========
+    /**
+     * 模组名称（从 fabric.mod.json 动态读取，避免与 gradle 双源漂移）
+     */
+    public final transient String modName = readModMeta(true, "我的机器人");
+    
+    /**
+     * 模组版本（从 fabric.mod.json 动态读取，单一数据源）
+     */
+    public final transient String modVersion = readModMeta(false, "1.3.1");
     
     /**
      * 作者信息
@@ -165,6 +203,37 @@ public class ModConfig {
     public final transient String license = "MIT License";
     
     /**
+     * 从 fabric.mod.json 元数据读取模组名称/版本（单一数据源，避免与 gradle.properties 漂移）
+     * @param name true 读取名称，false 读取版本
+     */
+    private static String readModMeta(boolean name, String fallback) {
+        try {
+            var opt = FabricLoader.getInstance().getModContainer("my-bot-mod");
+            if (opt.isPresent()) {
+                var meta = opt.get().getMetadata();
+                return name ? meta.getName() : meta.getVersion().getFriendlyString();
+            }
+        } catch (Exception ignored) {
+        }
+        return fallback;
+    }
+
+    /** 校验并夹取数值字段到合理范围，防止手改 JSON 写入非法值 */
+    private void validate() {
+        attackReachDistance = clamp(attackReachDistance, 0.0, 64.0);
+        creativeAttackReachDistance = clamp(creativeAttackReachDistance, 0.0, 128.0);
+        killAuraRange = clamp(killAuraRange, 0.0, 64.0);
+        if (maxBotCount < 0) maxBotCount = 0;
+        if (maxBotsPerPlayer < 0) maxBotsPerPlayer = 0;
+        maxPathfindingDistance = (int) clamp(maxPathfindingDistance, 32, 1024);
+        if (configMenuKey == null || configMenuKey.isEmpty()) configMenuKey = "key.keyboard.b";
+    }
+
+    private static double clamp(double v, double min, double max) {
+        return v < min ? min : (v > max ? max : v);
+    }
+
+    /**
      * 获取配置实例
      */
     public static ModConfig getInstance() {
@@ -186,8 +255,10 @@ public class ModConfig {
      * 从磁盘重新读取配置，替换当前单例
      */
     public static ModConfig reload() {
-        INSTANCE = load();
-        return INSTANCE;
+        synchronized (ModConfig.class) {
+            INSTANCE = load();
+            return INSTANCE;
+        }
     }
     
     /**
@@ -204,10 +275,11 @@ public class ModConfig {
                         config.mountWhitelist = new ArrayList<>();
                         config.initDefaultMountWhitelist();
                     }
+                    config.validate();
                     return config;
                 }
             } catch (IOException | com.google.gson.JsonParseException e) {
-                System.err.println("无法加载配置文件，将使用默认配置: " + e.getMessage());
+                name.modid.MyBotMod.LOGGER.error("无法加载配置文件，将使用默认配置: {}", e.getMessage());
             }
         }
         
@@ -246,7 +318,7 @@ public class ModConfig {
                 GSON.toJson(this, writer);
             }
         } catch (IOException e) {
-            System.err.println("无法保存配置文件: " + e.getMessage());
+            name.modid.MyBotMod.LOGGER.error("无法保存配置文件: {}", e.getMessage());
         }
     }
     
@@ -270,6 +342,13 @@ public class ModConfig {
         carpetModCompatibility = true;
         allowBotAutoJump = true;
         allowBatonTeleportNonCreative = false;
+        botGlowing = false;
+        botFireImmune = false;
+        maxBotsPerPlayer = 0;
+        batonRequiresOp = false;
+        maxPathfindingDistance = 256;
+        pathfindingAllowParkour = true;
+        pathfindingAllowSwim = true;
         allowNonOpControlBot = false;
         
         mountWhitelist.clear();

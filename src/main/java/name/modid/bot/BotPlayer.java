@@ -2,7 +2,6 @@ package name.modid.bot;
 
 import com.mojang.authlib.GameProfile;
 import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -43,13 +42,14 @@ public class BotPlayer extends ServerPlayer {
      * @param level 世界
      * @param profile 游戏档案（包含假人名字和UUID）
      * @param connection 网络连接
-     * @param creator 创建假人的玩家
+     * @param creatorUUID 创建假人的玩家 UUID（驻留恢复时为原始创建者，可能不在线）
+     * @param creatorName 创建假人的玩家名字
      */
-    public BotPlayer(MinecraftServer server, ServerLevel level, GameProfile profile, Connection connection, ServerPlayer creator) {
+    public BotPlayer(MinecraftServer server, ServerLevel level, GameProfile profile, Connection connection, java.util.UUID creatorUUID, String creatorName) {
         super(server, level, profile);
         this.connection = new FakeServerGamePacketListenerImpl(server, connection, this);
-        this.creatorUUID = creator.getUUID();
-        this.creatorName = creator.getName().getString();
+        this.creatorUUID = creatorUUID;
+        this.creatorName = creatorName;
         this.actionController = new BotActionController(this);
         
         // 设置假人的物理属性，使其能够跳跃、被击退和碰撞
@@ -124,13 +124,17 @@ public class BotPlayer extends ServerPlayer {
             // 处理饥饿系统（假人个人配置优先于全局配置）
             var config = name.modid.config.ModConfig.getInstance();
             if (!BotSettings.resolve(settings.hunger, config.botHunger)) {
-                // 如果禁用饥饿，保持满饱食度
-                this.getFoodData().setFoodLevel(20);
-                this.getFoodData().setSaturation(20.0F);
+                // 如果禁用饥饿，保持满饱食度（仅在值不对时写入，减少不必要调用）
+                if (this.getFoodData().getFoodLevel() != 20) {
+                    this.getFoodData().setFoodLevel(20);
+                }
+                if (this.getFoodData().getSaturationLevel() < 20.0F) {
+                    this.getFoodData().setSaturation(20.0F);
+                }
             }
-        } catch (NullPointerException e) {
-            // 记录 NPE 以便调试，而非静默吞掉
-            name.modid.MyBotMod.LOGGER.warn("假人 {} tick 时发生 NPE: {}", this.getName().getString(), e.getMessage());
+        } catch (Exception e) {
+            // 记录完整堆栈以定位根因（而非仅消息掉掉问题）；捕获避免单个假人异常中断服务器 tick 循环
+            name.modid.MyBotMod.LOGGER.error("假人 {} tick 时发生异常", this.getName().getString(), e);
         }
     }
     
@@ -189,8 +193,12 @@ public class BotPlayer extends ServerPlayer {
                 }
             ));
         } else {
-            // 从管理器中移除假人
-            BotManager.removeBot(this.getName().getString());
+            // 延迟到下一 tick 移除假人，避免在实体 tick 处理期间同步移除导致 ConcurrentModificationException
+            String botName = this.getName().getString();
+            this.level().getServer().tell(new net.minecraft.server.TickTask(
+                this.level().getServer().getTickCount() + 1,
+                () -> BotManager.removeBot(botName)
+            ));
         }
     }
     
@@ -204,6 +212,12 @@ public class BotPlayer extends ServerPlayer {
         
         // 如果配置为不受伤害，则忽略所有伤害（假人个人配置优先于全局配置）
         if (!BotSettings.resolve(settings.takeDamage, config.botTakeDamage)) {
+            return false;
+        }
+        
+        // 免疫火焰/岩浆伤害（含着火、岩浆、火球等；假人个人配置优先于全局配置）
+        if (BotSettings.resolve(settings.fireImmune, config.botFireImmune)
+                && source.is(net.minecraft.tags.DamageTypeTags.IS_FIRE)) {
             return false;
         }
         

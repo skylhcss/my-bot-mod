@@ -49,6 +49,12 @@ public class BotCommand {
                 return source.hasPermission(2);
             })
             .then(Commands.argument("botName", StringArgumentType.word())
+                .suggests((ctx, builder) -> {
+                    for (BotPlayer b : BotManager.getAllBots()) {
+                        builder.suggest(b.getName().getString());
+                    }
+                    return builder.buildFuture();
+                })
                 // /bot <name> spawn
                 .then(Commands.literal("spawn")
                     .executes(BotCommand::spawnBot)
@@ -245,22 +251,6 @@ public class BotCommand {
             .then(Commands.literal("list")
                 .executes(BotCommand::listBots)
             )
-            // /bot test - 快速测试所有功能
-            .then(Commands.literal("test")
-                .executes(BotCommand::runTests)
-                .then(Commands.literal("movement")
-                    .executes(ctx -> runSpecificTest(ctx, "movement"))
-                )
-                .then(Commands.literal("actions")
-                    .executes(ctx -> runSpecificTest(ctx, "actions"))
-                )
-                .then(Commands.literal("skin")
-                    .executes(ctx -> runSpecificTest(ctx, "skin"))
-                )
-                .then(Commands.literal("all")
-                    .executes(BotCommand::runTests)
-                )
-            )
         );
     }
 
@@ -273,17 +263,12 @@ public class BotCommand {
 
         // 验证名字格式
         if (!BotManager.isValidBotName(botName)) {
-            ctx.getSource().sendFailure(Component.literal(
-                "无效的假人名字！名字必须：\n" +
-                "- 长度 3-16 个字符\n" +
-                "- 只包含字母、数字和下划线\n" +
-                "- 例如：Bot_1, TestBot, Steve123"
-            ));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.spawn.invalid_name"));
             return 0;
         }
 
         if (BotManager.hasBot(botName)) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 已存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.spawn.already_exists", botName));
             return 0;
         }
 
@@ -296,10 +281,10 @@ public class BotCommand {
         );
 
         if (bot != null) {
-            ctx.getSource().sendSuccess(() -> Component.literal("成功召唤假人 " + botName), true);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.spawn.success", botName), true);
             return 1;
         } else {
-            ctx.getSource().sendFailure(Component.literal("召唤假人失败！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.spawn.failed"));
             return 0;
         }
     }
@@ -314,17 +299,12 @@ public class BotCommand {
 
         // 验证名字格式
         if (!BotManager.isValidBotName(botName)) {
-            ctx.getSource().sendFailure(Component.literal(
-                "无效的假人名字！名字必须：\n" +
-                "- 长度 3-16 个字符\n" +
-                "- 只包含字母、数字和下划线\n" +
-                "- 例如：Bot_1, TestBot, Steve123"
-            ));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.spawn.invalid_name"));
             return 0;
         }
 
         if (BotManager.hasBot(botName)) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 已存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.spawn.already_exists", botName));
             return 0;
         }
 
@@ -337,12 +317,11 @@ public class BotCommand {
         );
 
         if (bot != null) {
-            ctx.getSource().sendSuccess(() -> Component.literal("成功在 " + 
-                String.format("%.1f, %.1f, %.1f", position.x, position.y, position.z) + 
-                " 召唤假人 " + botName), true);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.spawn.success_at",
+                String.format("%.1f, %.1f, %.1f", position.x, position.y, position.z), botName), true);
             return 1;
         } else {
-            ctx.getSource().sendFailure(Component.literal("召唤假人失败！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.spawn.failed"));
             return 0;
         }
     }
@@ -350,14 +329,36 @@ public class BotCommand {
     /**
      * 移除假人
      */
+    /** 待确认的移除操作：key = 操作者名 + ":" + 假人名(小写)，value = 过期时间戳(ms) */
+    private static final java.util.Map<String, Long> pendingKill = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long KILL_CONFIRM_WINDOW_MS = 15000L;
+
     private static int killBot(CommandContext<CommandSourceStack> ctx) {
         String botName = StringArgumentType.getString(ctx, "botName");
 
+        if (!BotManager.hasBot(botName)) {
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
+            return 0;
+        }
+
+        // 破坏性操作二次确认：首次仅提示，窗口期内再次执行才真正移除
+        String key = ctx.getSource().getTextName() + ":" + botName.toLowerCase();
+        long now = System.currentTimeMillis();
+        Long expiry = pendingKill.get(key);
+        if (expiry == null || now > expiry) {
+            // 顺便清理已过期的条目，避免内存泄漏
+            pendingKill.entrySet().removeIf(e -> System.currentTimeMillis() > e.getValue());
+            pendingKill.put(key, now + KILL_CONFIRM_WINDOW_MS);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.kill.confirm", botName, botName), false);
+            return 0;
+        }
+        pendingKill.remove(key);
+
         if (BotManager.removeBot(botName)) {
-            ctx.getSource().sendSuccess(() -> Component.literal("已移除假人 " + botName), true);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.kill.success", botName), true);
             return 1;
         } else {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
     }
@@ -371,27 +372,27 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         BotActionController controller = bot.getActionController();
-        String message = "";
+        Component message = Component.empty();
         
         switch (action) {
             case "attack":
                 switch (mode) {
                     case "once":
                         controller.startAttackOnce();
-                        message = "假人 " + botName + " 攻击一次";
+                        message = Component.translatable("msg.my-bot-mod.attack.once", botName);
                         break;
                     case "continuous":
                         controller.startAttackContinuous();
-                        message = "假人 " + botName + " 开始持续攻击";
+                        message = Component.translatable("msg.my-bot-mod.attack.continuous", botName);
                         break;
                     case "interval":
                         controller.startAttackInterval(interval);
-                        message = "假人 " + botName + " 开始间隔攻击（每 " + interval + " tick）";
+                        message = Component.translatable("msg.my-bot-mod.attack.interval", botName, interval);
                         break;
                 }
                 break;
@@ -399,22 +400,22 @@ public class BotCommand {
                 switch (mode) {
                     case "once":
                         controller.startUseOnce();
-                        message = "假人 " + botName + " 使用物品一次";
+                        message = Component.translatable("msg.my-bot-mod.use.once", botName);
                         break;
                     case "continuous":
                         controller.startUseContinuous();
-                        message = "假人 " + botName + " 开始持续使用物品";
+                        message = Component.translatable("msg.my-bot-mod.use.continuous", botName);
                         break;
                     case "interval":
                         controller.startUseInterval(interval);
-                        message = "假人 " + botName + " 开始间隔使用物品（每 " + interval + " tick）";
+                        message = Component.translatable("msg.my-bot-mod.use.interval", botName, interval);
                         break;
                 }
                 break;
         }
 
-        String finalMessage = message;
-        ctx.getSource().sendSuccess(() -> Component.literal(finalMessage), true);
+        Component finalMessage = message;
+        ctx.getSource().sendSuccess(() -> finalMessage, true);
         return 1;
     }
 
@@ -426,7 +427,7 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
@@ -435,11 +436,11 @@ public class BotCommand {
         switch (action) {
             case "attack":
                 controller.stopAttack();
-                ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 停止攻击"), true);
+                ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.attack.stop", botName), true);
                 break;
             case "use":
                 controller.stopUse();
-                ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 停止使用物品"), true);
+                ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.use.stop", botName), true);
                 break;
         }
 
@@ -454,30 +455,30 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         BotActionController controller = bot.getActionController();
-        String actionName = "";
+        Component message = Component.empty();
         
         switch (state) {
             case "sneak":
                 controller.setSneak(enable);
-                actionName = enable ? "开始潜行" : "停止潜行";
+                message = Component.translatable(enable ? "msg.my-bot-mod.action.sneak_on" : "msg.my-bot-mod.action.sneak_off", botName);
                 break;
             case "jump":
                 controller.setJump(enable);
-                actionName = enable ? "开始跳跃" : "停止跳跃";
+                message = Component.translatable(enable ? "msg.my-bot-mod.action.jump_on" : "msg.my-bot-mod.action.jump_off", botName);
                 break;
             case "sprint":
                 controller.setSprint(enable);
-                actionName = enable ? "开始疾跑" : "停止疾跑";
+                message = Component.translatable(enable ? "msg.my-bot-mod.action.sprint_on" : "msg.my-bot-mod.action.sprint_off", botName);
                 break;
         }
 
-        String finalActionName = actionName;
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " " + finalActionName), true);
+        Component finalMessage = message;
+        ctx.getSource().sendSuccess(() -> finalMessage, true);
         return 1;
     }
 
@@ -490,34 +491,34 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         BotActionController controller = bot.getActionController();
-        String actionDescription = "";
+        Component message = Component.empty();
         
         switch (direction) {
             case "up":
                 controller.lookUp();
-                actionDescription = "看向正上方";
+                message = Component.translatable("msg.my-bot-mod.look.up", botName);
                 break;
             case "down":
                 controller.lookDown();
-                actionDescription = "看向正下方";
+                message = Component.translatable("msg.my-bot-mod.look.down", botName);
                 break;
             case "left":
                 controller.lookLeft();
-                actionDescription = "向左转 90°";
+                message = Component.translatable("msg.my-bot-mod.look.left", botName);
                 break;
             case "right":
                 controller.lookRight();
-                actionDescription = "向右转 90°";
+                message = Component.translatable("msg.my-bot-mod.look.right", botName);
                 break;
         }
 
-        String finalDescription = actionDescription;
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " " + finalDescription), true);
+        Component finalMessage = message;
+        ctx.getSource().sendSuccess(() -> finalMessage, true);
         return 1;
     }
 
@@ -529,14 +530,14 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         bot.getActionController().lookAt(yaw, bot.getXRot());
         
-        String direction = yaw == 180.0F ? "北" : yaw == 0.0F ? "南" : yaw == -90.0F ? "东" : "西";
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 看向" + direction + "方"), true);
+        String key = yaw == 180.0F ? "msg.my-bot-mod.look.north" : yaw == 0.0F ? "msg.my-bot-mod.look.south" : yaw == -90.0F ? "msg.my-bot-mod.look.east" : "msg.my-bot-mod.look.west";
+        ctx.getSource().sendSuccess(() -> Component.translatable(key, botName), true);
         return 1;
     }
 
@@ -548,7 +549,7 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
@@ -572,9 +573,14 @@ public class BotCommand {
                 break;
         }
 
-        String actionName = direction.equals("stop") ? "停止移动" : "向" + getDirectionName(direction) + "移动";
-        String finalActionName = actionName;
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " " + finalActionName), true);
+        String key = switch (direction) {
+            case "forward" -> "msg.my-bot-mod.move.forward";
+            case "backward" -> "msg.my-bot-mod.move.backward";
+            case "left" -> "msg.my-bot-mod.move.left";
+            case "right" -> "msg.my-bot-mod.move.right";
+            default -> "msg.my-bot-mod.move.stop";
+        };
+        ctx.getSource().sendSuccess(() -> Component.translatable(key, botName), true);
         return 1;
     }
 
@@ -586,7 +592,7 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
@@ -595,19 +601,18 @@ public class BotCommand {
         // 远距离警告（不再硬限制距离，但提示用户可能较慢）
         double distance = bot.position().distanceTo(Vec3.atCenterOf(target));
         if (distance > 500) {
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "§e目标距离较远（" + String.format("%.0f", distance) + "格），寻路可能需要较长时间"), false);
+            ctx.getSource().sendSuccess(() -> Component.translatable(
+                "msg.my-bot-mod.goto.far_warning", String.format("%.0f", distance)), false);
         }
 
         boolean success = bot.getActionController().pathTo(target);
         if (success) {
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "假人 " + botName + " 开始寻路到 " + 
-                target.getX() + ", " + target.getY() + ", " + target.getZ()), true);
+            ctx.getSource().sendSuccess(() -> Component.translatable(
+                "msg.my-bot-mod.goto.start", botName, target.getX(), target.getY(), target.getZ()), true);
             return 1;
         } else {
-            ctx.getSource().sendFailure(Component.literal(
-                "无法找到到 " + target.getX() + ", " + target.getY() + ", " + target.getZ() + " 的路径"));
+            ctx.getSource().sendFailure(Component.translatable(
+                "msg.my-bot-mod.goto.no_path", target.getX(), target.getY(), target.getZ()));
             return 0;
         }
     }
@@ -620,13 +625,13 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         bot.getActionController().cancelPath();
-        ctx.getSource().sendSuccess(() -> Component.literal(
-            "假人 " + botName + " 已取消寻路"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable(
+            "msg.my-bot-mod.goto.cancel", botName), true);
         return 1;
     }
 
@@ -637,16 +642,15 @@ public class BotCommand {
         var bots = BotManager.getAllBots();
         
         if (bots.isEmpty()) {
-            ctx.getSource().sendSuccess(() -> Component.literal("当前没有假人"), false);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.list.empty"), false);
             return 0;
         }
 
-        ctx.getSource().sendSuccess(() -> Component.literal("当前假人列表 (" + bots.size() + "):"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.list.header", bots.size()), false);
         for (BotPlayer bot : bots) {
             String botName = bot.getName().getString();
             String creatorName = bot.getCreatorName();
-            ctx.getSource().sendSuccess(() -> Component.literal("  - " + botName + 
-                " (创建者: " + creatorName + ")"), false);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.list.entry", botName, creatorName), false);
         }
         
         return bots.size();
@@ -660,12 +664,12 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         bot.getActionController().stopAll();
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 已停止所有动作"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.stop.all", botName), true);
         return 1;
     }
 
@@ -677,12 +681,12 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         bot.getActionController().dropItem();
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 丢弃了物品"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.drop.item", botName), true);
         return 1;
     }
 
@@ -694,12 +698,12 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         bot.getActionController().dropStack();
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 丢弃了整组物品"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.drop.stack", botName), true);
         return 1;
     }
 
@@ -711,12 +715,12 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         bot.getActionController().swapHands();
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 交换了主副手物品"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.swap.hands", botName), true);
         return 1;
     }
 
@@ -728,15 +732,15 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         if (bot.getActionController().mount()) {
-            ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 骑乘了附近的实体"), true);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.mount.success", botName), true);
             return 1;
         } else {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 附近没有可骑乘的实体"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.mount.no_target", botName));
             return 0;
         }
     }
@@ -749,15 +753,15 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
         if (bot.getActionController().dismount()) {
-            ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 下马了"), true);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.dismount.success", botName), true);
             return 1;
         } else {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 当前没有骑乘任何实体"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.dismount.not_riding", botName));
             return 0;
         }
     }
@@ -770,7 +774,7 @@ public class BotCommand {
         BotPlayer bot = BotManager.getBot(botName);
 
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
 
@@ -778,8 +782,8 @@ public class BotCommand {
         float pitch = FloatArgumentType.getFloat(ctx, "pitch");
 
         bot.getActionController().turn(yaw, pitch);
-        ctx.getSource().sendSuccess(() -> Component.literal(
-            "假人 " + botName + " 旋转了视角 (偏航: " + yaw + "°, 俯仰: " + pitch + "°)"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable(
+            "msg.my-bot-mod.turn.success", botName, yaw, pitch), true);
         return 1;
     }
 
@@ -791,7 +795,7 @@ public class BotCommand {
         String botName = StringArgumentType.getString(ctx, "botName");
         BotPlayer bot = BotManager.getBot(botName);
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
         player.openMenu(new ExtendedScreenHandlerFactory() {
@@ -802,7 +806,7 @@ public class BotCommand {
 
             @Override
             public Component getDisplayName() {
-                return Component.literal(botName + " 的背包");
+                return Component.translatable("gui.my-bot-mod.inventory.title", botName);
             }
 
             @Override
@@ -822,7 +826,7 @@ public class BotCommand {
         String botName = StringArgumentType.getString(ctx, "botName");
         BotPlayer bot = BotManager.getBot(botName);
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
         player.openMenu(new SimpleMenuProvider(
@@ -835,7 +839,7 @@ public class BotCommand {
                     name.modid.bot.BotPersistenceManager.saveBot(bot);
                 }
             },
-            Component.literal(botName + " 的末影箱")
+            Component.translatable("gui.my-bot-mod.enderchest.title", botName)
         ));
         return 1;
     }
@@ -848,7 +852,7 @@ public class BotCommand {
         String botName = StringArgumentType.getString(ctx, "botName");
         BotPlayer bot = BotManager.getBot(botName);
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
         BotNetworking.sendOpenPanel(player, bot);
@@ -862,7 +866,7 @@ public class BotCommand {
         String botName = StringArgumentType.getString(ctx, "botName");
         BotPlayer bot = BotManager.getBot(botName);
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
         int index = IntegerArgumentType.getInteger(ctx, "index");
@@ -878,11 +882,11 @@ public class BotCommand {
         String botName = StringArgumentType.getString(ctx, "botName");
         BotPlayer bot = BotManager.getBot(botName);
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
         bot.setGameMode(mode);
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 游戏模式设为 " + mode.getName()), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.gamemode.set", botName, Component.translatable("gameMode." + mode.getName())), true);
         return 1;
     }
 
@@ -894,432 +898,11 @@ public class BotCommand {
         String botName = StringArgumentType.getString(ctx, "botName");
         BotPlayer bot = BotManager.getBot(botName);
         if (bot == null) {
-            ctx.getSource().sendFailure(Component.literal("假人 " + botName + " 不存在！"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
         bot.teleportTo(player.serverLevel(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
-        ctx.getSource().sendSuccess(() -> Component.literal("假人 " + botName + " 已传送到你身边"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.tphere.success", botName), true);
         return 1;
-    }
-
-    /**
-     * 获取方向的中文名称
-     */
-    private static String getDirectionName(String direction) {
-        switch (direction) {
-            case "up": return "上";
-            case "down": return "下";
-            case "left": return "左";
-            case "right": return "右";
-            case "forward": return "前";
-            case "backward": return "后";
-            default: return direction;
-        }
-    }
-    
-    /**
-     * 运行所有测试
-     */
-    private static int runTests(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
-        ServerPlayer player = ctx.getSource().getPlayerOrException();
-        
-        ctx.getSource().sendSuccess(() -> Component.literal("=== 开始假人功能测试 ==="), false);
-        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        int totalTests = 0;
-        int passedTests = 0;
-        
-        // 测试 1: 名字验证
-        ctx.getSource().sendSuccess(() -> Component.literal("§e[测试 1/6] 名字验证"), false);
-        totalTests++;
-        if (testNameValidation(ctx)) {
-            passedTests++;
-            ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 通过：名字验证正常工作"), false);
-        } else {
-            ctx.getSource().sendSuccess(() -> Component.literal("§c✗ 失败：名字验证有问题"), false);
-        }
-        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        // 测试 2: 假人创建和删除
-        ctx.getSource().sendSuccess(() -> Component.literal("§e[测试 2/6] 假人创建和删除"), false);
-        totalTests++;
-        if (testBotCreationAndRemoval(ctx, player)) {
-            passedTests++;
-            ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 通过：假人创建和删除正常"), false);
-        } else {
-            ctx.getSource().sendSuccess(() -> Component.literal("§c✗ 失败：假人创建或删除有问题"), false);
-        }
-        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        // 测试 3: 移动功能
-        ctx.getSource().sendSuccess(() -> Component.literal("§e[测试 3/6] 移动功能"), false);
-        totalTests++;
-        if (testMovement(ctx, player)) {
-            passedTests++;
-            ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 通过：移动功能正常"), false);
-        } else {
-            ctx.getSource().sendSuccess(() -> Component.literal("§c✗ 失败：移动功能有问题"), false);
-        }
-        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        // 测试 4: 动作控制
-        ctx.getSource().sendSuccess(() -> Component.literal("§e[测试 4/6] 动作控制"), false);
-        totalTests++;
-        if (testActions(ctx, player)) {
-            passedTests++;
-            ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 通过：动作控制正常"), false);
-        } else {
-            ctx.getSource().sendSuccess(() -> Component.literal("§c✗ 失败：动作控制有问题"), false);
-        }
-        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        // 测试 5: 皮肤系统
-        ctx.getSource().sendSuccess(() -> Component.literal("§e[测试 5/6] 皮肤系统"), false);
-        totalTests++;
-        if (testSkinSystem(ctx, player)) {
-            passedTests++;
-            ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 通过：皮肤系统正常"), false);
-        } else {
-            ctx.getSource().sendSuccess(() -> Component.literal("§c✗ 失败：皮肤系统有问题"), false);
-        }
-        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        // 测试 6: 骑乘功能
-        ctx.getSource().sendSuccess(() -> Component.literal("§e[测试 6/6] 骑乘功能"), false);
-        totalTests++;
-        if (testMounting(ctx, player)) {
-            passedTests++;
-            ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 通过：骑乘功能正常"), false);
-        } else {
-            ctx.getSource().sendSuccess(() -> Component.literal("§c✗ 失败：骑乘功能有问题"), false);
-        }
-        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        // 总结
-        ctx.getSource().sendSuccess(() -> Component.literal("=== 测试完成 ==="), false);
-        final String resultColor = passedTests == totalTests ? "§a" : (passedTests > 0 ? "§e" : "§c");
-        final int finalPassedTests = passedTests;
-        final int finalTotalTests = totalTests;
-        ctx.getSource().sendSuccess(() -> Component.literal(
-            resultColor + "通过: " + finalPassedTests + "/" + finalTotalTests + " 个测试"
-        ), false);
-        
-        return passedTests;
-    }
-    
-    /**
-     * 运行特定类型的测试
-     */
-    private static int runSpecificTest(CommandContext<CommandSourceStack> ctx, String testType) throws CommandSyntaxException {
-        ServerPlayer player = ctx.getSource().getPlayerOrException();
-        
-        switch (testType) {
-            case "movement":
-                ctx.getSource().sendSuccess(() -> Component.literal("§e=== 测试移动功能 ==="), false);
-                if (testMovement(ctx, player)) {
-                    ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 移动功能测试通过"), true);
-                    return 1;
-                } else {
-                    ctx.getSource().sendFailure(Component.literal("§c✗ 移动功能测试失败"));
-                    return 0;
-                }
-                
-            case "actions":
-                ctx.getSource().sendSuccess(() -> Component.literal("§e=== 测试动作控制 ==="), false);
-                if (testActions(ctx, player)) {
-                    ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 动作控制测试通过"), true);
-                    return 1;
-                } else {
-                    ctx.getSource().sendFailure(Component.literal("§c✗ 动作控制测试失败"));
-                    return 0;
-                }
-                
-            case "skin":
-                ctx.getSource().sendSuccess(() -> Component.literal("§e=== 测试皮肤系统 ==="), false);
-                if (testSkinSystem(ctx, player)) {
-                    ctx.getSource().sendSuccess(() -> Component.literal("§a✓ 皮肤系统测试通过"), true);
-                    return 1;
-                } else {
-                    ctx.getSource().sendFailure(Component.literal("§c✗ 皮肤系统测试失败"));
-                    return 0;
-                }
-                
-            default:
-                return runTests(ctx);
-        }
-    }
-    
-    /**
-     * 测试名字验证
-     */
-    private static boolean testNameValidation(CommandContext<CommandSourceStack> ctx) {
-        // 测试有效名字
-        boolean test1 = BotManager.isValidBotName("TestBot");
-        boolean test2 = BotManager.isValidBotName("Bot_123");
-        boolean test3 = BotManager.isValidBotName("ABC");
-        
-        // 测试无效名字
-        boolean test4 = !BotManager.isValidBotName("ab");  // 太短
-        boolean test5 = !BotManager.isValidBotName("verylongbotname123");  // 太长
-        boolean test6 = !BotManager.isValidBotName("bot.test");  // 包含非法字符
-        boolean test7 = !BotManager.isValidBotName("bot-test");  // 包含连字符
-        
-        return test1 && test2 && test3 && test4 && test5 && test6 && test7;
-    }
-    
-    /**
-     * 测试假人创建和删除
-     */
-    private static boolean testBotCreationAndRemoval(CommandContext<CommandSourceStack> ctx, ServerPlayer player) {
-        String testBotName = "TestBot_" + System.currentTimeMillis() % 10000;
-        
-        try {
-            // 创建假人
-            BotPlayer bot = BotManager.createBot(
-                ctx.getSource().getServer(),
-                player,
-                testBotName,
-                null,
-                null
-            );
-            
-            if (bot == null) {
-                return false;
-            }
-            
-            // 检查假人是否存在
-            if (!BotManager.hasBot(testBotName)) {
-                return false;
-            }
-            
-            // 删除假人
-            boolean removed = BotManager.removeBot(testBotName);
-            if (!removed) {
-                return false;
-            }
-            
-            // 检查假人是否已删除
-            return !BotManager.hasBot(testBotName);
-            
-        } catch (Exception e) {
-            return false;
-        }
-    }
-    
-    /**
-     * 测试移动功能
-     */
-    private static boolean testMovement(CommandContext<CommandSourceStack> ctx, ServerPlayer player) {
-        String testBotName = "MoveBot_" + System.currentTimeMillis() % 10000;
-        
-        try {
-            // 创建假人
-            BotPlayer bot = BotManager.createBot(
-                ctx.getSource().getServer(),
-                player,
-                testBotName,
-                null,
-                null
-            );
-            
-            if (bot == null) {
-                return false;
-            }
-            
-            BotActionController controller = bot.getActionController();
-            
-            // 测试移动输入
-            controller.moveForward();
-            controller.applyMovement();
-            boolean test1 = bot.zza == 1.0F;
-            
-            controller.moveBackward();
-            controller.applyMovement();
-            boolean test2 = bot.zza == -1.0F;
-            
-            controller.moveLeft();
-            controller.applyMovement();
-            boolean test3 = bot.xxa == 1.0F;
-            
-            controller.moveRight();
-            controller.applyMovement();
-            boolean test4 = bot.xxa == -1.0F;
-            
-            controller.stopMovement();
-            controller.applyMovement();
-            boolean test5 = bot.zza == 0.0F && bot.xxa == 0.0F;
-            
-            // 清理
-            BotManager.removeBot(testBotName);
-            
-            return test1 && test2 && test3 && test4 && test5;
-            
-        } catch (Exception e) {
-            BotManager.removeBot(testBotName);
-            return false;
-        }
-    }
-    
-    /**
-     * 测试动作控制
-     */
-    private static boolean testActions(CommandContext<CommandSourceStack> ctx, ServerPlayer player) {
-        String testBotName = "ActionBot_" + System.currentTimeMillis() % 10000;
-        
-        try {
-            // 创建假人
-            BotPlayer bot = BotManager.createBot(
-                ctx.getSource().getServer(),
-                player,
-                testBotName,
-                null,
-                null
-            );
-            
-            if (bot == null) {
-                return false;
-            }
-            
-            BotActionController controller = bot.getActionController();
-            
-            // 测试潜行
-            controller.setSneak(true);
-            bot.tick();  // 需要 tick 才能应用状态
-            boolean test1 = bot.isShiftKeyDown();
-            
-            controller.setSneak(false);
-            bot.tick();
-            boolean test2 = !bot.isShiftKeyDown();
-            
-            // 测试疾跑
-            controller.setSprint(true);
-            bot.tick();
-            boolean test3 = bot.isSprinting();
-            
-            controller.setSprint(false);
-            bot.tick();
-            boolean test4 = !bot.isSprinting();
-            
-            // 测试视角旋转（不需要 tick）
-            // 现在 lookRight() 会转 90 度
-            float originalYaw = bot.getYRot();
-            controller.lookRight();
-            boolean test5 = Math.abs(bot.getYRot() - (originalYaw + 90.0F)) < 0.1F;
-            
-            // 清理
-            BotManager.removeBot(testBotName);
-            
-            return test1 && test2 && test3 && test4 && test5;
-            
-        } catch (Exception e) {
-            BotManager.removeBot(testBotName);
-            return false;
-        }
-    }
-    
-    /**
-     * 测试皮肤系统
-     */
-    private static boolean testSkinSystem(CommandContext<CommandSourceStack> ctx, ServerPlayer player) {
-        String testBotName1 = "SkinBot1";
-        String testBotName2 = "Steve";  // 正版玩家名
-        
-        try {
-            // 测试 1: 创建假人并检查是否有皮肤属性
-            BotPlayer bot1 = BotManager.createBot(
-                ctx.getSource().getServer(),
-                player,
-                testBotName1,
-                null,
-                null
-            );
-            
-            if (bot1 == null) {
-                return false;
-            }
-            
-            boolean test1 = bot1.getGameProfile().getProperties().containsKey("textures");
-            
-            // 测试 2: 尝试获取正版玩家皮肤
-            BotPlayer bot2 = BotManager.createBot(
-                ctx.getSource().getServer(),
-                player,
-                testBotName2,
-                player.position().add(2, 0, 0),
-                null
-            );
-            
-            boolean test2 = bot2 != null && bot2.getGameProfile().getProperties().containsKey("textures");
-            
-            // 清理
-            BotManager.removeBot(testBotName1);
-            if (bot2 != null) {
-                BotManager.removeBot(testBotName2);
-            }
-            
-            return test1 && test2;
-            
-        } catch (Exception e) {
-            BotManager.removeBot(testBotName1);
-            BotManager.removeBot(testBotName2);
-            return false;
-        }
-    }
-    
-    /**
-     * 测试骑乘功能
-     */
-    private static boolean testMounting(CommandContext<CommandSourceStack> ctx, ServerPlayer player) {
-        String testBotName1 = "MountBot1";
-        String testBotName2 = "MountBot2";
-        
-        try {
-            // 创建两个假人在远离玩家的位置，确保它们彼此靠近但周围没有其他可骑乘实体
-            Vec3 testPos = player.position().add(10, 0, 10);  // 远离玩家
-            
-            BotPlayer bot1 = BotManager.createBot(
-                ctx.getSource().getServer(),
-                player,
-                testBotName1,
-                testPos,
-                null
-            );
-            
-            BotPlayer bot2 = BotManager.createBot(
-                ctx.getSource().getServer(),
-                player,
-                testBotName2,
-                testPos.add(1, 0, 0),  // 在 bot1 旁边 1 格
-                null
-            );
-            
-            if (bot1 == null || bot2 == null) {
-                BotManager.removeBot(testBotName1);
-                BotManager.removeBot(testBotName2);
-                return false;
-            }
-            
-            // 测试：bot1 尝试骑乘（附近只有 bot2，应该失败因为过滤了假人）
-            boolean mounted = bot1.getActionController().mount();
-            
-            // 检查 bot1 是否骑到了 bot2 上
-            boolean ridingBot2 = bot1.isPassenger() && bot1.getVehicle() == bot2;
-            
-            // 测试通过条件：
-            // 1. 没有骑乘成功（因为附近只有假人，被过滤了）
-            // 2. 或者骑乘成功但不是骑到 bot2 上（说明骑到了其他实体，这也是可以接受的）
-            boolean test1 = !mounted || !ridingBot2;
-            
-            // 清理
-            BotManager.removeBot(testBotName1);
-            BotManager.removeBot(testBotName2);
-            
-            return test1;
-            
-        } catch (Exception e) {
-            BotManager.removeBot(testBotName1);
-            BotManager.removeBot(testBotName2);
-            return false;
-        }
     }
 }

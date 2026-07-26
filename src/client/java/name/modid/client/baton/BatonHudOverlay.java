@@ -40,13 +40,14 @@ public class BatonHudOverlay {
         if (mc.screen != null || mc.options.hideGui) return;
         if (!BatonClientState.isHoldingBaton(mc.player)) return;
 
-        renderLeft(g, mc.font, mc);
-        renderRight(g, mc.font, mc, g.guiWidth());
+        List<BotClientData.Entry> bots = BotClientData.get();
+        renderLeft(g, mc.font, mc, bots);
+        renderRight(g, mc.font, mc, g.guiWidth(), bots);
     }
 
     // ==================== 左上：模式 + 操作 + 选中信息 ====================
 
-    private static void renderLeft(GuiGraphics g, Font font, Minecraft mc) {
+    private static void renderLeft(GuiGraphics g, Font font, Minecraft mc, List<BotClientData.Entry> bots) {
         int x = MARGIN;
         int y = MARGIN;
 
@@ -98,7 +99,7 @@ public class BatonHudOverlay {
                     ? "gui.my-bot-mod.baton.state_swim"
                     : "gui.my-bot-mod.baton.state_near")), COLOR_GREEN);
         } else {
-            String dim = dimensionOf(selected);
+            String dim = dimensionOf(bots, selected);
             if (dim != null) {
                 y = line(g, font, x, y, labeled("gui.my-bot-mod.baton.dimension", dim), COLOR_GRAY);
             }
@@ -108,8 +109,7 @@ public class BatonHudOverlay {
 
     // ==================== 右上：假人列表 ====================
 
-    private static void renderRight(GuiGraphics g, Font font, Minecraft mc, int w) {
-        List<BotClientData.Entry> bots = BotClientData.get();
+    private static void renderRight(GuiGraphics g, Font font, Minecraft mc, int w, List<BotClientData.Entry> bots) {
         int y = MARGIN;
 
         Component header = Component.translatable("gui.my-bot-mod.baton.bots")
@@ -150,8 +150,8 @@ public class BatonHudOverlay {
         g.drawString(font, c, w - MARGIN - font.width(c), y, color);
     }
 
-    private static String dimensionOf(String botName) {
-        for (BotClientData.Entry e : BotClientData.get()) {
+    private static String dimensionOf(List<BotClientData.Entry> bots, String botName) {
+        for (BotClientData.Entry e : bots) {
             if (e.name().equals(botName)) return e.dimension();
         }
         return null;

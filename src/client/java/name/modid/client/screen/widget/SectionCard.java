@@ -6,14 +6,16 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
  * Section 卡片组件
- * 带圆角背景、边框和标题的容器，用于组织配置项
+ * 带圆角背景、边框和标题的容器，用于组织配置项。
+ * 支持搜索过滤：命中标题则整卡显示；否则仅显示标签命中的项；无命中则整卡隐藏。
  */
 public class SectionCard {
-    
+
     private final String title;
     private int x, y;
     private int width;
@@ -21,25 +23,30 @@ public class SectionCard {
     private boolean collapsed = false;
     private final List<AbstractWidget> items = new ArrayList<>();
     private final List<ResetButton> resets = new ArrayList<>();
-    
+
+    // 搜索过滤状态
+    private boolean[] itemVisible = new boolean[0];
+    private boolean sectionVisible = true;
+
     public SectionCard(String title) {
         this.title = title;
     }
-    
+
     public boolean isCollapsed() { return collapsed; }
     public void setCollapsed(boolean collapsed) { this.collapsed = collapsed; }
     public void toggleCollapsed() { this.collapsed = !this.collapsed; }
-    
+    public boolean isVisibleSection() { return sectionVisible; }
+
     /** 标题栏（可点击折叠）高度 */
     public int headerHeight() {
         return DesignTokens.CARD_V_PADDING + DesignTokens.CARD_TITLE_HEIGHT + DesignTokens.CARD_TITLE_GAP;
     }
-    
+
     /** 判断坐标是否命中标题栏（虚拟坐标） */
     public boolean isTitleClicked(double mouseX, double mouseY) {
-        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + headerHeight();
+        return sectionVisible && mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + headerHeight();
     }
-    
+
     /**
      * 添加一个配置项和可选的重置按钮
      */
@@ -47,20 +54,54 @@ public class SectionCard {
         items.add(widget);
         resets.add(reset);
     }
-    
+
     public void addItem(AbstractWidget widget) {
         items.add(widget);
         resets.add(null);
     }
-    
+
     /**
-     * 计算并布局所有子项，返回卡片总高度
-     * 所有行统一高度 ROW_HEIGHT，避免不同控件类型混排出现重叠
+     * 应用搜索过滤（queryLower 已转小写）。
+     * @return 本卡过滤后是否可见
+     */
+    public boolean applyFilter(String queryLower) {
+        int n = items.size();
+        if (itemVisible.length != n) {
+            itemVisible = new boolean[n];
+        }
+        if (queryLower == null || queryLower.isEmpty()) {
+            Arrays.fill(itemVisible, true);
+            sectionVisible = true;
+            return true;
+        }
+        boolean titleMatch = SearchLang.textContains(title, queryLower);
+        boolean any = false;
+        for (int i = 0; i < n; i++) {
+            boolean m = titleMatch || SearchLang.widgetMatches(items.get(i), queryLower);
+            itemVisible[i] = m;
+            any = any || m;
+        }
+        sectionVisible = any;
+        return any;
+    }
+
+    private boolean visible(int i) {
+        return i >= itemVisible.length || itemVisible[i];
+    }
+
+    /**
+     * 计算并布局所有子项，返回卡片总高度（隐藏时返回 0）。
+     * 所有行统一高度 ROW_HEIGHT，避免不同控件类型混排出现重叠。
      */
     public int layout(int cardX, int cardY, int cardWidth) {
         this.x = cardX;
         this.y = cardY;
         this.width = cardWidth;
+
+        if (!sectionVisible) {
+            this.height = 0;
+            return 0;
+        }
 
         // 折叠时仅保留标题行高度
         if (collapsed) {
@@ -72,7 +113,11 @@ public class SectionCard {
         // 留出右侧一个 reset 按钮的宽度（reset 紧贴右内边距），控件文字居中时不会被 reset 遮挡
         int itemWidth = cardWidth - DesignTokens.CARD_H_PADDING * 2 - DesignTokens.RESET_SIZE - 2;
 
+        boolean placedAny = false;
         for (int i = 0; i < items.size(); i++) {
+            if (!visible(i)) {
+                continue;
+            }
             AbstractWidget item = items.get(i);
             // 统一行高，避免不同控件（slider/checkbox/button）自定义高度造成重叠
             item.setX(cardX + DesignTokens.CARD_H_PADDING);
@@ -90,10 +135,11 @@ public class SectionCard {
             }
 
             currentY += DesignTokens.ROW_HEIGHT + DesignTokens.ROW_GAP;
+            placedAny = true;
         }
 
         // 移除末尾多余间距
-        if (!items.isEmpty()) {
+        if (placedAny) {
             currentY -= DesignTokens.ROW_GAP;
         }
         currentY += DesignTokens.CARD_V_PADDING;
@@ -101,17 +147,21 @@ public class SectionCard {
         this.height = currentY - cardY;
         return this.height;
     }
-    
+
     /**
      * 渲染卡片及其子项
      */
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        if (!sectionVisible) {
+            return;
+        }
+
         // 绘制圆角背景
         drawRoundedRect(graphics, x, y, width, height, DesignTokens.CARD_BG);
-        
+
         // 绘制边框
         drawRoundedBorder(graphics, x, y, width, height, DesignTokens.CARD_BORDER);
-        
+
         // 绘制标题（小号字体），前缀折叠箭头
         String arrow = collapsed ? "▶ " : "▼ ";
         UI.drawScaled(graphics,
@@ -121,44 +171,52 @@ public class SectionCard {
             y + DesignTokens.CARD_V_PADDING,
             DesignTokens.TEXT_SCALE,
             DesignTokens.CARD_TITLE_COLOR);
-        
+
         // 折叠时不渲染子项
         if (collapsed) {
             return;
         }
-        
-        // 渲染子项
-        for (AbstractWidget item : items) {
-            item.render(graphics, mouseX, mouseY, partialTick);
-        }
-        for (ResetButton reset : resets) {
+
+        // 渲染可见子项
+        for (int i = 0; i < items.size(); i++) {
+            if (!visible(i)) {
+                continue;
+            }
+            items.get(i).render(graphics, mouseX, mouseY, partialTick);
+            ResetButton reset = resets.get(i);
             if (reset != null) {
                 reset.render(graphics, mouseX, mouseY, partialTick);
             }
         }
     }
-    
+
     /**
-     * 获取所有子 widget（含 ResetButton）
+     * 获取所有可见子 widget（含 ResetButton）
      */
     public List<AbstractWidget> getAllWidgets() {
         List<AbstractWidget> all = new ArrayList<>();
-        // 折叠时不暴露子控件，避免隐藏控件被点击
-        if (collapsed) {
+        // 隐藏或折叠时不暴露子控件，避免隐藏控件被点击
+        if (!sectionVisible || collapsed) {
             return all;
         }
-        all.addAll(items);
-        for (ResetButton r : resets) {
-            if (r != null) all.add(r);
+        for (int i = 0; i < items.size(); i++) {
+            if (!visible(i)) {
+                continue;
+            }
+            all.add(items.get(i));
+            ResetButton reset = resets.get(i);
+            if (reset != null) {
+                all.add(reset);
+            }
         }
         return all;
     }
-    
+
     public int getHeight() { return height; }
     public int getY() { return y; }
-    
+
     // ========== 圆角矩形绘制 ==========
-    
+
     private void drawRoundedRect(GuiGraphics graphics, int x, int y, int w, int h, int color) {
         int r = DesignTokens.CARD_RADIUS;
         // 顶部缩进
@@ -174,7 +232,7 @@ public class SectionCard {
         }
         graphics.fill(x + r, y + h - 1, x + w - r, y + h, color);
     }
-    
+
     private void drawRoundedBorder(GuiGraphics graphics, int x, int y, int w, int h, int color) {
         int r = DesignTokens.CARD_RADIUS;
         // 顶部边框

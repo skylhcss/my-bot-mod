@@ -74,10 +74,15 @@ public class MyBotMod implements ModInitializer {
 		// 注册玩家加入事件，用于加载假人
 		// 参考 GCA：在第一个玩家加入时触发加载，而不是在服务器启动时
 		net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-			LOGGER.info("玩家 {} 加入，触发假人加载检查", handler.getPlayer().getName().getString());
-			BotPersistenceManager.onPlayerJoin(server, handler.getPlayer());
+			net.minecraft.server.level.ServerPlayer joined = handler.getPlayer();
+			// 假人自身也走正规上线流程会触发本事件——过滤掉，避免向假连接发包/重复加载
+			if (joined instanceof name.modid.bot.BotPlayer) {
+				return;
+			}
+			LOGGER.info("玩家 {} 加入，触发假人加载检查", joined.getName().getString());
+			BotPersistenceManager.onPlayerJoin(server, joined);
 			// 向加入的玩家下发当前假人列表
-			BotNetworking.sendBotList(handler.getPlayer());
+			BotNetworking.sendBotList(joined);
 		});
 		
 		// 注册服务器 tick 事件，用于定期刷新区块加载票据
@@ -112,10 +117,10 @@ public class MyBotMod implements ModInitializer {
 	 * 检测 Carpet Mod 是否已加载
 	 */
 	private void checkCarpetMod() {
-		try {
-			// 尝试加载 Carpet Mod 的类
-			Class.forName("carpet.CarpetServer");
-			carpetModLoaded = true;
+		// 使用 FabricLoader 标准 API 检测模组，比反射 Class.forName 更可靠
+		carpetModLoaded = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("carpet");
+		
+		if (carpetModLoaded) {
 			LOGGER.warn("检测到 Carpet Mod 已加载！");
 			
 			var config = name.modid.config.ModConfig.getInstance();
@@ -128,9 +133,7 @@ public class MyBotMod implements ModInitializer {
 				LOGGER.warn("Carpet Mod 兼容模式已禁用，两个模组的假人功能可能会冲突");
 				LOGGER.warn("建议：只使用其中一个模组的假人功能");
 			}
-		} catch (ClassNotFoundException e) {
-			// Carpet Mod 未加载
-			carpetModLoaded = false;
+		} else {
 			LOGGER.info("未检测到 Carpet Mod");
 		}
 	}

@@ -1,30 +1,97 @@
-# 我的机器人 (My Bot Mod)
+# My Bot Mod · 我的机器人
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-green.svg)](https://www.minecraft.net/)
 [![Fabric](https://img.shields.io/badge/Fabric-0.92.8-blue.svg)](https://fabricmc.net/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-1.3.1-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
+[![Version](https://img.shields.io/badge/Version-1.3.2-orange.svg)](https://github.com/skylhcss/my-bot-mod/releases)
+
+> A Carpet-style **fake player (bot)** mod for **Minecraft 1.20.1 (Fabric)**.
+> 一个类似 Carpet Mod 的**假人（机器人玩家）**模组，用于 **Minecraft 1.20.1 Fabric**。
+
+**English** | [简体中文](#简体中文)
+
+---
+
+## English
+
+Spawn player-like bots, control their actions, send them around with smart pathfinding, and keep them in your world across restarts.
+
+### ✨ Features
+- 🤖 **Bot management** — create, remove and control fake players (registered via the vanilla `placeNewPlayer` path, so scoreboards, teleporting and other vanilla logic work normally)
+- 🎮 **Action control** — attack, use, move, jump, sneak, sprint, look, drop, swap hands, ride
+- 🪄 **Command Baton** — a handheld item with an on-screen HUD; `Ctrl+Scroll` to switch modes; command a bot to **pathfind** or **teleport** to wherever you look
+- 🗺️ **Smart pathfinding** — non-blocking, frame-sliced A* (no server lag), with swimming, gap-crossing, hazard avoidance and stuck-detour/give-up logic (same-dimension only)
+- 🎒 **Inventory / Ender Chest / settings panel** — right-click a bot to edit its inventory, switch game mode, teleport, delete, and set per-bot options (7 tri-state overrides incl. glowing & fire immunity)
+- 🎨 **Skin system** — Mojang API → local PNG → Base64 → default, with graceful fallback
+- 💾 **Bot persistence** — bots can stay in the world after you leave (optional); their chunks stay loaded, across dimensions
+- ⚙️ **Configuration** — in-game GUI (press **B**): browser-style tabs, crafting-table home page and a bilingual search box; plus commands + JSON file
+- 🌏 **Fully bilingual** — every message and GUI text in English & 简体中文
+- 🔧 **Carpet compatible** — auto-detects and avoids conflicts
+
+### 📦 Installation
+Requires **Minecraft 1.20.1**, **Fabric Loader 0.19.2+** and **Fabric API 0.92.8+**. Drop the JAR into `.minecraft/mods`.
+
+### 🚀 Quick start
+```
+/bot Steve spawn              # create a bot
+/bot Steve goto 100 64 200    # pathfind to coordinates
+/bot Steve attack continuous  # keep attacking
+/bot list                     # list bots
+/bot Steve kill               # remove a bot
+```
+**Right-click a bot** to open its panel (inventory / ender chest / game mode / teleport / delete + per-bot settings). Press **B** for the global config screen.
+
+### 🪄 Command Baton
+Crafted from two sticks; unstackable. While **held**, the top-left shows the current mode and the selected bot, and the top-right lists your bots.
+
+| Action | Effect |
+|--------|--------|
+| `Ctrl + Scroll` | Switch mode (Pathfind / Teleport) |
+| `Alt + Scroll` / `Alt + right-click a bot` | Select a bot |
+| `Right-click somewhere` | Make the selected bot **pathfind** / **teleport** to that spot |
+
+- **Teleport mode** is Creative-only by default; open it up with `allowBatonTeleportNonCreative`, or require OP with `batonRequiresOp`.
+- **Cross-dimension**: teleport works across dimensions; pathfinding is **same-dimension only** (cross-dimension orders are rejected).
+
+### ⚙️ Configuration
+Config file: `config/my-bot-mod.json` · Command: `/botmod config` · GUI: **B** key.
+Common options: attack range, kill aura, max bot count, bot persistence, non-OP control (`allowNonOpControlBot`), baton teleport permission (`allowBatonTeleportNonCreative`).
+
+### 📖 Documentation
+[Commands](docs/COMMANDS.md) · [Config](docs/CONFIG.md) · [Skins](docs/SKINS.md) · [Development](docs/DEVELOPMENT.md) · [FAQ](docs/FAQ.md) · [Changelog](CHANGELOG.md)
+
+### 🔧 Development
+```bash
+./gradlew build       # build; artifacts in build/libs/
+./gradlew runClient   # run the client
+```
+
+### 📄 License
+MIT License. Author: **Skyline_hcss**. Bots are intended for singleplayer and private servers — please follow your server's rules.
+
+---
+
+<a id="简体中文"></a>
+## 简体中文
 
 一个类似 Carpet Mod 的假人（机器人玩家）模组，用于 Minecraft 1.20.1 Fabric。
 
-## ✨ 功能特性
-
+### ✨ 功能特性
 - 🤖 **假人管理**：创建、删除、控制假人玩家（`placeNewPlayer` 规范注册，计分板/传送等原版逻辑正常）
 - 🎮 **动作控制**：攻击、使用、移动、跳跃、潜行、疾跑、视角、丢物、换手、骑乘
 - 🪄 **指挥棒**（v1.3.1 新增）：手持道具，四周 HUD 显示信息，Ctrl+滚轮切模式，指挥假人**寻路**或**传送**到你看向的位置
-- 🗺️ **智能寻路**：非阻塞分帧 A*（不卡服），支持游泳、跨越裂谷、危险规避、跨维度
-- 🎒 **背包/末影箱/设置面板**：右键假人打开，可编辑背包、切换游戏模式、传送、删除，并含每假人三态个人配置
+- 🗺️ **智能寻路**：非阻塞分帧 A*（不卡服），支持游泳、跨越裂谷、危险规避，卡住自动绕行/放弃（仅限同维度）
+- 🎒 **背包/末影箱/设置面板**：右键假人打开，可编辑背包、切换游戏模式、传送、删除，并含每假人 7 项三态个人配置（含发光、免疫火焰）
 - 🎨 **皮肤系统**：Mojang API → PNG → Base64 → 默认，三级回退
 - 💾 **假人驻留**：退出世界后假人可保留（可选），跨维度区块保持加载
-- ⚙️ **配置系统**：图形界面（B 键）+ 命令 + JSON 文件
+- ⚙️ **配置系统**：图形界面（B 键）——浏览器式标签页、工作台风格主页、中英文搜索框；另有命令 + JSON 文件
+- 🌏 **完全双语**：所有消息与界面文本均为中/英双语
 - 🔧 **Carpet 兼容**：自动检测并避免冲突
 
-## 📦 安装
-
+### 📦 安装
 需要 **Minecraft 1.20.1** + **Fabric Loader 0.19.2+** + **Fabric API 0.92.8+**。将 JAR 放入 `.minecraft/mods` 即可。
 
-## 🚀 快速开始
-
+### 🚀 快速开始
 ```
 /bot Steve spawn              # 创建假人
 /bot Steve goto 100 64 200   # 寻路到坐标
@@ -32,11 +99,9 @@
 /bot list                     # 列出假人
 /bot Steve kill               # 删除假人
 ```
-
 **右键假人**打开设置面板（背包/末影箱/游戏模式/传送/删除 + 个人配置）。按 **B** 键打开全局配置界面。
 
-## 🪄 指挥棒（Command Baton）
-
+### 🪄 指挥棒（Command Baton）
 两根木棍合成，不可堆叠。**手持**时屏幕左上显示模式与选中假人信息、右上显示假人列表。
 
 | 操作 | 效果 |
@@ -45,43 +110,21 @@
 | `Alt + 滚轮` / `Alt + 右键看向假人` | 选择假人 |
 | `右键看向某处` | 让选中假人**寻路**前往 / **传送**至该处 |
 
-- **传送模式**默认仅当手持玩家处于创造模式时可用，可用配置项 `allowBatonTeleportNonCreative` 放开。
-- **跨维度**：传送直接跨维度；寻路会先把假人拉到你所在维度再寻路。
+- **传送模式**默认仅当手持玩家处于创造模式时可用，可用配置项 `allowBatonTeleportNonCreative` 放开；`batonRequiresOp` 可要求 OP 权限。
+- **跨维度**：传送支持跨维度；寻路**仅限同维度**（跨维度指令会被拒绝）。
 
-## 📖 文档
+### ⚙️ 配置
+配置文件：`config/my-bot-mod.json`；命令：`/botmod config`；界面：**B** 键。常用项：攻击距离、杀戮光环、最大数量、假人驻留、非 OP 权限（`allowNonOpControlBot`）、指挥棒传送权限（`allowBatonTeleportNonCreative`）。
 
-- [命令参考](docs/COMMANDS.md) · [配置指南](docs/CONFIG.md) · [皮肤系统](docs/SKINS.md) · [开发文档](docs/DEVELOPMENT.md) · [常见问题](docs/FAQ.md) · [更新日志](CHANGELOG.md)
+### 📖 文档
+[命令参考](docs/COMMANDS.md) · [配置指南](docs/CONFIG.md) · [皮肤系统](docs/SKINS.md) · [开发文档](docs/DEVELOPMENT.md) · [常见问题](docs/FAQ.md) · [更新日志](CHANGELOG.md)
 
-## 🎨 皮肤
+### 📝 最新更新（v1.3.2）
+- 🖥️ **配置界面重构**：浏览器式标签页、工作台风格主页、优雅的中英文搜索框、新增"寻路"分类页
+- ⚙️ **新配置项**：每玩家假人上限、指挥棒需 OP、最大寻路距离、跑酷/游泳开关、假人发光、免疫火焰（后两项支持假人个人三态覆盖）
+- 🗺️ **寻路增强**：多假人共享计算预算、卡住自动绕行/多次卡住自动放弃、栅栏与头顶空间判定、攀爬修正；**禁止跨维度寻路**
+- 🌏 **全面双语化**：所有消息与界面文本中英对照；破坏性命令（kill/reset）二次确认
+- 🐛 修复 use once 拉弓不释放、持续右键重触发、皮肤只获取默认皮肤、驻留退出重进乱走等多个 Bug
 
-假人皮肤按 **Mojang API（正版玩家名）→ `skins/` 下的 PNG（64x64 / 64x32）→ Base64 .txt → 默认皮肤** 的顺序回退。将 PNG 放入 `skins/` 文件夹后重启即可随机使用。详见 [皮肤系统](docs/SKINS.md)。
-
-## ⚙️ 配置
-
-配置文件：`config/my-bot-mod.json`；命令：`/botmod config`；界面：**B** 键。常用项：攻击距离、杀戮光环、最大数量、假人驻留、非 OP 权限（`allowNonOpControlBot`）、指挥棒传送权限（`allowBatonTeleportNonCreative`）。详见 [配置指南](docs/CONFIG.md)。
-
-## 🔧 开发
-
-```bash
-./gradlew build       # 构建，产物在 build/libs/
-./gradlew runClient   # 运行客户端
-```
-
-详见 [开发文档](docs/DEVELOPMENT.md)。
-
-## 📝 最新更新（v1.3.1）
-
-- 🪄 新增**指挥棒**：手持 HUD + 指挥假人寻路/传送到准星位置（含跨维度、传送权限配置）
-- 🗺️ **寻路全面重构**：非阻塞分帧 A*（不卡服）、游泳、跨越裂谷、危险规避、跨维度、修正到达判定
-- 🐛 修复生存挖矿挖不动、配置损坏崩溃、驻留区块票据过期/跨维度泄漏、死亡重生忽略维度、皮肤加载刷屏、快捷键失效等多个 Bug
-- ⚙️ 配置项 `allowNonOpCreateBot` 更名为 `allowNonOpControlBot`（旧配置自动迁移）
-
-完整历史见 [CHANGELOG](CHANGELOG.md)。
-
-## 📄 许可证
-
-MIT License。作者：Skyline_hcss。
-
----
-
-**注意**：本模组主要面向单人游戏和私人服务器，请遵守服务器规则。
+### 📄 许可证
+MIT License。作者：Skyline_hcss。本模组主要面向单人游戏和私人服务器，请遵守服务器规则。

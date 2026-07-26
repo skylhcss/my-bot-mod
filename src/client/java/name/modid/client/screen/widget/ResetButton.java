@@ -17,6 +17,7 @@ public class ResetButton extends AbstractWidget {
     public ResetButton(int x, int y, Runnable onPress) {
         super(x, y, DesignTokens.RESET_SIZE, DesignTokens.RESET_SIZE, Component.literal("↺"));
         this.onPress = onPress;
+        this.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.translatable("gui.my-bot-mod.reset.tooltip")));
     }
 
     /** 设置高度（AbstractWidget 的 height 为 protected，需在子类暴露） */
@@ -29,7 +30,7 @@ public class ResetButton extends AbstractWidget {
         int bgColor = this.isHovered() ? DesignTokens.RESET_HOVER_BG : DesignTokens.RESET_BG;
         graphics.fill(this.getX(), this.getY(), this.getX() + this.width, this.getY() + this.height, bgColor);
         
-        drawBorder(graphics, this.getX(), this.getY(), this.width, this.height, DesignTokens.RESET_BORDER);
+        UI.border(graphics, this.getX(), this.getY(), this.width, this.height, DesignTokens.RESET_BORDER);
         
         int textColor = this.isHovered() ? DesignTokens.RESET_HOVER_ICON : DesignTokens.RESET_ICON_COLOR;
         int textH = UI.lineHeight(DesignTokens.TEXT_SCALE);
@@ -51,15 +52,8 @@ public class ResetButton extends AbstractWidget {
         }
     }
     
-    private void drawBorder(GuiGraphics graphics, int x, int y, int w, int h, int color) {
-        graphics.fill(x, y, x + w, y + 1, color);
-        graphics.fill(x, y + h - 1, x + w, y + h, color);
-        graphics.fill(x, y, x + 1, y + h, color);
-        graphics.fill(x + w - 1, y, x + w, y + h, color);
-    }
-    
     @Override
     protected void updateWidgetNarration(NarrationElementOutput output) {
-        output.add(net.minecraft.client.gui.narration.NarratedElementType.TITLE, Component.literal("重置为默认值"));
+        output.add(net.minecraft.client.gui.narration.NarratedElementType.TITLE, Component.translatable("gui.my-bot-mod.reset.tooltip"));
     }
 }

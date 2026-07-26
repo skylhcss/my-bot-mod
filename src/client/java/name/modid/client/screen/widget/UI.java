@@ -84,4 +84,12 @@ public final class UI {
     public static Font font() {
         return Minecraft.getInstance().font;
     }
+
+    /** 绘制 1px 矩形边框（收敛各处重复的 drawBorder 实现） */
+    public static void border(GuiGraphics g, int x, int y, int w, int h, int color) {
+        g.fill(x, y, x + w, y + 1, color);
+        g.fill(x, y + h - 1, x + w, y + h, color);
+        g.fill(x, y, x + 1, y + h, color);
+        g.fill(x + w - 1, y, x + w, y + h, color);
+    }
 }

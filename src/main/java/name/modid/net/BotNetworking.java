@@ -40,6 +40,31 @@ public class BotNetworking {
     public static final ResourceLocation BATON_ACTION =
         new ResourceLocation("my-bot-mod", "baton_action");
 
+    /** S2C：假人列表增量更新（0=新增/更新，1=移除） */
+    public static final ResourceLocation BOT_LIST_UPDATE =
+        new ResourceLocation("my-bot-mod", "bot_list_update");
+
+    /** S2C：假人 PNG 皮肤映射（UUID -> 文件名） */
+    public static final ResourceLocation BOT_SKIN =
+        new ResourceLocation("my-bot-mod", "bot_skin");
+
+    /** 网络协议版本（C2S 包携带并由服务端校验，防旧客户端/异常输入） */
+    public static final int PROTOCOL_VERSION = 1;
+    private static final int MAX_NAME_LEN = 16;
+    private static final int MAX_KEY_LEN = 32;
+
+    /** 创建带协议版本前缀的 C2S 缓冲（客户端发送 C2S 包时使用） */
+    public static FriendlyByteBuf c2s() {
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(PROTOCOL_VERSION);
+        return buf;
+    }
+
+    /** 读取并校验协议版本；不匹配返回 true（应丢弃该包） */
+    private static boolean badVersion(FriendlyByteBuf buf) {
+        return buf.readableBytes() < 1 || buf.readVarInt() != PROTOCOL_VERSION;
+    }
+
     /**
      * 注册服务端接收器（在主初始化中调用一次）
      */
@@ -47,8 +72,9 @@ public class BotNetworking {
         // 更新假人个人配置
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_SETTING,
             (server, player, handler, buf, responseSender) -> {
-                String botName = buf.readUtf();
-                String key = buf.readUtf();
+                if (badVersion(buf)) return;
+                String botName = buf.readUtf(MAX_NAME_LEN);
+                String key = buf.readUtf(MAX_KEY_LEN);
                 int stateId = buf.readVarInt();
                 server.execute(() -> {
                     if (!player.hasPermissions(2) && !name.modid.config.ModConfig.getInstance().allowNonOpControlBot) {
@@ -57,6 +83,9 @@ public class BotNetworking {
                     BotPlayer bot = BotManager.getBot(botName);
                     if (bot != null) {
                         bot.getSettings().set(key, BotSettings.Override.byId(stateId));
+                        // 即时应用外观类设置（发光）
+                        bot.setGlowingTag(BotSettings.resolve(bot.getSettings().glowing,
+                            name.modid.config.ModConfig.getInstance().botGlowing));
                         BotPersistenceManager.saveBot(bot);
                     }
                 });
@@ -64,13 +93,17 @@ public class BotNetworking {
 
         // 请求假人列表
         ServerPlayNetworking.registerGlobalReceiver(REQUEST_BOT_LIST,
-            (server, player, handler, buf, responseSender) -> server.execute(() -> sendBotList(player)));
+            (server, player, handler, buf, responseSender) -> {
+                if (badVersion(buf)) return;
+                server.execute(() -> sendBotList(player));
+            });
 
         // 指挥棒下令（寻路/传送）
         ServerPlayNetworking.registerGlobalReceiver(BATON_ACTION,
             (server, player, handler, buf, responseSender) -> {
+                if (badVersion(buf)) return;
                 int actionType = buf.readVarInt();
-                String botName = buf.readUtf();
+                String botName = buf.readUtf(MAX_NAME_LEN);
                 double x = buf.readDouble();
                 double y = buf.readDouble();
                 double z = buf.readDouble();
@@ -84,36 +117,52 @@ public class BotNetworking {
     private static void handleBatonAction(ServerPlayer player, int actionType, String botName,
                                           double x, double y, double z) {
         var config = name.modid.config.ModConfig.getInstance();
-        if (!player.hasPermissions(2) && !config.allowNonOpControlBot) {
+        if (!player.hasPermissions(2) && (!config.allowNonOpControlBot || config.batonRequiresOp)) {
+            return;
+        }
+        // 校验坐标：拒绝 NaN/Infinity、世界边界外、以及远超建筑高度的 y（防恶意/异常客户端触发寻路死循环或在未加载区块操作）
+        net.minecraft.server.level.ServerLevel plevel = player.serverLevel();
+        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)
+                || !plevel.getWorldBorder().isWithinBounds(net.minecraft.core.BlockPos.containing(x, y, z))
+                || y < plevel.getMinBuildHeight() - 64 || y > plevel.getMaxBuildHeight() + 64) {
+            player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.baton.invalid_pos"));
             return;
         }
         BotPlayer bot = BotManager.getBot(botName);
         if (bot == null) {
-            player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c假人 " + botName + " 不存在"));
+            player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return;
         }
 
         if (actionType == 0) {
-            // 寻路模式：先停止旧寻路；若假人在其他维度，先传送到指挥者所在维度再寻路
-            bot.getActionController().cancelPath();
+            // 寻路模式：禁止跨维度寻路——假人不在指挥者所在维度时直接拒绝
             if (!bot.level().dimension().equals(player.level().dimension())) {
-                bot.teleportTo(player.serverLevel(), player.getX(), player.getY(), player.getZ(), bot.getYRot(), bot.getXRot());
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§e假人在其他维度，已先传送到你所在维度再寻路"));
+                player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.baton.cross_dim"));
+                return;
             }
+            bot.getActionController().cancelPath();
             boolean ok = bot.getActionController().pathTo(net.minecraft.core.BlockPos.containing(x, y, z));
-            if (!ok) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c无法找到通往目标的路径"));
+            if (ok) {
+                player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                    "msg.my-bot-mod.baton.pathfind_ok", botName, (int) x, (int) y, (int) z), true);
+                player.playNotifySound(net.minecraft.sounds.SoundEvents.EXPERIENCE_ORB_PICKUP,
+                    net.minecraft.sounds.SoundSource.PLAYERS, 0.5F, 1.6F);
+            } else {
+                player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.baton.pathfind_fail"));
             }
         } else {
             // 传送模式：默认仅指挥者处于创造模式可用，配置可放开到其他模式
             boolean creative = player.gameMode.getGameModeForPlayer().isCreative();
             if (!creative && !config.allowBatonTeleportNonCreative) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                    "§c传送模式默认仅创造模式可用（可在配置中开放 allowBatonTeleportNonCreative）"));
+                player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.baton.tp_creative_only"));
                 return;
             }
             bot.getActionController().cancelPath();
             bot.teleportTo(player.serverLevel(), x, y, z, player.getYRot(), 0.0F);
+            player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
+                "msg.my-bot-mod.baton.teleport_ok", botName, (int) x, (int) y, (int) z), true);
+            player.playNotifySound(net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT,
+                net.minecraft.sounds.SoundSource.PLAYERS, 0.5F, 1.4F);
         }
     }
 
@@ -152,6 +201,29 @@ public class BotNetworking {
                 continue; // 不发给假人自己
             }
             sendBotList(player);
+        }
+    }
+
+    /** 增量广播“新增/更新”一个假人（创建时调用，替代全量广播） */
+    public static void broadcastBotAdded(MinecraftServer server, BotPlayer bot) {
+        if (server == null) return;
+        String name = bot.getName().getString();
+        String dim = bot.level().dimension().location().toString();
+        broadcast(server, b -> { b.writeVarInt(0); b.writeUtf(name); b.writeUtf(dim); });
+    }
+
+    /** 增量广播“移除”一个假人（删除时调用） */
+    public static void broadcastBotRemoved(MinecraftServer server, String name) {
+        if (server == null) return;
+        broadcast(server, b -> { b.writeVarInt(1); b.writeUtf(name); });
+    }
+
+    private static void broadcast(MinecraftServer server, java.util.function.Consumer<FriendlyByteBuf> writer) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player instanceof BotPlayer) continue;
+            FriendlyByteBuf buf = PacketByteBufs.create();
+            writer.accept(buf);
+            ServerPlayNetworking.send(player, BOT_LIST_UPDATE, buf);
         }
     }
 }

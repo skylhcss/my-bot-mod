@@ -13,6 +13,7 @@ import name.modid.MyBotMod;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 /**
  * 假人管理器
@@ -22,6 +23,9 @@ public class BotManager {
     
     private static final Map<String, BotPlayer> bots = new ConcurrentHashMap<>();
     private static final Map<UUID, BotPlayer> botsByUUID = new ConcurrentHashMap<>();
+    
+    /** 预编译的假人名字验证正则（避免每次调用 String.matches 重复编译） */
+    private static final Pattern BOT_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$");
 
     /**
      * 创建并召唤一个假人
@@ -33,6 +37,20 @@ public class BotManager {
      * @return 创建的假人，如果失败则返回null
      */
     public static BotPlayer createBot(MinecraftServer server, ServerPlayer creator, String botName, Vec3 position, GameType gameMode) {
+        // 常规召唤：目标维度=创建者维度，随机 UUID，创建者=当前玩家
+        return createBot(server, creator, botName, position, gameMode,
+            creator.serverLevel(), null, creator.getUUID(), creator.getName().getString());
+    }
+
+    /**
+     * 创建并召唤一个假人（完整参数版，供驻留恢复透传原始维度/UUID/创建者）
+     * @param targetLevel 目标世界（null 则用创建者维度）
+     * @param botUuid 假人 UUID（null 则随机生成）
+     * @param creatorUuid 原始创建者 UUID（null 则用 creator）
+     * @param creatorName 原始创建者名字（null 则用 creator）
+     */
+    public static BotPlayer createBot(MinecraftServer server, ServerPlayer creator, String botName, Vec3 position, GameType gameMode,
+                                      ServerLevel targetLevel, UUID botUuid, UUID creatorUuid, String creatorName) {
         try {
             var config = name.modid.config.ModConfig.getInstance();
             
@@ -43,6 +61,12 @@ public class BotManager {
             
             // 检查假人数量限制
             if (config.maxBotCount > 0 && bots.size() >= config.maxBotCount) {
+                return null;
+            }
+            
+            // 检查每位玩家的假人数量上限
+            if (config.maxBotsPerPlayer > 0 && creator != null
+                    && getBotsByCreator(creator).size() >= config.maxBotsPerPlayer) {
                 return null;
             }
             
@@ -61,20 +85,22 @@ public class BotManager {
                 return null;
             }
 
-            // 创建游戏档案
-            GameProfile profile = new GameProfile(UUID.randomUUID(), botName);
+            // 创建游戏档案（驻留恢复时使用保存的 UUID，保持身份一致）
+            GameProfile profile = new GameProfile(botUuid != null ? botUuid : UUID.randomUUID(), botName);
             
             // 应用皮肤
             BotSkinManager.applySkin(profile, botName);
             
-            // 获取世界
-            ServerLevel level = creator.serverLevel();
+            // 获取世界（驻留恢复时为保存的维度，而非创建者维度）
+            ServerLevel level = targetLevel != null ? targetLevel : creator.serverLevel();
             
             // 创建假的网络连接
             Connection connection = new Connection(PacketFlow.SERVERBOUND);
             
-            // 创建假人
-            BotPlayer bot = new BotPlayer(server, level, profile, connection, creator);
+            // 创建假人（创建者身份：驻留恢复时为原始创建者，否则为当前玩家）
+            BotPlayer bot = new BotPlayer(server, level, profile, connection,
+                creatorUuid != null ? creatorUuid : creator.getUUID(),
+                creatorName != null ? creatorName : creator.getName().getString());
             
             // 设置位置和旋转
             Vec3 spawnPos = position != null ? position : creator.position();
@@ -106,11 +132,11 @@ public class BotManager {
             bots.put(botName.toLowerCase(), bot);
             botsByUUID.put(bot.getUUID(), bot);
             
-            // 异步获取 Mojang 正版皮肤（避免阻塞服务器线程），成功后刷新客户端显示
-            BotSkinManager.fetchMojangSkinAsync(server, bot, botName);
+            // 外观：发光标记（假人个人配置优先于全局配置）
+            bot.setGlowingTag(BotSettings.resolve(bot.getSettings().glowing, config.botGlowing));
             
-            // 向客户端广播更新后的假人列表
-            name.modid.net.BotNetworking.broadcastBotList(server);
+            // 向客户端增量广播"新增假人"
+            name.modid.net.BotNetworking.broadcastBotAdded(server, bot);
             
             // 如果启用了驻留功能，添加区块加载票据
             if (config.botPersistence) {
@@ -139,8 +165,8 @@ public class BotManager {
         if (name == null || name.length() < 3 || name.length() > 16) {
             return false;
         }
-        // 只允许字母、数字和下划线
-        return name.matches("^[a-zA-Z0-9_]+$");
+        // 只允许字母、数字和下划线（使用预编译 Pattern 避免重复编译）
+        return BOT_NAME_PATTERN.matcher(name).matches();
     }
 
     /**
@@ -156,13 +182,13 @@ public class BotManager {
 
             // 规范移除：触发连接断开，走原版 PlayerList.remove 完整清理
             // （保存数据、退出队伍、从 playersByUUID 移除、从世界移除实体、广播移除信息包）
-            bot.connection.onDisconnect(net.minecraft.network.chat.Component.literal("假人已移除"));
+            bot.connection.onDisconnect(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.bot.removed"));
 
             // 删除驻留数据
             BotPersistenceManager.deleteBot(server, botName);
 
-            // 向客户端广播更新后的假人列表
-            name.modid.net.BotNetworking.broadcastBotList(server);
+            // 向客户端增量广播“移除假人”
+            name.modid.net.BotNetworking.broadcastBotRemoved(server, bot.getName().getString());
 
             return true;
         }

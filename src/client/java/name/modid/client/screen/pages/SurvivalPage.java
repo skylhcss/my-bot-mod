@@ -24,49 +24,49 @@ public class SurvivalPage extends ConfigPage {
     
     @Override
     public Component getTitle() {
-        return Component.literal("生存");
+        return Component.translatable("gui.my-bot-mod.survival.title");
     }
     
     @Override
     protected void buildPage() {
         // Section 1: 假人属性
-        SectionCard attrSection = addSection("假人属性");
+        SectionCard attrSection = addSection(Component.translatable("gui.my-bot-mod.survival.section.attr").getString());
         
-        ModernCheckbox takeDamage = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("假人受到伤害"), config.botTakeDamage);
+        ModernCheckbox takeDamage = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.survival.take_damage"), config.botTakeDamage);
         takeDamage.setOnChanged(() -> { config.botTakeDamage = takeDamage.selected(); config.save(); });
         attrSection.addItem(takeDamage, new ResetButton(0, 0, () -> {
             config.botTakeDamage = true; config.save(); takeDamage.setSelected(true);
         }));
         
-        ModernCheckbox hunger = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("假人会饥饿"), config.botHunger);
+        ModernCheckbox hunger = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.survival.hunger"), config.botHunger);
         hunger.setOnChanged(() -> { config.botHunger = hunger.selected(); config.save(); });
         attrSection.addItem(hunger, new ResetButton(0, 0, () -> {
             config.botHunger = true; config.save(); hunger.setSelected(true);
         }));
         
-        ModernCheckbox autoRespawn = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("死亡自动重生"), config.autoRespawnOnDeath);
+        ModernCheckbox autoRespawn = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.survival.auto_respawn"), config.autoRespawnOnDeath);
         autoRespawn.setOnChanged(() -> { config.autoRespawnOnDeath = autoRespawn.selected(); config.save(); });
         attrSection.addItem(autoRespawn, new ResetButton(0, 0, () -> {
             config.autoRespawnOnDeath = false; config.save(); autoRespawn.setSelected(false);
         }));
         
-        ModernCheckbox autoJump = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("自动跳跃"), config.allowBotAutoJump);
+        ModernCheckbox autoJump = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.survival.auto_jump"), config.allowBotAutoJump);
         autoJump.setOnChanged(() -> { config.allowBotAutoJump = autoJump.selected(); config.save(); });
         attrSection.addItem(autoJump, new ResetButton(0, 0, () -> {
             config.allowBotAutoJump = true; config.save(); autoJump.setSelected(true);
         }));
         
         // Section 2: 骑乘设置
-        SectionCard mountSection = addSection("骑乘设置");
+        SectionCard mountSection = addSection(Component.translatable("gui.my-bot-mod.survival.section.mount").getString());
         
-        ModernCheckbox mountBots = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("允许骑乘其他假人"), config.allowMountOtherBots);
+        ModernCheckbox mountBots = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.survival.mount_bots"), config.allowMountOtherBots);
         mountBots.setOnChanged(() -> { config.allowMountOtherBots = mountBots.selected(); config.save(); });
         mountSection.addItem(mountBots, new ResetButton(0, 0, () -> {
             config.allowMountOtherBots = false; config.save(); mountBots.setSelected(false);
         }));
         
         ModernButton whitelistBtn = new ModernButton(0, 0, 0, DesignTokens.ROW_HEIGHT,
-            Component.literal("编辑骑乘白名单"),
+            Component.translatable("gui.my-bot-mod.survival.edit_whitelist"),
             button -> minecraft.setScreen(new MountWhitelistScreen(parentScreen)));
         mountSection.addItem(whitelistBtn);
     }

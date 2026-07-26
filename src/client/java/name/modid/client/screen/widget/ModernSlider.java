@@ -146,7 +146,7 @@ public class ModernSlider extends AbstractWidget {
         int trackY = this.getY() + (this.height - DesignTokens.SLIDER_TRACK_HEIGHT) / 2;
 
         graphics.fill(this.getX(), trackY, this.getX() + this.width, trackY + DesignTokens.SLIDER_TRACK_HEIGHT, DesignTokens.SLIDER_TRACK_BG);
-        drawBorder(graphics, this.getX(), trackY, this.width, DesignTokens.SLIDER_TRACK_HEIGHT, DesignTokens.SLIDER_TRACK_BORDER);
+        UI.border(graphics, this.getX(), trackY, this.width, DesignTokens.SLIDER_TRACK_HEIGHT, DesignTokens.SLIDER_TRACK_BORDER);
 
         int handleX = this.getX() + (int) ((this.width - DesignTokens.SLIDER_HANDLE_WIDTH) * this.value);
         int filledWidth = handleX - this.getX();
@@ -156,19 +156,12 @@ public class ModernSlider extends AbstractWidget {
 
         int handleColor = (this.isHovered() || this.dragging) ? DesignTokens.SLIDER_HANDLE_HOVER : DesignTokens.SLIDER_HANDLE_BG;
         graphics.fill(handleX, this.getY(), handleX + DesignTokens.SLIDER_HANDLE_WIDTH, this.getY() + this.height, handleColor);
-        drawBorder(graphics, handleX, this.getY(), DesignTokens.SLIDER_HANDLE_WIDTH, this.height, DesignTokens.SLIDER_HANDLE_BORDER);
+        UI.border(graphics, handleX, this.getY(), DesignTokens.SLIDER_HANDLE_WIDTH, this.height, DesignTokens.SLIDER_HANDLE_BORDER);
 
         int textH = UI.lineHeight(DesignTokens.TEXT_SCALE);
         int textY = this.getY() + (this.height - textH) / 2;
         UI.drawScaledCentered(graphics, Minecraft.getInstance().font, this.getMessage(),
             this.getX() + this.width / 2, textY, DesignTokens.TEXT_SCALE, 0xFFFFFFFF);
-    }
-
-    private void drawBorder(GuiGraphics graphics, int x, int y, int w, int h, int color) {
-        graphics.fill(x, y, x + w, y + 1, color);
-        graphics.fill(x, y + h - 1, x + w, y + h, color);
-        graphics.fill(x, y, x + 1, y + h, color);
-        graphics.fill(x + w - 1, y, x + w, y + h, color);
     }
 
     public void setHeight(int height) {

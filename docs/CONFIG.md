@@ -15,12 +15,19 @@
   "mountWhitelist": ["minecraft:pig", "minecraft:horse", "minecraft:boat"],
   "allowMountOtherBots": false,
   "maxBotCount": 0,
+  "maxBotsPerPlayer": 0,
   "allowNonOpControlBot": false,
+  "batonRequiresOp": false,
   "autoRespawnOnDeath": false,
   "botTakeDamage": true,
   "botHunger": true,
+  "botGlowing": false,
+  "botFireImmune": false,
   "allowBotAutoJump": true,
   "allowBatonTeleportNonCreative": false,
+  "maxPathfindingDistance": 256,
+  "pathfindingAllowParkour": true,
+  "pathfindingAllowSwim": true,
   "botPersistence": false,
   "preserveBotState": false,
   "carpetModCompatibility": true
@@ -29,8 +36,8 @@
 
 ## 打开配置
 
-- **全局配置界面**：按 **B** 键（可在 游戏设置 → 控制 → 按键绑定 中改键）。界面分类卡片可折叠，"假人"标签页列出所有假人。
-- **每假人设置面板**：**右键假人**打开——左侧为操作（背包/末影箱/游戏模式/手持槽位/停止/传送/删除），右侧为**个人配置**。
+- **全局配置界面**：按 **B** 键（可在 游戏设置 → 控制 → 按键绑定 中改键）。**主页**为工作台风格九宫格（每分类一个图标槽位）；分类以**浏览器式标签页**打开，可单独关闭并记忆上次打开的页面；标签页右端有**搜索框**（中英文均可实时过滤当前页配置项）。
+- **每假人设置面板**：**右键假人**打开——顶部显示状态（空闲/战斗/寻路 + 饥饿值），左侧为操作（背包/末影箱/游戏模式/停止/传送/删除），右侧为**个人配置**。
 
 ## 配置项
 
@@ -44,21 +51,28 @@
 | `mountWhitelist` | 字符串数组 | 常见坐骑 | 可骑乘的实体类型 ID |
 | `allowMountOtherBots` | bool | false | 是否允许假人骑乘其他假人 |
 | `maxBotCount` | 整数 | 0 | 假人数量上限（0=无限） |
+| `maxBotsPerPlayer` | 整数 | 0 | 每位玩家可创建的假人数量上限（0=无限，v1.3.2 新增） |
 | `allowNonOpControlBot` | bool | false | 允许非 OP 玩家**创建并控制**假人（v1.3.1 由 `allowNonOpCreateBot` 更名，旧配置自动迁移） |
+| `batonRequiresOp` | bool | false | 指挥棒需要 OP 权限（开启后非 OP 即使有控制权限也不能用指挥棒，v1.3.2 新增） |
 | `autoRespawnOnDeath` | bool | false | 假人死亡后自动重生（回重生点或创建者处，含跨维度） |
 | `botTakeDamage` | bool | true | 假人是否受伤害 |
 | `botHunger` | bool | true | 假人是否会饥饿 |
+| `botGlowing` | bool | false | 假人是否发光（便于远处定位，v1.3.2 新增） |
+| `botFireImmune` | bool | false | 假人是否免疫火焰/岩浆伤害（v1.3.2 新增） |
 | `allowBotAutoJump` | bool | true | 移动时自动跳过 1 格高障碍 |
 | `allowBatonTeleportNonCreative` | bool | false | 指挥棒传送模式是否允许非创造模式使用（v1.3.1 新增） |
+| `maxPathfindingDistance` | 整数 | 256 | 最大寻路距离（32-1024 格，超出直接拒绝，v1.3.2 新增） |
+| `pathfindingAllowParkour` | bool | true | 寻路允许跑酷跳跃（跨越裂谷，v1.3.2 新增） |
+| `pathfindingAllowSwim` | bool | true | 寻路允许游泳路线（v1.3.2 新增） |
 | `botPersistence` | bool | false | 退出世界后假人是否保留 |
 | `preserveBotState` | bool | false | 驻留时是否保留退出前的动作/状态 |
 | `carpetModCompatibility` | bool | true | 检测到 Carpet Mod 时自动禁用本模组假人功能以避免冲突 |
 
-配置修改后**立即生效**。数值范围：距离 0-10，`maxBotCount` ≥ 0。
+配置修改后**立即生效**。数值范围：距离 0-10，`maxBotCount`/`maxBotsPerPlayer` ≥ 0，`maxPathfindingDistance` 32-1024。
 
 ## 假人个人配置（三态）
 
-在假人设置面板右侧，可为**单个假人**单独设置：受到伤害、会饥饿、死亡自动重生、自动跳跃、杀戮光环。每项为三态——**继承**（用全局）/ **强制开** / **强制关**，**优先于全局配置**，并随假人驻留保存。
+在假人设置面板右侧，可为**单个假人**单独设置：受到伤害、会饥饿、死亡自动重生、自动跳跃、杀戮光环、发光、免疫火焰（共 7 项）。每项为三态——**继承**（用全局）/ **强制开** / **强制关**，**优先于全局配置**，并随假人驻留保存。
 
 ## 假人驻留
 

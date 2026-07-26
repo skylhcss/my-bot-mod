@@ -1,5 +1,6 @@
 package name.modid.net;
 
+import name.modid.bot.BotActionController;
 import name.modid.bot.BotPlayer;
 import name.modid.bot.BotSettings;
 import net.minecraft.network.FriendlyByteBuf;
@@ -9,7 +10,7 @@ import java.util.UUID;
 /**
  * 假人设置面板的快照数据
  * 服务端在玩家右键假人时采集并下发，客户端据此打开并显示面板。
- * 包含假人个人配置（覆盖全局配置）的三态值。
+ * 包含假人个人配置（覆盖全局配置）的三态值，以及当前活动状态与饥饿值等展示信息。
  */
 public record BotPanelData(
     String name,
@@ -27,7 +28,13 @@ public record BotPanelData(
     int hunger,
     int autoRespawn,
     int autoJump,
-    int killAura
+    int killAura,
+    int glowing,
+    int fireImmune,
+    // 当前活动状态：0=空闲 1=战斗中 2=寻路中 3=跟随中
+    int status,
+    // 饥饿值（0-20）
+    int food
 ) {
 
     /**
@@ -50,8 +57,24 @@ public record BotPanelData(
             s.hunger.id(),
             s.autoRespawn.id(),
             s.autoJump.id(),
-            s.killAura.id()
+            s.killAura.id(),
+            s.glowing.id(),
+            s.fireImmune.id(),
+            statusOf(bot),
+            bot.getFoodData().getFoodLevel()
         );
+    }
+
+    /** 计算假人当前活动状态：战斗中 &gt; 寻路中 &gt; 空闲（跟随功能未实现，暂不产生 3） */
+    private static int statusOf(BotPlayer bot) {
+        BotActionController c = bot.getActionController();
+        if (c.isAttacking() || c.isUsing()) {
+            return 1;
+        }
+        if (c.isPathfinding()) {
+            return 2;
+        }
+        return 0;
     }
 
     /** 按 BotSettings.KEYS 顺序取得三态 id */
@@ -62,6 +85,8 @@ public record BotPanelData(
             case "autoRespawn" -> autoRespawn;
             case "autoJump" -> autoJump;
             case "killAura" -> killAura;
+            case "glowing" -> glowing;
+            case "fireImmune" -> fireImmune;
             default -> 0;
         };
     }
@@ -82,6 +107,10 @@ public record BotPanelData(
         buf.writeVarInt(autoRespawn);
         buf.writeVarInt(autoJump);
         buf.writeVarInt(killAura);
+        buf.writeVarInt(glowing);
+        buf.writeVarInt(fireImmune);
+        buf.writeVarInt(status);
+        buf.writeVarInt(food);
     }
 
     public static BotPanelData read(FriendlyByteBuf buf) {
@@ -96,6 +125,10 @@ public record BotPanelData(
             buf.readDouble(),
             buf.readDouble(),
             buf.readDouble(),
+            buf.readVarInt(),
+            buf.readVarInt(),
+            buf.readVarInt(),
+            buf.readVarInt(),
             buf.readVarInt(),
             buf.readVarInt(),
             buf.readVarInt(),

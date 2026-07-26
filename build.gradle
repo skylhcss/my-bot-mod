@@ -1,17 +1,15 @@
 plugins {
 	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
 	id 'maven-publish'
+	id 'checkstyle'
 }
 
 version = project.mod_version
 group = project.maven_group
 
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// You should only use this when depending on other mods because
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
+	// Loom 自动添加 Minecraft/Fabric 仓库；mavenCentral 供 Checkstyle 等工具解析。
+	mavenCentral()
 }
 
 loom {
@@ -40,7 +38,22 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	
+
+	// Testing
+	testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+	useJUnitPlatform()
+}
+
+// 确保 test 源集可访问 main 的编译输出及 Minecraft 类
+sourceSets {
+	test {
+		compileClasspath += sourceSets.main.compileClasspath
+		runtimeClasspath += sourceSets.main.runtimeClasspath
+	}
 }
 
 processResources {
@@ -64,6 +77,13 @@ java {
 
 	sourceCompatibility = JavaVersion.VERSION_17
 	targetCompatibility = JavaVersion.VERSION_17
+}
+
+// 静态检查：违规将阻断构建（CI 质量门控）
+checkstyle {
+	toolVersion = '10.12.4'
+	ignoreFailures = false
+	maxWarnings = Integer.MAX_VALUE
 }
 
 jar {

@@ -1,6 +1,7 @@
 package name.modid.client.menu;
 
 import name.modid.menu.BotInventoryMenu;
+import name.modid.client.screen.widget.UI;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -88,7 +89,7 @@ public class BotInventoryScreen extends AbstractContainerScreen<BotInventoryMenu
         if (selected >= 0 && selected <= 8) {
             int hx = x + 8 + selected * 18;
             int hy = y + BOT_HOTBAR_Y;
-            drawBorder(graphics, hx - 1, hy - 1, 18, 18, SELECTED_BORDER);
+            UI.border(graphics, hx - 1, hy - 1, 18, 18, SELECTED_BORDER);
         }
 
         // 假人模型
@@ -129,7 +130,7 @@ public class BotInventoryScreen extends AbstractContainerScreen<BotInventoryMenu
             boolean hovered = mouseX >= cx && mouseX < cx + PAD_CELL && mouseY >= cy && mouseY < cy + PAD_CELL;
             int bg = (i == selected) ? 0xFF3F7F3F : (hovered ? 0xFF6F6F6F : SLOT_BG);
             graphics.fill(cx, cy, cx + PAD_CELL, cy + PAD_CELL, bg);
-            drawBorder(graphics, cx, cy, PAD_CELL, PAD_CELL, i == selected ? SELECTED_BORDER : SLOT_DARK);
+            UI.border(graphics, cx, cy, PAD_CELL, PAD_CELL, i == selected ? SELECTED_BORDER : SLOT_DARK);
 
             String label = String.valueOf(i + 1);
             int tw = this.font.width(label);
@@ -137,7 +138,7 @@ public class BotInventoryScreen extends AbstractContainerScreen<BotInventoryMenu
                 cx + (PAD_CELL - tw) / 2, cy + (PAD_CELL - 8) / 2, 0xFFFFFFFF, false);
         }
         // 说明文字
-        graphics.drawString(this.font, Component.literal("手持"),
+        graphics.drawString(this.font, Component.translatable("gui.my-bot-mod.inventory.held"),
             originX + PAD_X, originY + PAD_Y - 10, LABEL_COLOR, false);
     }
 
@@ -186,13 +187,5 @@ public class BotInventoryScreen extends AbstractContainerScreen<BotInventoryMenu
         g.fill(x1, y1, x1 + 1, y2, SLOT_DARK);
         g.fill(x2 - 1, y1, x2, y2, PANEL_LIGHT);
         g.fill(x1, y2 - 1, x2, y2, PANEL_LIGHT);
-    }
-
-    /** 绘制矩形边框 */
-    private void drawBorder(GuiGraphics g, int x, int y, int w, int h, int color) {
-        g.fill(x, y, x + w, y + 1, color);
-        g.fill(x, y + h - 1, x + w, y + h, color);
-        g.fill(x, y, x + 1, y + h, color);
-        g.fill(x + w - 1, y, x + w, y + h, color);
     }
 }

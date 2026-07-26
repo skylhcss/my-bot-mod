@@ -186,16 +186,16 @@ public class BotModCommand {
     private static int showConfig(CommandContext<CommandSourceStack> ctx) {
         ModConfig config = ModConfig.getInstance();
         
-        ctx.getSource().sendSuccess(() -> Component.literal("§e§l=== 我的机器人 - 配置 ==="), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.title"), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 总开关
-        ctx.getSource().sendSuccess(() -> Component.literal("§6总开关:"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.master"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  enableBotFeature: " + formatBool(config.enableBotFeature)), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 攻击设置
-        ctx.getSource().sendSuccess(() -> Component.literal("§6攻击设置:"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.attack"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  attackReachDistance: " + config.attackReachDistance), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  creativeAttackReachDistance: " + config.creativeAttackReachDistance), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  enableKillAura: " + formatBool(config.enableKillAura)), false);
@@ -203,14 +203,14 @@ public class BotModCommand {
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 骑乘设置
-        ctx.getSource().sendSuccess(() -> Component.literal("§6骑乘设置:"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.mount"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  allowMountOtherBots: " + formatBool(config.allowMountOtherBots)), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  mountWhitelist: " + config.mountWhitelist.size() + " 个实体"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.mount_whitelist_count", config.mountWhitelist.size()), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 生存设置
-        ctx.getSource().sendSuccess(() -> Component.literal("§6生存设置:"), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  maxBotCount: " + config.maxBotCount + " (0=无限)"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.survival"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.max_bot_count", config.maxBotCount), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  allowNonOpControlBot: " + formatBool(config.allowNonOpControlBot)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  autoRespawnOnDeath: " + formatBool(config.autoRespawnOnDeath)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  botTakeDamage: " + formatBool(config.botTakeDamage)), false);
@@ -218,26 +218,26 @@ public class BotModCommand {
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 动作设置
-        ctx.getSource().sendSuccess(() -> Component.literal("§6动作设置:"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.action"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  allowBotAutoJump: " + formatBool(config.allowBotAutoJump)), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 指挥棒设置
-        ctx.getSource().sendSuccess(() -> Component.literal("§6指挥棒设置:"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.baton"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  allowBatonTeleportNonCreative: " + formatBool(config.allowBatonTeleportNonCreative)), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 驻留设置
-        ctx.getSource().sendSuccess(() -> Component.literal("§6驻留设置:"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.persistence"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  botPersistence: " + formatBool(config.botPersistence)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  preserveBotState: " + formatBool(config.preserveBotState)), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 兼容性设置
-        ctx.getSource().sendSuccess(() -> Component.literal("§6兼容性设置:"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.compat"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  carpetModCompatibility: " + formatBool(config.carpetModCompatibility)), false);
         if (MyBotMod.isCarpetModLoaded()) {
-            ctx.getSource().sendSuccess(() -> Component.literal("  §e检测到 Carpet Mod 已加载"), false);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.carpet_detected"), false);
         }
         
         return 1;
@@ -249,17 +249,35 @@ public class BotModCommand {
     private static int reloadConfig(CommandContext<CommandSourceStack> ctx) {
         // 重新从磁盘加载配置
         ModConfig.reload();
-        ctx.getSource().sendSuccess(() -> Component.literal("§a配置已重新加载"), true);
+        // 重读皮肤文件夹，使新增皮肤生效（运行态回传）
+        name.modid.bot.BotSkinManager.reloadDefaultSkins();
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.reloaded"), true);
         return 1;
     }
 
     /**
      * 重置配置
      */
+    /** 待确认的配置重置：key = 操作者名，value = 过期时间戳(ms) */
+    private static final java.util.Map<String, Long> pendingReset = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long RESET_CONFIRM_WINDOW_MS = 15000L;
+
     private static int resetConfig(CommandContext<CommandSourceStack> ctx) {
+        // 破坏性操作二次确认：首次仅提示，窗口期内再次执行才真正重置
+        String key = ctx.getSource().getTextName();
+        long now = System.currentTimeMillis();
+        Long expiry = pendingReset.get(key);
+        if (expiry == null || now > expiry) {
+            // 顺便清理已过期的条目，避免内存泄漏
+            pendingReset.entrySet().removeIf(e -> System.currentTimeMillis() > e.getValue());
+            pendingReset.put(key, now + RESET_CONFIRM_WINDOW_MS);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.reset_confirm"), false);
+            return 0;
+        }
+        pendingReset.remove(key);
         ModConfig config = ModConfig.getInstance();
         config.reset();
-        ctx.getSource().sendSuccess(() -> Component.literal("§a配置已重置为默认值"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.reset"), true);
         return 1;
     }
 
@@ -304,10 +322,10 @@ public class BotModCommand {
                 if (value && MyBotMod.isCarpetModLoaded()) {
                     // 启用兼容模式且检测到 Carpet Mod，禁用假人功能
                     config.enableBotFeature = false;
-                    ctx.getSource().sendSuccess(() -> Component.literal("§e检测到 Carpet Mod，已自动禁用假人功能"), false);
+                    ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.carpet_disabled_bot"), false);
                 } else if (!value && MyBotMod.isCarpetModLoaded()) {
                     // 禁用兼容模式，提示用户可以手动启用假人功能
-                    ctx.getSource().sendSuccess(() -> Component.literal("§e兼容模式已禁用，可使用 /botmod config set enableBotFeature true 启用假人功能"), false);
+                    ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.compat_disabled_hint"), false);
                 }
                 break;
             case "allowBotAutoJump":
@@ -319,7 +337,7 @@ public class BotModCommand {
         }
         
         config.save();
-        ctx.getSource().sendSuccess(() -> Component.literal("§a已设置 " + key + " = " + formatBool(value)), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.set_ok", key, formatBool(value)), true);
         return 1;
     }
 
@@ -343,7 +361,7 @@ public class BotModCommand {
         }
         
         config.save();
-        ctx.getSource().sendSuccess(() -> Component.literal("§a已设置 " + key + " = " + value), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.set_ok", key, value), true);
         return 1;
     }
 
@@ -359,7 +377,7 @@ public class BotModCommand {
         }
         
         config.save();
-        ctx.getSource().sendSuccess(() -> Component.literal("§a已设置 " + key + " = " + value), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.set_ok", key, value), true);
         return 1;
     }
 
@@ -387,7 +405,7 @@ public class BotModCommand {
             case "carpetModCompatibility" -> formatBool(config.carpetModCompatibility);
             case "allowBotAutoJump" -> formatBool(config.allowBotAutoJump);
             case "allowBatonTeleportNonCreative" -> formatBool(config.allowBatonTeleportNonCreative);
-            default -> "§c未知配置项";
+            default -> Component.translatable("msg.my-bot-mod.config.unknown").getString();
         };
         
         ctx.getSource().sendSuccess(() -> Component.literal(key + " = " + value), false);
@@ -401,11 +419,11 @@ public class BotModCommand {
         ModConfig config = ModConfig.getInstance();
         
         if (config.mountWhitelist.isEmpty()) {
-            ctx.getSource().sendSuccess(() -> Component.literal("§e骑乘白名单为空"), false);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.mount.whitelist_empty"), false);
             return 0;
         }
         
-        ctx.getSource().sendSuccess(() -> Component.literal("§e骑乘白名单 (" + config.mountWhitelist.size() + "):"), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.mount.whitelist_header", config.mountWhitelist.size()), false);
         for (String entityType : config.mountWhitelist) {
             ctx.getSource().sendSuccess(() -> Component.literal("  - " + entityType), false);
         }
@@ -421,13 +439,13 @@ public class BotModCommand {
         String entityType = StringArgumentType.getString(ctx, "entityType");
         
         if (config.mountWhitelist.contains(entityType)) {
-            ctx.getSource().sendFailure(Component.literal("§c" + entityType + " 已在白名单中"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.mount.already_in", entityType));
             return 0;
         }
         
         config.mountWhitelist.add(entityType);
         config.save();
-        ctx.getSource().sendSuccess(() -> Component.literal("§a已添加 " + entityType + " 到骑乘白名单"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.mount.added", entityType), true);
         return 1;
     }
 
@@ -439,13 +457,13 @@ public class BotModCommand {
         String entityType = StringArgumentType.getString(ctx, "entityType");
         
         if (!config.mountWhitelist.contains(entityType)) {
-            ctx.getSource().sendFailure(Component.literal("§c" + entityType + " 不在白名单中"));
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.mount.not_in", entityType));
             return 0;
         }
         
         config.mountWhitelist.remove(entityType);
         config.save();
-        ctx.getSource().sendSuccess(() -> Component.literal("§a已从骑乘白名单移除 " + entityType), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.mount.removed", entityType), true);
         return 1;
     }
 
@@ -457,7 +475,7 @@ public class BotModCommand {
         int count = config.mountWhitelist.size();
         config.mountWhitelist.clear();
         config.save();
-        ctx.getSource().sendSuccess(() -> Component.literal("§a已清空骑乘白名单（移除了 " + count + " 个实体）"), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.mount.cleared", count), true);
         return 1;
     }
 
@@ -467,23 +485,23 @@ public class BotModCommand {
     private static int showInfo(CommandContext<CommandSourceStack> ctx) {
         ModConfig config = ModConfig.getInstance();
         
-        ctx.getSource().sendSuccess(() -> Component.literal("§e§l=== 我的机器人 ==="), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.title"), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("§6版本: §f" + config.modVersion), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("§6作者: §f" + config.author), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("§6邮箱: §f" + config.email), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("§6许可证: §f" + config.license), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("§6GitHub: §f" + config.githubRepo), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.version", config.modVersion), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.author", config.author), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.email", config.email), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.license", config.license), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.github", config.githubRepo), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("§7" + config.description), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.description", config.description), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         if (MyBotMod.isCarpetModLoaded()) {
-            ctx.getSource().sendSuccess(() -> Component.literal("§e检测到 Carpet Mod 已加载"), false);
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.carpet_loaded"), false);
             if (config.carpetModCompatibility) {
-                ctx.getSource().sendSuccess(() -> Component.literal("§a兼容模式已启用"), false);
+                ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.compat_enabled"), false);
             } else {
-                ctx.getSource().sendSuccess(() -> Component.literal("§c兼容模式已禁用"), false);
+                ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.compat_disabled"), false);
             }
         }
         

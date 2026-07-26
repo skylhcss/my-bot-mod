@@ -39,7 +39,7 @@ public class BotSettings {
 
     /** 可覆盖的配置项键（用于网络与界面遍历） */
     public static final String[] KEYS = {
-        "takeDamage", "hunger", "autoRespawn", "autoJump", "killAura"
+        "takeDamage", "hunger", "autoRespawn", "autoJump", "killAura", "glowing", "fireImmune"
     };
 
     // 受到伤害
@@ -52,6 +52,10 @@ public class BotSettings {
     public Override autoJump = Override.INHERIT;
     // 杀戮光环
     public Override killAura = Override.INHERIT;
+    // 发光
+    public Override glowing = Override.INHERIT;
+    // 免疫火焰/岩浆伤害
+    public Override fireImmune = Override.INHERIT;
 
     /**
      * 解析三态覆盖：ON/OFF 优先，INHERIT 使用全局值
@@ -77,6 +81,8 @@ public class BotSettings {
             case "autoRespawn" -> autoRespawn;
             case "autoJump" -> autoJump;
             case "killAura" -> killAura;
+            case "glowing" -> glowing;
+            case "fireImmune" -> fireImmune;
             default -> Override.INHERIT;
         };
     }
@@ -91,6 +97,8 @@ public class BotSettings {
             case "autoRespawn" -> autoRespawn = value;
             case "autoJump" -> autoJump = value;
             case "killAura" -> killAura = value;
+            case "glowing" -> glowing = value;
+            case "fireImmune" -> fireImmune = value;
             default -> {
             }
         }
@@ -106,16 +114,18 @@ public class BotSettings {
         this.autoRespawn = other.autoRespawn != null ? other.autoRespawn : Override.INHERIT;
         this.autoJump = other.autoJump != null ? other.autoJump : Override.INHERIT;
         this.killAura = other.killAura != null ? other.killAura : Override.INHERIT;
+        this.glowing = other.glowing != null ? other.glowing : Override.INHERIT;
+        this.fireImmune = other.fireImmune != null ? other.fireImmune : Override.INHERIT;
     }
 
-    /** 该键的中文显示名 */
+    /** 该键的本地化显示名 */
     public static String displayName(String key) {
+        if (key == null) {
+            return "";
+        }
         return switch (key) {
-            case "takeDamage" -> "受到伤害";
-            case "hunger" -> "会饥饿";
-            case "autoRespawn" -> "死亡自动重生";
-            case "autoJump" -> "自动跳跃";
-            case "killAura" -> "杀戮光环";
+            case "takeDamage", "hunger", "autoRespawn", "autoJump", "killAura", "glowing", "fireImmune" ->
+                net.minecraft.network.chat.Component.translatable("gui.my-bot-mod.setting." + key).getString();
             default -> key;
         };
     }

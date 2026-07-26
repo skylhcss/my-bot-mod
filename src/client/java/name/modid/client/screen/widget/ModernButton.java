@@ -41,7 +41,7 @@ public class ModernButton extends Button {
         graphics.fill(this.getX(), this.getY(), this.getX() + this.width, this.getY() + this.height, backgroundColor);
         
         // 绘制边框
-        drawBorder(graphics, this.getX(), this.getY(), this.width, this.height, BORDER_COLOR);
+        UI.border(graphics, this.getX(), this.getY(), this.width, this.height, BORDER_COLOR);
         
         // 绘制文本（小号字体）
         int textColor = this.active ? 0xFFFFFF : 0x808080;
@@ -55,19 +55,5 @@ public class ModernButton extends Button {
             DesignTokens.TEXT_SCALE,
             textColor
         );
-    }
-    
-    /**
-     * 绘制边框
-     */
-    private void drawBorder(GuiGraphics graphics, int x, int y, int width, int height, int color) {
-        // 上边框
-        graphics.fill(x, y, x + width, y + 1, color);
-        // 下边框
-        graphics.fill(x, y + height - 1, x + width, y + height, color);
-        // 左边框
-        graphics.fill(x, y, x + 1, y + height, color);
-        // 右边框
-        graphics.fill(x + width - 1, y, x + width, y + height, color);
     }
 }

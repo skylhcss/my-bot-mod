@@ -19,7 +19,7 @@ public class AboutScreen extends Screen {
     private int panelX, panelY, panelWidth, panelHeight;
 
     public AboutScreen(Screen parent) {
-        super(Component.literal("关于"));
+        super(Component.translatable("gui.my-bot-mod.about.title"));
         this.parent = parent;
         this.config = ModConfig.getInstance();
     }
@@ -38,7 +38,7 @@ public class AboutScreen extends Screen {
 
         int githubBtnY = panelY + panelHeight - DesignTokens.FOOTER_HEIGHT - btnH - 4;
         this.addRenderableWidget(new ModernButton(cx, githubBtnY, btnW, btnH,
-            Component.literal("GitHub 仓库"),
+            Component.translatable("gui.my-bot-mod.about.github"),
             button -> {
                 try { Util.getPlatform().openUri(config.githubRepo); }
                 catch (Exception e) { /* ignore */ }
@@ -46,7 +46,7 @@ public class AboutScreen extends Screen {
 
         int doneY = panelY + panelHeight - btnH - 4;
         this.addRenderableWidget(new ModernButton(cx, doneY, btnW, btnH,
-            Component.literal("完成"),
+            net.minecraft.network.chat.CommonComponents.GUI_DONE,
             button -> this.minecraft.setScreen(parent)));
     }
 
@@ -55,7 +55,7 @@ public class AboutScreen extends Screen {
         this.renderBackground(graphics);
 
         graphics.fill(panelX, panelY, panelX + panelWidth, panelY + panelHeight, DesignTokens.PANEL_BG);
-        drawBorder(graphics, panelX, panelY, panelWidth, panelHeight, DesignTokens.PANEL_BORDER);
+        UI.border(graphics, panelX, panelY, panelWidth, panelHeight, DesignTokens.PANEL_BORDER);
 
         float sc = DesignTokens.TEXT_SCALE;
         int lineH = UI.lineHeight(sc);
@@ -63,7 +63,7 @@ public class AboutScreen extends Screen {
         int y = panelY + 14;
         int padX = panelX + DesignTokens.CARD_H_PADDING;
 
-        UI.drawScaledCentered(graphics, this.font, Component.literal("关于"), cx, y, sc, DesignTokens.HEADER_TEXT_COLOR);
+        UI.drawScaledCentered(graphics, this.font, Component.translatable("gui.my-bot-mod.about.title"), cx, y, sc, DesignTokens.HEADER_TEXT_COLOR);
         y += lineH + 10;
         graphics.fill(panelX + 6, y, panelX + panelWidth - 6, y + 1, DesignTokens.HEADER_DIVIDER_COLOR);
         y += 6;
@@ -86,16 +86,9 @@ public class AboutScreen extends Screen {
 
         graphics.fill(panelX + 6, y, panelX + panelWidth - 6, y + 1, DesignTokens.HEADER_DIVIDER_COLOR);
         y += 6;
-        UI.drawScaled(graphics, this.font, "邮箱: " + config.email, padX, y, sc, 0xFFAAAAAA);
+        UI.drawScaled(graphics, this.font, Component.translatable("gui.my-bot-mod.about.email", config.email).getString(), padX, y, sc, 0xFFAAAAAA);
 
         super.render(graphics, mouseX, mouseY, partialTick);
-    }
-
-    private void drawBorder(GuiGraphics g, int x, int y, int w, int h, int color) {
-        g.fill(x, y, x + w, y + 1, color);
-        g.fill(x, y + h - 1, x + w, y + h, color);
-        g.fill(x, y, x + 1, y + h, color);
-        g.fill(x + w - 1, y, x + w, y + h, color);
     }
 
     @Override

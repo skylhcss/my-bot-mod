@@ -1,11 +1,8 @@
 package name.modid.bot;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.TagParser;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -46,7 +43,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BotPersistenceManager extends SavedData {
     
     private static final String DATA_NAME = "my_bot_mod_bots";
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     
     // 区块加载票据类型 - 用于保持假人所在区块加载
     private static final TicketType<ChunkPos> BOT_CHUNK_TICKET = TicketType.create(
@@ -55,8 +51,8 @@ public class BotPersistenceManager extends SavedData {
         300 // 票据有效期（tick）
     );
     
-    // 存储所有假人数据（线程安全）
-    private final Map<String, BotData> botsData = new ConcurrentHashMap<>();
+    // 存储所有假人数据（每个假人一个 CompoundTag，直接以 NBT 持久化，线程安全）
+    private final Map<String, CompoundTag> botsData = new ConcurrentHashMap<>();
     
     // 存储假人的区块加载票据（假人名 -> 区块位置）
     /** 票据位置：维度 + 区块坐标（用于跨维度精确移除/刷新票据） */
@@ -151,15 +147,8 @@ public class BotPersistenceManager extends SavedData {
             for (int i = 0; i < botsList.size(); i++) {
                 CompoundTag botTag = botsList.getCompound(i);
                 String name = botTag.getString("Name");
-                String json = botTag.getString("Data");
-                
-                try {
-                    BotData data = GSON.fromJson(json, BotData.class);
-                    if (data != null) {
-                        manager.botsData.put(name.toLowerCase(), data);
-                    }
-                } catch (Exception e) {
-                    MyBotMod.LOGGER.error("无法加载假人数据: {}", name, e);
+                if (!name.isEmpty()) {
+                    manager.botsData.put(name.toLowerCase(), botTag);
                 }
             }
         }
@@ -174,11 +163,8 @@ public class BotPersistenceManager extends SavedData {
     public CompoundTag save(CompoundTag tag) {
         ListTag botsList = new ListTag();
         
-        for (Map.Entry<String, BotData> entry : botsData.entrySet()) {
-            CompoundTag botTag = new CompoundTag();
-            botTag.putString("Name", entry.getKey());
-            botTag.putString("Data", GSON.toJson(entry.getValue()));
-            botsList.add(botTag);
+        for (Map.Entry<String, CompoundTag> entry : botsData.entrySet()) {
+            botsList.add(entry.getValue().copy());
         }
         
         tag.put("Bots", botsList);
@@ -224,102 +210,88 @@ public class BotPersistenceManager extends SavedData {
         }
         
         try {
-            BotData data = new BotData();
-            
+            String botName = bot.getName().getString();
+            CompoundTag data = new CompoundTag();
+
             // 基本信息
-            data.name = bot.getName().getString();
-            data.uuid = bot.getUUID();
-            data.creatorUUID = bot.getCreatorUUID();
-            data.creatorName = bot.getCreatorName();
-            
+            data.putString("Name", botName);
+            data.putUUID("UUID", bot.getUUID());
+            data.putUUID("CreatorUUID", bot.getCreatorUUID());
+            data.putString("CreatorName", bot.getCreatorName());
+
             // 位置信息
-            data.dimension = bot.level().dimension().location().toString();
-            data.x = bot.getX();
-            data.y = bot.getY();
-            data.z = bot.getZ();
-            data.yaw = bot.getYRot();
-            data.pitch = bot.getXRot();
-            
-            // 游戏模式
-            data.gameMode = bot.gameMode.getGameModeForPlayer().getName();
-            
-            // 保存物品栏（包裹在 CompoundTag 中，以便 SNBT 解析）
-            try {
-                CompoundTag invCompound = new CompoundTag();
-                ListTag inventoryList = new ListTag();
-                bot.getInventory().save(inventoryList);
-                invCompound.put("Items", inventoryList);
-                data.inventoryData = invCompound.toString();
-            } catch (Exception e) {
-                MyBotMod.LOGGER.error("无法保存假人 {} 的物品栏: {}", data.name, e.getMessage());
+            data.putString("Dimension", bot.level().dimension().location().toString());
+            data.putDouble("X", bot.getX());
+            data.putDouble("Y", bot.getY());
+            data.putDouble("Z", bot.getZ());
+            data.putFloat("Yaw", bot.getYRot());
+            data.putFloat("Pitch", bot.getXRot());
+
+            // 游戏模式 + 当前手持槽位
+            data.putString("GameMode", bot.gameMode.getGameModeForPlayer().getName());
+            data.putInt("SelectedSlot", bot.getInventory().selected);
+
+            // 个人配置（三态，按 KEYS 存整型 id）
+            CompoundTag settingsTag = new CompoundTag();
+            for (String k : BotSettings.KEYS) {
+                settingsTag.putInt(k, bot.getSettings().get(k).id());
             }
-            
-            // 保存当前手持槽位
-            data.selectedSlot = bot.getInventory().selected;
-            
-            // 保存假人个人配置
-            data.settings = bot.getSettings();
-            
-            // 保存末影箱
-            try {
-                ListTag enderChestList = new ListTag();
-                var enderChest = bot.getEnderChestInventory();
-                for (int i = 0; i < enderChest.getContainerSize(); i++) {
-                    var stack = enderChest.getItem(i);
-                    if (!stack.isEmpty()) {
-                        CompoundTag itemTag = new CompoundTag();
-                        itemTag.putByte("Slot", (byte) i);
-                        stack.save(itemTag);
-                        enderChestList.add(itemTag);
-                    }
+            data.put("Settings", settingsTag);
+
+            // 物品栏（直接以 NBT 存储，无 SNBT 字符串往返）
+            ListTag inventoryList = new ListTag();
+            bot.getInventory().save(inventoryList);
+            data.put("Inventory", inventoryList);
+
+            // 末影箱（直接以 NBT 存储）
+            ListTag enderList = new ListTag();
+            var enderChest = bot.getEnderChestInventory();
+            for (int i = 0; i < enderChest.getContainerSize(); i++) {
+                var stack = enderChest.getItem(i);
+                if (!stack.isEmpty()) {
+                    CompoundTag itemTag = new CompoundTag();
+                    itemTag.putByte("Slot", (byte) i);
+                    stack.save(itemTag);
+                    enderList.add(itemTag);
                 }
-                CompoundTag enderChestTag = new CompoundTag();
-                enderChestTag.put("EnderItems", enderChestList);
-                data.enderChestData = enderChestTag.toString();
-            } catch (Exception e) {
-                MyBotMod.LOGGER.error("无法保存假人 {} 的末影箱: {}", data.name, e.getMessage());
             }
-            
-            // 如果启用了保留状态，保存假人状态
+            data.put("EnderItems", enderList);
+
+            // 状态（仅在 preserveBotState 时保存）
             if (config.preserveBotState) {
-                data.state = new BotData.BotState();
                 var controller = bot.getActionController();
-                
-                // 保存动作状态（使用 getter 方法替代反射）
-                data.state.attacking = controller.isAttacking();
-                data.state.using = controller.isUsing();
-                data.state.sneaking = controller.isSneaking();
-                data.state.jumping = controller.isJumping();
-                data.state.sprinting = controller.isSprinting();
-                data.state.forward = controller.getForward();
-                data.state.strafing = controller.getStrafing();
-                data.state.attackInterval = controller.getAttackInterval();
-                data.state.useInterval = controller.getUseInterval();
-                
-                // 保存健康和饥饿
-                data.state.health = bot.getHealth();
-                data.state.foodLevel = bot.getFoodData().getFoodLevel();
-                data.state.saturation = bot.getFoodData().getSaturationLevel();
-                data.state.exhaustion = bot.getFoodData().getExhaustionLevel();
-                
-                // 保存经验
-                data.state.experienceLevel = bot.experienceLevel;
-                data.state.experienceProgress = bot.experienceProgress;
-                
-                // 保存药水效果
+                // 寻路中的移动/跳跃/疾跑是寻路器的瞬态输入，不应持久化，
+                // 否则重进世界后（路径并未保存）假人会无目标地一直向前走
+                boolean pathing = controller.isPathfinding();
+                CompoundTag st = new CompoundTag();
+                st.putBoolean("Attacking", controller.isAttacking());
+                st.putBoolean("Using", controller.isUsing());
+                st.putBoolean("Sneaking", controller.isSneaking());
+                st.putBoolean("Jumping", !pathing && controller.isJumping());
+                st.putBoolean("Sprinting", !pathing && controller.isSprinting());
+                st.putFloat("Forward", pathing ? 0.0F : controller.getForward());
+                st.putFloat("Strafing", pathing ? 0.0F : controller.getStrafing());
+                st.putInt("AttackInterval", controller.getAttackInterval());
+                st.putInt("UseInterval", controller.getUseInterval());
+                st.putFloat("Health", bot.getHealth());
+                st.putInt("FoodLevel", bot.getFoodData().getFoodLevel());
+                st.putFloat("Saturation", bot.getFoodData().getSaturationLevel());
+                st.putFloat("Exhaustion", bot.getFoodData().getExhaustionLevel());
+                st.putInt("XpLevel", bot.experienceLevel);
+                st.putFloat("XpProgress", bot.experienceProgress);
+                ListTag effects = new ListTag();
                 bot.getActiveEffects().forEach(effect -> {
-                    CompoundTag effectTag = new CompoundTag();
-                    effect.save(effectTag);
-                    data.state.effects.add(effectTag.toString());
+                    CompoundTag et = new CompoundTag();
+                    effect.save(et);
+                    effects.add(et);
                 });
+                st.put("Effects", effects);
+                data.put("State", st);
             }
-            
-            // 保存到管理器
-            manager.botsData.put(data.name.toLowerCase(), data);
+
+            manager.botsData.put(botName.toLowerCase(), data);
             manager.setDirty();
-            
-            MyBotMod.LOGGER.debug("保存假人数据: {} 在 {}", data.name, data.dimension);
-            
+            MyBotMod.LOGGER.debug("保存假人数据: {} 在 {}", botName, data.getString("Dimension"));
         } catch (Exception e) {
             MyBotMod.LOGGER.error("无法保存假人数据: {}", e.getMessage(), e);
         }
@@ -410,7 +382,7 @@ public class BotPersistenceManager extends SavedData {
     /**
      * 获取所有保存的假人数据
      */
-    public static List<BotData> getAllBots(MinecraftServer server) {
+    public static List<CompoundTag> getAllBots(MinecraftServer server) {
         BotPersistenceManager manager = get(server);
         if (manager == null) {
             return new ArrayList<>();
@@ -492,7 +464,7 @@ public class BotPersistenceManager extends SavedData {
      * 7. 将假人添加到世界和玩家列表
      */
     private static void loadAllBotsForPlayer(MinecraftServer server, ServerPlayer player) {
-        List<BotData> bots = getAllBots(server);
+        List<CompoundTag> bots = getAllBots(server);
         
         if (bots.isEmpty()) {
             MyBotMod.LOGGER.info("没有需要加载的驻留假人");
@@ -506,130 +478,106 @@ public class BotPersistenceManager extends SavedData {
         int skippedCount = 0;
         int failedCount = 0;
         
-        for (BotData data : bots) {
+        for (CompoundTag data : bots) {
+            String botName = data.getString("Name");
             try {
-                MyBotMod.LOGGER.info("正在处理假人: {}", data.name);
-                
-                // 检查假人是否已经存在（可能是在游戏中创建的）
-                // hasBot() 方法会检查假人是否真的存在于世界中
-                if (BotManager.hasBot(data.name)) {
-                    MyBotMod.LOGGER.info("假人 {} 已存在于世界中，跳过加载", data.name);
+                // 已存在则跳过（可能是游戏中创建的）
+                if (BotManager.hasBot(botName)) {
+                    MyBotMod.LOGGER.info("假人 {} 已存在于世界中，跳过加载", botName);
                     skippedCount++;
                     continue;
                 }
-                
-                MyBotMod.LOGGER.info("假人 {} 不存在，开始创建...", data.name);
-                
-                // 获取目标世界
+
+                String dimStr = data.getString("Dimension");
                 ServerLevel level = server.getLevel(
                     net.minecraft.resources.ResourceKey.create(
                         net.minecraft.core.registries.Registries.DIMENSION,
-                        new net.minecraft.resources.ResourceLocation(data.dimension)
+                        new net.minecraft.resources.ResourceLocation(dimStr)
                     )
                 );
-                
                 if (level == null) {
-                    MyBotMod.LOGGER.error("无法加载假人 {}：世界 {} 不存在", data.name, data.dimension);
+                    MyBotMod.LOGGER.error("无法加载假人 {}：世界 {} 不存在", botName, dimStr);
                     failedCount++;
                     continue;
                 }
-                
-                // 使用当前加入的玩家作为创建者
-                // 注意：GCA 会保存原始创建者信息，但实际创建时使用当前玩家
-                ServerPlayer creator = player;
-                
-                // 创建假人
-                Vec3 position = new Vec3(data.x, data.y, data.z);
-                GameType gameMode = GameType.byName(data.gameMode, GameType.SURVIVAL);
-                
-                MyBotMod.LOGGER.info("调用 BotManager.createBot() 创建假人 {}", data.name);
-                BotPlayer bot = BotManager.createBot(server, creator, data.name, position, gameMode);
-                
+
+                Vec3 position = new Vec3(data.getDouble("X"), data.getDouble("Y"), data.getDouble("Z"));
+                GameType gameMode = GameType.byName(data.getString("GameMode"), GameType.SURVIVAL);
+                UUID botUuid = data.hasUUID("UUID") ? data.getUUID("UUID") : null;
+                UUID creatorUuid = data.hasUUID("CreatorUUID") ? data.getUUID("CreatorUUID") : null;
+                String creatorName = data.contains("CreatorName") ? data.getString("CreatorName") : null;
+
+                // 透传保存的维度/UUID/创建者，保持跨维度位置与身份一致
+                BotPlayer bot = BotManager.createBot(server, player, botName, position, gameMode,
+                    level, botUuid, creatorUuid, creatorName);
+
                 if (bot != null) {
-                    MyBotMod.LOGGER.info("假人 {} 创建成功，正在设置属性...", data.name);
-                    
-                    // 设置旋转（包括头部旋转）
-                    bot.setYRot(data.yaw);
-                    bot.setXRot(data.pitch);
-                    bot.setYHeadRot(data.yaw);
-                    
-                    // 恢复假人个人配置
-                    if (data.settings != null) {
-                        bot.getSettings().copyFrom(data.settings);
-                    }
-                    
-                    // 区块加载票据已在 BotManager.createBot() 中添加，无需重复添加
-                    
-                    // 如果启用了保留状态，恢复假人状态
-                    var config = name.modid.config.ModConfig.getInstance();
-                    if (config.preserveBotState && data.state != null) {
-                        MyBotMod.LOGGER.info("延迟恢复假人 {} 的状态...", data.name);
-                        // 延迟恢复状态，确保假人完全加载
-                        server.tell(new net.minecraft.server.TickTask(
-                            server.getTickCount() + 5,
-                            () -> restoreBotState(bot, data.state)
-                        ));
-                    }
-                    
-                    // 恢复物品栏（如果有数据）
-                    if (data.inventoryData != null && !data.inventoryData.isEmpty()) {
-                        try {
-                            String invStr = data.inventoryData.trim();
-                            CompoundTag invCompound;
-                            if (invStr.startsWith("[")) {
-                                // 兼容旧版本的 list 格式（[...]），包裹为 {Items:[...]}
-                                invCompound = TagParser.parseTag("{Items:" + invStr + "}");
-                            } else {
-                                invCompound = TagParser.parseTag(invStr);
+                    float yaw = data.getFloat("Yaw");
+                    bot.setYRot(yaw);
+                    bot.setXRot(data.getFloat("Pitch"));
+                    bot.setYHeadRot(yaw);
+
+                    // 恢复个人配置（三态）
+                    if (data.contains("Settings")) {
+                        CompoundTag settingsTag = data.getCompound("Settings");
+                        for (String k : BotSettings.KEYS) {
+                            if (settingsTag.contains(k)) {
+                                bot.getSettings().set(k, BotSettings.Override.byId(settingsTag.getInt(k)));
                             }
-                            if (invCompound.contains("Items")) {
-                                ListTag inventoryList = invCompound.getList("Items", 10);
-                                bot.getInventory().load(inventoryList);
-                                // 恢复手持槽位（限制在 0-8）
-                                bot.getInventory().selected = Math.max(0, Math.min(8, data.selectedSlot));
-                                MyBotMod.LOGGER.info("成功恢复假人 {} 的物品栏", data.name);
-                            }
-                        } catch (Exception e) {
-                            MyBotMod.LOGGER.error("无法恢复假人 {} 的物品栏: {}", data.name, e.getMessage());
                         }
                     }
-                    
-                    // 恢复末影箱（如果有数据）
-                    if (data.enderChestData != null && !data.enderChestData.isEmpty()) {
+
+                    // 恢复物品栏（直接读 NBT）
+                    if (data.contains("Inventory")) {
                         try {
-                            CompoundTag enderTag = TagParser.parseTag(data.enderChestData);
-                            if (enderTag.contains("EnderItems")) {
-                                ListTag enderItems = enderTag.getList("EnderItems", 10);
-                                var enderChest = bot.getEnderChestInventory();
-                                enderChest.clearContent();
-                                for (int i = 0; i < enderItems.size(); i++) {
-                                    CompoundTag itemTag = enderItems.getCompound(i);
-                                    int slot = itemTag.getByte("Slot") & 255;
-                                    if (slot < enderChest.getContainerSize()) {
-                                        var stack = net.minecraft.world.item.ItemStack.of(itemTag);
-                                        if (!stack.isEmpty()) {
-                                            enderChest.setItem(slot, stack);
-                                        }
-                                    }
+                            bot.getInventory().load(data.getList("Inventory", 10));
+                            bot.getInventory().selected = Math.max(0, Math.min(8, data.getInt("SelectedSlot")));
+                        } catch (Exception e) {
+                            MyBotMod.LOGGER.error("无法恢复假人 {} 的物品栏: {}", botName, e.getMessage());
+                        }
+                    }
+
+                    // 恢复末影箱（直接读 NBT）
+                    if (data.contains("EnderItems")) {
+                        try {
+                            ListTag enderItems = data.getList("EnderItems", 10);
+                            var enderChest = bot.getEnderChestInventory();
+                            enderChest.clearContent();
+                            for (int i = 0; i < enderItems.size(); i++) {
+                                CompoundTag itemTag = enderItems.getCompound(i);
+                                int slot = itemTag.getByte("Slot") & 255;
+                                if (slot < enderChest.getContainerSize()) {
+                                    var stack = net.minecraft.world.item.ItemStack.of(itemTag);
+                                    if (!stack.isEmpty()) enderChest.setItem(slot, stack);
                                 }
                             }
                         } catch (Exception e) {
-                            MyBotMod.LOGGER.error("无法恢复假人 {} 的末影箱: {}", data.name, e.getMessage());
+                            MyBotMod.LOGGER.error("无法恢复假人 {} 的末影箱: {}", botName, e.getMessage());
                         }
                     }
-                    
+
+                    // 恢复状态（延迟，确保假人完全加载）
+                    var config = name.modid.config.ModConfig.getInstance();
+                    if (config.preserveBotState && data.contains("State")) {
+                        CompoundTag stateTag = data.getCompound("State");
+                        server.tell(new net.minecraft.server.TickTask(
+                            server.getTickCount() + 5,
+                            () -> restoreBotState(bot, stateTag)
+                        ));
+                    }
+
                     loadedCount++;
-                    MyBotMod.LOGGER.info("✓ 成功加载假人: {} [{}] ({}, {}, {})",
-                        data.name, data.dimension,
-                        String.format("%.1f", data.x),
-                        String.format("%.1f", data.y),
-                        String.format("%.1f", data.z));
+                    MyBotMod.LOGGER.info("成功加载假人: {} [{}] ({}, {}, {})",
+                        botName, dimStr,
+                        String.format("%.1f", data.getDouble("X")),
+                        String.format("%.1f", data.getDouble("Y")),
+                        String.format("%.1f", data.getDouble("Z")));
                 } else {
-                    MyBotMod.LOGGER.error("✗ 无法创建假人: {}（BotManager.createBot() 返回 null）", data.name);
+                    MyBotMod.LOGGER.error("无法创建假人: {}（createBot 返回 null）", botName);
                     failedCount++;
                 }
             } catch (Exception e) {
-                MyBotMod.LOGGER.error("✗ 加载假人 {} 时发生错误: {}", data.name, e.getMessage(), e);
+                MyBotMod.LOGGER.error("加载假人 {} 时发生错误: {}", botName, e.getMessage(), e);
                 failedCount++;
             }
         }
@@ -659,71 +607,48 @@ public class BotPersistenceManager extends SavedData {
      * 恢复假人状态
      * 包括动作、健康、饥饿、经验、药水效果等
      */
-    private static void restoreBotState(BotPlayer bot, BotData.BotState state) {
+    private static void restoreBotState(BotPlayer bot, CompoundTag state) {
         try {
+            if (bot.isRemoved()) return; // 延迟恢复期间假人可能已被移除，避免对已移除实体操作
             var controller = bot.getActionController();
-            
-            // 恢复动作状态
-            if (state.attacking) {
-                if (state.attackInterval > 0) {
-                    controller.startAttackInterval(state.attackInterval);
-                } else {
-                    controller.startAttackContinuous();
-                }
+
+            if (state.getBoolean("Attacking")) {
+                int ai = state.getInt("AttackInterval");
+                if (ai > 0) controller.startAttackInterval(ai); else controller.startAttackContinuous();
             }
-            
-            if (state.using) {
-                if (state.useInterval > 0) {
-                    controller.startUseInterval(state.useInterval);
-                } else {
-                    controller.startUseContinuous();
-                }
+            if (state.getBoolean("Using")) {
+                int ui = state.getInt("UseInterval");
+                if (ui > 0) controller.startUseInterval(ui); else controller.startUseContinuous();
             }
-            
-            controller.setSneak(state.sneaking);
-            controller.setJump(state.jumping);
-            controller.setSprint(state.sprinting);
-            
-            // 恢复移动状态
-            if (state.forward > 0) {
-                controller.moveForward();
-            } else if (state.forward < 0) {
-                controller.moveBackward();
-            }
-            
-            if (state.strafing > 0) {
-                controller.moveLeft();
-            } else if (state.strafing < 0) {
-                controller.moveRight();
-            }
-            
-            // 恢复健康和饥饿
-            bot.setHealth(Math.min(state.health, bot.getMaxHealth()));
-            bot.getFoodData().setFoodLevel(state.foodLevel);
-            bot.getFoodData().setSaturation(state.saturation);
-            bot.getFoodData().setExhaustion(state.exhaustion);
-            
-            // 恢复经验
-            bot.experienceLevel = state.experienceLevel;
-            bot.experienceProgress = state.experienceProgress;
-            
-            // 恢复药水效果
-            if (state.effects != null && !state.effects.isEmpty()) {
-                for (String effectStr : state.effects) {
+            controller.setSneak(state.getBoolean("Sneaking"));
+            controller.setJump(state.getBoolean("Jumping"));
+            controller.setSprint(state.getBoolean("Sprinting"));
+
+            float forward = state.getFloat("Forward");
+            if (forward > 0) controller.moveForward(); else if (forward < 0) controller.moveBackward();
+            float strafing = state.getFloat("Strafing");
+            if (strafing > 0) controller.moveLeft(); else if (strafing < 0) controller.moveRight();
+
+            bot.setHealth(Math.min(state.getFloat("Health"), bot.getMaxHealth()));
+            bot.getFoodData().setFoodLevel(state.getInt("FoodLevel"));
+            bot.getFoodData().setSaturation(state.getFloat("Saturation"));
+            bot.getFoodData().setExhaustion(state.getFloat("Exhaustion"));
+
+            bot.experienceLevel = state.getInt("XpLevel");
+            bot.experienceProgress = state.getFloat("XpProgress");
+
+            if (state.contains("Effects")) {
+                ListTag effects = state.getList("Effects", 10);
+                for (int i = 0; i < effects.size(); i++) {
                     try {
-                        CompoundTag effectTag = TagParser.parseTag(effectStr);
-                        var effect = net.minecraft.world.effect.MobEffectInstance.load(effectTag);
-                        if (effect != null) {
-                            bot.addEffect(effect);
-                        }
+                        var effect = net.minecraft.world.effect.MobEffectInstance.load(effects.getCompound(i));
+                        if (effect != null) bot.addEffect(effect);
                     } catch (Exception e) {
                         MyBotMod.LOGGER.error("无法恢复药水效果: {}", e.getMessage());
                     }
                 }
             }
-            
             MyBotMod.LOGGER.info("成功恢复假人 {} 的状态", bot.getName().getString());
-            
         } catch (Exception e) {
             MyBotMod.LOGGER.error("恢复假人状态时发生错误: {}", e.getMessage(), e);
         }
@@ -769,8 +694,12 @@ public class BotPersistenceManager extends SavedData {
     public static void refreshAllChunkTickets(MinecraftServer server) {
         var config = name.modid.config.ModConfig.getInstance();
         
-        // 如果未启用驻留功能，不需要刷新
+        // 如果运行时关闭了驻留功能，主动清理残余票据，而非等待自然过期
         if (!config.botPersistence) {
+            BotPersistenceManager manager = get(server);
+            if (manager != null && !manager.botChunkTickets.isEmpty()) {
+                clearAllChunkTickets(server);
+            }
             return;
         }
         

@@ -174,7 +174,7 @@ public class BatonInputHandler {
     }
 
     private static void sendAction(int actionType, String botName, Vec3 pos) {
-        FriendlyByteBuf buf = PacketByteBufs.create();
+        FriendlyByteBuf buf = BotNetworking.c2s();
         buf.writeVarInt(actionType);
         buf.writeUtf(botName);
         buf.writeDouble(pos.x);

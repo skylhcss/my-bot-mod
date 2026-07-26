@@ -1,7 +1,6 @@
 package name.modid.client.screen.pages;
 
 import name.modid.client.screen.AboutScreen;
-import name.modid.client.screen.KeybindConfigScreen;
 import name.modid.client.screen.ModernConfigScreen;
 import name.modid.client.screen.widget.DesignTokens;
 import name.modid.client.screen.widget.ModernButton;
@@ -25,45 +24,55 @@ public class AdvancedPage extends ConfigPage {
     
     @Override
     public Component getTitle() {
-        return Component.literal("高级");
+        return Component.translatable("gui.my-bot-mod.advanced.title");
     }
     
     @Override
     protected void buildPage() {
         // Section 1: 数据持久化
-        SectionCard persistenceSection = addSection("数据持久化");
+        SectionCard persistenceSection = addSection(Component.translatable("gui.my-bot-mod.advanced.section.persistence").getString());
         
-        ModernCheckbox persistence = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("假人驻留"), config.botPersistence);
+        ModernCheckbox persistence = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.advanced.persistence"), config.botPersistence);
         persistence.setOnChanged(() -> { config.botPersistence = persistence.selected(); config.save(); });
         persistenceSection.addItem(persistence, new ResetButton(0, 0, () -> {
             config.botPersistence = false; config.save(); persistence.setSelected(false);
         }));
         
-        ModernCheckbox preserveState = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("保留假人状态"), config.preserveBotState);
+        ModernCheckbox preserveState = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.advanced.preserve_state"), config.preserveBotState);
         preserveState.setOnChanged(() -> { config.preserveBotState = preserveState.selected(); config.save(); });
         persistenceSection.addItem(preserveState, new ResetButton(0, 0, () -> {
             config.preserveBotState = false; config.save(); preserveState.setSelected(false);
         }));
         
         // Section 2: 指挥棒
-        SectionCard batonSection = addSection("指挥棒");
+        SectionCard batonSection = addSection(Component.translatable("gui.my-bot-mod.advanced.section.baton").getString());
         
-        ModernCheckbox batonTeleport = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("非创造模式允许传送"), config.allowBatonTeleportNonCreative);
+        ModernCheckbox batonTeleport = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.advanced.baton_teleport"), config.allowBatonTeleportNonCreative);
         batonTeleport.setOnChanged(() -> { config.allowBatonTeleportNonCreative = batonTeleport.selected(); config.save(); });
         batonSection.addItem(batonTeleport, new ResetButton(0, 0, () -> {
             config.allowBatonTeleportNonCreative = false; config.save(); batonTeleport.setSelected(false);
         }));
         
-        // Section 3: 其他
-        SectionCard otherSection = addSection("其他");
+        // Section 3: 外观与防护
+        SectionCard lookSection = addSection(Component.translatable("gui.my-bot-mod.advanced.section.look").getString());
         
-        ModernButton keybindBtn = new ModernButton(0, 0, 0, DesignTokens.ROW_HEIGHT,
-            Component.literal("快捷键配置"),
-            button -> minecraft.setScreen(new KeybindConfigScreen(parentScreen)));
-        otherSection.addItem(keybindBtn);
+        ModernCheckbox glowing = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.advanced.glowing"), config.botGlowing);
+        glowing.setOnChanged(() -> { config.botGlowing = glowing.selected(); config.save(); });
+        lookSection.addItem(glowing, new ResetButton(0, 0, () -> {
+            config.botGlowing = false; config.save(); glowing.setSelected(false);
+        }));
+        
+        ModernCheckbox fireImmune = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.advanced.fire_immune"), config.botFireImmune);
+        fireImmune.setOnChanged(() -> { config.botFireImmune = fireImmune.selected(); config.save(); });
+        lookSection.addItem(fireImmune, new ResetButton(0, 0, () -> {
+            config.botFireImmune = false; config.save(); fireImmune.setSelected(false);
+        }));
+        
+        // Section 4: 其他
+        SectionCard otherSection = addSection(Component.translatable("gui.my-bot-mod.advanced.section.other").getString());
         
         ModernButton aboutBtn = new ModernButton(0, 0, 0, DesignTokens.ROW_HEIGHT,
-            Component.literal("关于"),
+            Component.translatable("gui.my-bot-mod.about.title"),
             button -> minecraft.setScreen(new AboutScreen(parentScreen)));
         otherSection.addItem(aboutBtn);
     }

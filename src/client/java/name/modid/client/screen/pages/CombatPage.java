@@ -23,39 +23,39 @@ public class CombatPage extends ConfigPage {
     
     @Override
     public Component getTitle() {
-        return Component.literal("战斗");
+        return Component.translatable("gui.my-bot-mod.combat.title");
     }
     
     @Override
     protected void buildPage() {
         // Section 1: 攻击距离
-        SectionCard reachSection = addSection("攻击距离");
+        SectionCard reachSection = addSection(Component.translatable("gui.my-bot-mod.combat.section.reach").getString());
         
         ModernSlider attackReach = new ModernSlider(0, 0, 0, DesignTokens.ROW_HEIGHT, 1.0, 10.0, config.attackReachDistance,
-            value -> Component.literal(String.format("生存模式攻击距离: %.1f 格", value)),
+            value -> Component.translatable("gui.my-bot-mod.combat.survival_reach", String.format("%.1f", value)),
             value -> { config.attackReachDistance = value; });
         reachSection.addItem(attackReach, new ResetButton(0, 0, () -> {
             config.attackReachDistance = 3.0; config.save(); attackReach.setCurrentValue(3.0);
         }));
         
         ModernSlider creativeReach = new ModernSlider(0, 0, 0, DesignTokens.ROW_HEIGHT, 1.0, 15.0, config.creativeAttackReachDistance,
-            value -> Component.literal(String.format("创造模式攻击距离: %.1f 格", value)),
+            value -> Component.translatable("gui.my-bot-mod.combat.creative_reach", String.format("%.1f", value)),
             value -> { config.creativeAttackReachDistance = value; });
         reachSection.addItem(creativeReach, new ResetButton(0, 0, () -> {
             config.creativeAttackReachDistance = 5.0; config.save(); creativeReach.setCurrentValue(5.0);
         }));
         
         // Section 2: 杀戮光环
-        SectionCard auraSection = addSection("杀戮光环");
+        SectionCard auraSection = addSection(Component.translatable("gui.my-bot-mod.combat.section.aura").getString());
         
-        ModernCheckbox killAura = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.literal("启用杀戮光环"), config.enableKillAura);
+        ModernCheckbox killAura = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.combat.enable_aura"), config.enableKillAura);
         killAura.setOnChanged(() -> { config.enableKillAura = killAura.selected(); config.save(); });
         auraSection.addItem(killAura, new ResetButton(0, 0, () -> {
             config.enableKillAura = false; config.save(); killAura.setSelected(false);
         }));
         
         ModernSlider auraRange = new ModernSlider(0, 0, 0, DesignTokens.ROW_HEIGHT, 1.0, 10.0, config.killAuraRange,
-            value -> Component.literal(String.format("杀戮光环范围: %.1f 格", value)),
+            value -> Component.translatable("gui.my-bot-mod.combat.aura_range", String.format("%.1f", value)),
             value -> { config.killAuraRange = value; });
         auraSection.addItem(auraRange, new ResetButton(0, 0, () -> {
             config.killAuraRange = 3.0; config.save(); auraRange.setCurrentValue(3.0);

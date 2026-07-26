@@ -56,7 +56,7 @@ public class ModernCheckbox extends AbstractWidget {
         graphics.fill(boxX, boxY, boxX + boxSize, boxY + boxSize, bgColor);
         
         // 边框
-        drawBorder(graphics, boxX, boxY, boxSize, boxSize, DesignTokens.CHECKBOX_BOX_BORDER);
+        UI.border(graphics, boxX, boxY, boxSize, boxSize, DesignTokens.CHECKBOX_BOX_BORDER);
         
         // 勾选标记
         if (this.selected) {
@@ -72,13 +72,6 @@ public class ModernCheckbox extends AbstractWidget {
             boxY + (boxSize - textH) / 2,
             DesignTokens.TEXT_SCALE,
             DesignTokens.ITEM_TEXT_COLOR);
-    }
-    
-    private void drawBorder(GuiGraphics graphics, int x, int y, int w, int h, int color) {
-        graphics.fill(x, y, x + w, y + 1, color);
-        graphics.fill(x, y + h - 1, x + w, y + h, color);
-        graphics.fill(x, y, x + 1, y + h, color);
-        graphics.fill(x + w - 1, y, x + w, y + h, color);
     }
     
     @Override

@@ -22,7 +22,7 @@ public class MountWhitelistScreen extends Screen {
     private int scrollOffset = 0;
     
     public MountWhitelistScreen(Screen parent) {
-        super(Component.literal("骑乘白名单"));
+        super(Component.translatable("gui.my-bot-mod.mount.title"));
         this.parent = parent;
         this.config = ModConfig.getInstance();
         this.tempWhitelist = new ArrayList<>(config.mountWhitelist);
@@ -37,8 +37,8 @@ public class MountWhitelistScreen extends Screen {
         int centerX = this.width / 2;
         
         // 新增实体输入框
-        newEntityBox = new EditBox(this.font, centerX - 100, this.height - 80, 150, buttonHeight, Component.literal("实体ID"));
-        newEntityBox.setHint(Component.literal("例如: minecraft:pig"));
+        newEntityBox = new EditBox(this.font, centerX - 100, this.height - 80, 150, buttonHeight, Component.translatable("gui.my-bot-mod.mount.entity_id"));
+        newEntityBox.setHint(Component.translatable("gui.my-bot-mod.mount.hint"));
         newEntityBox.setMaxLength(100);
         this.addRenderableWidget(newEntityBox);
         
@@ -61,7 +61,7 @@ public class MountWhitelistScreen extends Screen {
         // 保存按钮
         this.addRenderableWidget(
             Button.builder(
-                Component.literal("保存"),
+                Component.translatable("gui.my-bot-mod.mount.save"),
                 button -> {
                     config.mountWhitelist.clear();
                     config.mountWhitelist.addAll(tempWhitelist);
@@ -76,7 +76,7 @@ public class MountWhitelistScreen extends Screen {
         // 取消按钮
         this.addRenderableWidget(
             Button.builder(
-                Component.literal("取消"),
+                net.minecraft.network.chat.CommonComponents.GUI_CANCEL,
                 button -> this.minecraft.setScreen(parent)
             )
             .bounds(centerX + 5, this.height - 30, 100, buttonHeight)
@@ -93,7 +93,7 @@ public class MountWhitelistScreen extends Screen {
         // 说明文本
         graphics.drawCenteredString(
             this.font, 
-            Component.literal("§7点击实体ID可以删除"), 
+            Component.translatable("gui.my-bot-mod.mount.click_to_delete"), 
             this.width / 2, 
             40, 
             0xAAAAAA
@@ -127,7 +127,7 @@ public class MountWhitelistScreen extends Screen {
         if (tempWhitelist.size() > maxVisible) {
             graphics.drawCenteredString(
                 this.font, 
-                Component.literal("§7使用鼠标滚轮滚动"), 
+                Component.translatable("gui.my-bot-mod.mount.scroll_hint"), 
                 this.width / 2, 
                 this.height - 110, 
                 0xAAAAAA

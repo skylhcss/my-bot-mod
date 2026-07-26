@@ -43,6 +43,9 @@ public abstract class ConfigPage {
     protected double maxScrollOffset = 0;
     protected int virtualContentHeight = 0;
 
+    /** 搜索过滤查询（小写；空串表示不过滤） */
+    private String filter = "";
+
     // 滚动条拖动状态
     private boolean scrollbarDragging = false;
     /** 拖动开始时鼠标在 thumb 中的相对 Y（用于平滑跟随，而非把 thumb 顶端吸附到鼠标） */
@@ -79,6 +82,13 @@ public abstract class ConfigPage {
         layoutSections();
     }
 
+    /** 设置搜索过滤（中英文均可匹配），重新布局并回到顶部 */
+    public void setFilter(String query) {
+        this.filter = query == null ? "" : query.toLowerCase(java.util.Locale.ROOT);
+        this.scrollOffset = 0;
+        layoutSections();
+    }
+
     /**
      * 子类实现：构建 Section 卡片和配置项
      */
@@ -105,13 +115,18 @@ public abstract class ConfigPage {
         int cardX = scrollAreaX + DesignTokens.SCROLL_AREA_PADDING;
         int currentY = scrollAreaY; // 顶部不再额外留 CONTENT_TOP，由屏幕分配
 
-        for (int i = 0; i < sections.size(); i++) {
-            SectionCard card = sections.get(i);
-            int cardHeight = card.layout(cardX, currentY, contentWidth);
-            currentY += cardHeight;
-            if (i < sections.size() - 1) {
+        boolean placedAny = false;
+        for (SectionCard card : sections) {
+            // 应用搜索过滤：隐藏的卡片不占空间、不渲染、不响应点击
+            if (!card.applyFilter(filter)) {
+                continue;
+            }
+            if (placedAny) {
                 currentY += DesignTokens.CARD_GAP;
             }
+            int cardHeight = card.layout(cardX, currentY, contentWidth);
+            currentY += cardHeight;
+            placedAny = true;
         }
 
         this.virtualContentHeight = currentY - scrollAreaY;
