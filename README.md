@@ -22,6 +22,7 @@ Spawn player-like bots, control their actions, send them around with smart pathf
 - 🪄 **Command Baton** — a handheld item with an on-screen HUD; `Ctrl+Scroll` to switch modes; command a bot to **pathfind** or **teleport** to wherever you look
 - 🗺️ **Smart pathfinding** — non-blocking, frame-sliced A* (no server lag), with swimming, gap-crossing, hazard avoidance and stuck-detour/give-up logic (same-dimension only)
 - 🎒 **Inventory / Ender Chest / settings panel** — right-click a bot to edit its inventory, switch game mode, teleport, delete, and set per-bot options (7 tri-state overrides incl. glowing & fire immunity)
+- 🧩 **Behavior scripts** — program bots with a Scratch-like **visual Blockly editor** (`editor/behavior-editor.html`, offline): variables, expressions, loops, conditions, 40+ blocks; assign multi-behavior playlists in-game and export data to files (txt/JSON/CSV)
 - 🎨 **Skin system** — Mojang API → local PNG → Base64 → default, with graceful fallback
 - 💾 **Bot persistence** — bots can stay in the world after you leave (optional); their chunks stay loaded, across dimensions
 - ⚙️ **Configuration** — in-game GUI (press **B**): browser-style tabs, crafting-table home page and a bilingual search box; plus commands + JSON file
@@ -58,7 +59,7 @@ Config file: `config/my-bot-mod.json` · Command: `/botmod config` · GUI: **B**
 Common options: attack range, kill aura, max bot count, bot persistence, non-OP control (`allowNonOpControlBot`), baton teleport permission (`allowBatonTeleportNonCreative`).
 
 ### 📖 Documentation
-[Commands](docs/COMMANDS.md) · [Config](docs/CONFIG.md) · [Skins](docs/SKINS.md) · [Development](docs/DEVELOPMENT.md) · [FAQ](docs/FAQ.md) · [Changelog](CHANGELOG.md)
+[Commands](docs/COMMANDS.md) · [Config](docs/CONFIG.md) · [Behaviors](docs/BEHAVIORS.md) · [Skins](docs/SKINS.md) · [Development](docs/DEVELOPMENT.md) · [FAQ](docs/FAQ.md) · [Changelog](CHANGELOG.md)
 
 ### 🔧 Development
 ```bash
@@ -82,6 +83,7 @@ MIT License. Author: **Skyline_hcss**. Bots are intended for singleplayer and pr
 - 🪄 **指挥棒**（v1.3.1 新增）：手持道具，四周 HUD 显示信息，Ctrl+滚轮切模式，指挥假人**寻路**或**传送**到你看向的位置
 - 🗺️ **智能寻路**：非阻塞分帧 A*（不卡服），支持游泳、跨越裂谷、危险规避，卡住自动绕行/放弃（仅限同维度）
 - 🎒 **背包/末影箱/设置面板**：右键假人打开，可编辑背包、切换游戏模式、传送、删除，并含每假人 7 项三态个人配置（含发光、免疫火焰）
+- 🧩 **行为脚本**：类 Scratch 的 **Blockly 图形化编辑器**（`editor/behavior-editor.html`，离线可用）编排假人行为：变量/表达式/循环/条件、40+ 积木；游戏内分配多行为播放列表，可导出数据到文件（txt/JSON/CSV）
 - 🎨 **皮肤系统**：Mojang API → PNG → Base64 → 默认，三级回退
 - 💾 **假人驻留**：退出世界后假人可保留（可选），跨维度区块保持加载
 - ⚙️ **配置系统**：图形界面（B 键）——浏览器式标签页、工作台风格主页、中英文搜索框；另有命令 + JSON 文件
@@ -117,14 +119,14 @@ MIT License. Author: **Skyline_hcss**. Bots are intended for singleplayer and pr
 配置文件：`config/my-bot-mod.json`；命令：`/botmod config`；界面：**B** 键。常用项：攻击距离、杀戮光环、最大数量、假人驻留、非 OP 权限（`allowNonOpControlBot`）、指挥棒传送权限（`allowBatonTeleportNonCreative`）。
 
 ### 📖 文档
-[命令参考](docs/COMMANDS.md) · [配置指南](docs/CONFIG.md) · [皮肤系统](docs/SKINS.md) · [开发文档](docs/DEVELOPMENT.md) · [常见问题](docs/FAQ.md) · [更新日志](CHANGELOG.md)
+[命令参考](docs/COMMANDS.md) · [配置指南](docs/CONFIG.md) · [行为系统](docs/BEHAVIORS.md) · [皮肤系统](docs/SKINS.md) · [开发文档](docs/DEVELOPMENT.md) · [常见问题](docs/FAQ.md) · [更新日志](CHANGELOG.md)
 
-### 📝 最新更新（v1.3.2）
-- 🖥️ **配置界面重构**：浏览器式标签页、工作台风格主页、优雅的中英文搜索框、新增"寻路"分类页
-- ⚙️ **新配置项**：每玩家假人上限、指挥棒需 OP、最大寻路距离、跑酷/游泳开关、假人发光、免疫火焰（后两项支持假人个人三态覆盖）
-- 🗺️ **寻路增强**：多假人共享计算预算、卡住自动绕行/多次卡住自动放弃、栅栏与头顶空间判定、攀爬修正；**禁止跨维度寻路**
-- 🌏 **全面双语化**：所有消息与界面文本中英对照；破坏性命令（kill/reset）二次确认
-- 🐛 修复 use once 拉弓不释放、持续右键重触发、皮肤只获取默认皮肤、驻留退出重进乱走等多个 Bug
+### 📝 最新更新（v1.3.3-alpha 预览版）
+- 🧩 **假人行为系统**：类 Scratch 的 Blockly 图形化编辑器（60+ 积木/11 分类，现代化深色 UI，离线可用），游戏内行为管理页 + 播放列表
+- ⚡ **事件积木**：当行为启动时 / 当玩家发送"…"时（聊天触发，可驻留监听）
+- 📦 **容器拟真交互**：够不着先寻路靠近→看向→真实开箱→取出/放入/盘点（箱盖与声音生效）
+- 📄 **外置输出**：行为可将数据写入 my-bot-mod-exports/（txt / JSON Lines / CSV）
+- 🔧 含 v1.3.2 全部内容（配置界面重构、新配置项、寻路增强、全面双语等）
 
 ### 📄 许可证
 MIT License。作者：Skyline_hcss。本模组主要面向单人游戏和私人服务器，请遵守服务器规则。

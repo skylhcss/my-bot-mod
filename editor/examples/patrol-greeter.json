@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "name": "巡逻问候 Patrol Greeter",
+  "description": "打招呼后来回巡逻（循环）/ Greet then patrol back and forth (loops)",
+  "loop": true,
+  "program": [
+    { "op": "say", "text": { "e": "str", "v": "大家好，我开始巡逻啦！" } },
+    { "op": "wait", "ticks": { "e": "num", "v": 40 } },
+    { "op": "move", "dir": "forward", "ticks": { "e": "num", "v": 60 } },
+    { "op": "wait", "ticks": { "e": "num", "v": 20 } },
+    { "op": "turn", "yaw": { "e": "num", "v": 180 }, "pitch": { "e": "num", "v": 0 } }
+  ],
+  "blockly": {
+    "blocks": { "languageVersion": 0, "blocks": [
+      { "type": "bot_say", "x": 20, "y": 20,
+        "inputs": { "TEXT": { "block": { "type": "text", "fields": { "TEXT": "大家好，我开始巡逻啦！" } } } },
+        "next": { "block": { "type": "bot_wait",
+          "inputs": { "TICKS": { "block": { "type": "math_number", "fields": { "NUM": 40 } } } },
+          "next": { "block": { "type": "bot_move", "fields": { "DIR": "forward" },
+            "inputs": { "TICKS": { "block": { "type": "math_number", "fields": { "NUM": 60 } } } },
+            "next": { "block": { "type": "bot_wait",
+              "inputs": { "TICKS": { "block": { "type": "math_number", "fields": { "NUM": 20 } } } },
+              "next": { "block": { "type": "bot_turn",
+                "inputs": { "YAW": { "block": { "type": "math_number", "fields": { "NUM": 180 } } },
+                            "PITCH": { "block": { "type": "math_number", "fields": { "NUM": 0 } } } } } } } } } } } } }
+    ] }
+  }
+}

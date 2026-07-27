@@ -175,6 +175,13 @@ public class BotPanelScreen extends Screen {
             String.format("%.1f/%.1f", data.health(), data.maxHealth()),
             gameModeName(gameMode)), cx, y, sc, 0xFFAAAAAA);
 
+        // 行为运行状态（仅运行时显示，叠在分隔线上方右侧不占新行）
+        if (!data.behavior().isEmpty()) {
+            UI.drawScaledCentered(graphics, this.font, Component.translatable(
+                "gui.my-bot-mod.panel.behavior_running", data.behavior()),
+                cx, y + 8, sc * 0.9F, DesignTokens.ACCENT);
+        }
+
         // 分隔线
         int dividerY = panelY + 54;
         graphics.fill(panelX + 6, dividerY, panelX + panelWidth - 6, dividerY + 1, DesignTokens.HEADER_DIVIDER_COLOR);

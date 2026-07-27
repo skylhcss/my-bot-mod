@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>My Bot Mod · Behavior Editor 行为编辑器</title>
+<style>
+  :root {
+    --bg:#0f1319; --panel:#171d26; --panel2:#1d2531; --border:#2a3546;
+    --accent:#22d3ee; --accent-dim:#0e7490; --text:#e6edf3; --muted:#7d8b9f;
+    --danger:#f87171; --ok:#4ade80; --radius:10px;
+    --font:-apple-system,"Segoe UI","Microsoft YaHei UI","Microsoft YaHei",Roboto,sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font-family:var(--font); overflow:hidden; }
+
+  /* ===== 顶栏 ===== */
+  #topbar { display:flex; align-items:center; gap:10px; padding:0 14px; height:56px;
+    background:linear-gradient(180deg, #1a2230 0%, #161d28 100%);
+    border-bottom:1px solid var(--border); box-shadow:0 1px 12px rgba(0,0,0,.35); }
+  .logo { display:flex; align-items:center; gap:8px; font-weight:700; font-size:14.5px;
+    color:var(--accent); white-space:nowrap; letter-spacing:.2px; }
+  .logo svg { width:22px; height:22px; }
+  .field { display:flex; flex-direction:column; gap:1px; }
+  .field label { font-size:9.5px; color:var(--muted); padding-left:2px; letter-spacing:.5px; }
+  .field input[type=text] { background:var(--bg); border:1px solid var(--border); color:var(--text);
+    border-radius:8px; padding:5px 10px; font-size:12.5px; outline:none; font-family:var(--font);
+    transition:border-color .15s, box-shadow .15s; }
+  .field input[type=text]:focus { border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(34,211,238,.15); }
+  #bhName { width:150px; } #bhDesc { width:220px; }
+  .grow { flex:1; }
+  .divider { width:1px; height:26px; background:var(--border); margin:0 2px; }
+
+  /* 开关（循环） */
+  .switch { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; }
+  .switch input { display:none; }
+  .switch .track { width:32px; height:18px; border-radius:9px; background:var(--border);
+    position:relative; transition:background .15s; }
+  .switch .track::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px;
+    border-radius:50%; background:var(--muted); transition:all .15s; }
+  .switch input:checked + .track { background:var(--accent-dim); }
+  .switch input:checked + .track::after { left:16px; background:var(--accent); }
+  .switch span.lbl { font-size:12px; color:var(--muted); }
+
+  /* 图标按钮 */
+  .ibtn { display:flex; align-items:center; justify-content:center; width:34px; height:34px;
+    border-radius:8px; border:1px solid transparent; background:transparent; color:var(--muted);
+    cursor:pointer; transition:all .12s; position:relative; }
+  .ibtn:hover { background:var(--panel2); color:var(--text); border-color:var(--border); }
+  .ibtn:active { transform:scale(.94); }
+  .ibtn svg { width:17px; height:17px; }
+  .ibtn[data-tip]:hover::after { content:attr(data-tip); position:absolute; top:40px; left:50%;
+    transform:translateX(-50%); background:#000c; color:#fff; font-size:11px; padding:4px 8px;
+    border-radius:6px; white-space:nowrap; z-index:99; pointer-events:none; }
+  .btn-save { display:flex; align-items:center; gap:6px; height:34px; padding:0 16px;
+    border-radius:8px; border:none; cursor:pointer; font-size:13px; font-weight:600;
+    font-family:var(--font); color:#04252b;
+    background:linear-gradient(135deg, #22d3ee, #34e3b0); transition:all .15s; }
+  .btn-save:hover { filter:brightness(1.12); box-shadow:0 2px 14px rgba(34,211,238,.35); }
+  .btn-save:active { transform:scale(.97); }
+  .btn-save svg { width:15px; height:15px; }
+
+  /* ===== 工作区与状态栏 ===== */
+  #blocklyDiv { position:absolute; top:56px; bottom:28px; left:0; right:0; }
+  #statusbar { position:absolute; bottom:0; left:0; right:0; height:28px; display:flex;
+    align-items:center; gap:12px; padding:0 14px; font-size:11.5px; color:var(--muted);
+    background:var(--panel); border-top:1px solid var(--border); }
+  #statusMsg { flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #statusbar.ok #statusMsg { color:var(--ok); }
+  #statusbar.err #statusMsg { color:var(--danger); }
+  #blockCount { background:var(--panel2); border:1px solid var(--border); border-radius:999px;
+    padding:1px 10px; font-size:10.5px; white-space:nowrap; }
+
+  /* ===== Blockly 皮肤打磨 ===== */
+  .blocklyToolboxDiv { background:var(--panel) !important; border-right:1px solid var(--border);
+    padding-top:6px; width:130px !important; }
+  .blocklyTreeRow { height:30px !important; line-height:30px !important; margin:2px 6px;
+    border-radius:8px; padding-left:8px !important; transition:background .12s; }
+  .blocklyTreeRow:hover { background:var(--panel2) !important; }
+  .blocklyTreeRowContentContainer { display:flex; align-items:center; }
+  .blocklyTreeLabel { font-family:var(--font) !important; font-size:12.5px !important;
+    color:var(--text) !important; }
+  .blocklyTreeSelected { background:var(--panel2) !important;
+    box-shadow:inset 3px 0 0 var(--accent); }
+  .blocklyTreeIcon { display:none; }
+  .blocklyFlyout { border-radius:0 12px 12px 0; }
+  .blocklyScrollbarHandle { fill:#3a4557 !important; rx:3; }
+  .blocklyZoom>image, .blocklyTrash>image { opacity:.55; transition:opacity .15s; }
+  .blocklyZoom>image:hover, .blocklyTrash>image:hover { opacity:1; }
+  .blocklyWidgetDiv .goog-menu, .blocklyDropDownDiv { font-family:var(--font) !important; }
+  input[type=file] { display:none; }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <span class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="7" width="16" height="12" rx="2.5"/><circle cx="9" cy="13" r="1.4" fill="currentColor" stroke="none"/><circle cx="15" cy="13" r="1.4" fill="currentColor" stroke="none"/><path d="M12 7V4M8 4h8"/></svg>
+    Behavior Editor
+  </span>
+  <div class="divider"></div>
+  <div class="field"><label id="lbName">行为名</label><input type="text" id="bhName" placeholder="my-behavior"></div>
+  <div class="field"><label id="lbDesc">描述</label><input type="text" id="bhDesc" placeholder="..."></div>
+  <label class="switch"><input type="checkbox" id="bhLoop"><span class="track"></span><span class="lbl" id="lbLoop">循环</span></label>
+  <div class="grow"></div>
+  <button class="ibtn" id="btnUndo" data-tip="撤销 Ctrl+Z"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+  <button class="ibtn" id="btnRedo" data-tip="重做 Ctrl+Y"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+  <button class="ibtn" id="btnCenter" data-tip="居中视图"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/></svg></button>
+  <div class="divider"></div>
+  <button class="ibtn" id="btnNew" data-tip="新建"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg></button>
+  <button class="ibtn" id="btnOpen" data-tip="打开 .json"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h15a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-8L9 6H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1z"/></svg></button>
+  <button class="btn-save" id="btnSave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span id="lbSave">保存</span></button>
+  <button class="ibtn" id="btnLang" data-tip="Language">EN</button>
+  <input type="file" id="fileInput" accept=".json">
+</div>
+<div id="blocklyDiv"></div>
+<div id="statusbar"><span id="statusMsg"></span><span id="blockCount"></span></div>
+
+<script src="vendor/blockly/blockly_compressed.js"></script>
+<script src="vendor/blockly/blocks_compressed.js"></script>
+<script>
+// ==================== 语言 ====================
+var LANG = localStorage.getItem('bh_lang') || 'zh';
+document.write('<scr' + 'ipt src="vendor/blockly/msg/' + (LANG === 'zh' ? 'zh-hans' : 'en') + '.js"></scr' + 'ipt>');
+function T(zh, en) { return LANG === 'zh' ? zh : en; }
+</script>
+<script>
+// ==================== MC 物品 / 实体清单（选择器数据） ====================
+function opts(list) { return list.map(function (p) { return [T(p[1], p[2] || p[1]), 'minecraft:' + p[0]]; }); }
+var MC_ITEMS = opts([
+  ['stone','石头','Stone'],['cobblestone','圆石','Cobblestone'],['dirt','泥土','Dirt'],['grass_block','草方块','Grass Block'],
+  ['sand','沙子','Sand'],['gravel','沙砾','Gravel'],['oak_log','橡木原木','Oak Log'],['oak_planks','橡木木板','Oak Planks'],
+  ['spruce_log','云杉原木','Spruce Log'],['birch_log','白桦原木','Birch Log'],['glass','玻璃','Glass'],['obsidian','黑曜石','Obsidian'],
+  ['netherrack','下界岩','Netherrack'],['end_stone','末地石','End Stone'],['deepslate','深板岩','Deepslate'],
+  ['coal','煤炭','Coal'],['charcoal','木炭','Charcoal'],['raw_iron','粗铁','Raw Iron'],['iron_ingot','铁锭','Iron Ingot'],
+  ['raw_gold','粗金','Raw Gold'],['gold_ingot','金锭','Gold Ingot'],['raw_copper','粗铜','Raw Copper'],['copper_ingot','铜锭','Copper Ingot'],
+  ['diamond','钻石','Diamond'],['emerald','绿宝石','Emerald'],['redstone','红石粉','Redstone'],['lapis_lazuli','青金石','Lapis Lazuli'],
+  ['quartz','下界石英','Quartz'],['netherite_ingot','下界合金锭','Netherite Ingot'],['amethyst_shard','紫水晶碎片','Amethyst Shard'],
+  ['stick','木棍','Stick'],['string','线','String'],['flint','燧石','Flint'],['feather','羽毛','Feather'],
+  ['leather','皮革','Leather'],['paper','纸','Paper'],['book','书','Book'],['ender_pearl','末影珍珠','Ender Pearl'],
+  ['blaze_rod','烈焰棒','Blaze Rod'],['gunpowder','火药','Gunpowder'],['bone','骨头','Bone'],['bone_meal','骨粉','Bone Meal'],
+  ['slime_ball','粘液球','Slime Ball'],['spider_eye','蜘蛛眼','Spider Eye'],['rotten_flesh','腐肉','Rotten Flesh'],
+  ['wheat','小麦','Wheat'],['wheat_seeds','小麦种子','Wheat Seeds'],['carrot','胡萝卜','Carrot'],['potato','马铃薯','Potato'],
+  ['bread','面包','Bread'],['apple','苹果','Apple'],['golden_apple','金苹果','Golden Apple'],
+  ['beef','生牛肉','Raw Beef'],['cooked_beef','熟牛排','Steak'],['porkchop','生猪排','Raw Porkchop'],['cooked_porkchop','熟猪排','Cooked Porkchop'],
+  ['chicken','生鸡肉','Raw Chicken'],['cooked_chicken','熟鸡肉','Cooked Chicken'],['cod','生鳕鱼','Raw Cod'],['cooked_cod','熟鳕鱼','Cooked Cod'],
+  ['salmon','生鲑鱼','Raw Salmon'],['sugar','糖','Sugar'],['egg','鸡蛋','Egg'],['milk_bucket','奶桶','Milk Bucket'],
+  ['wooden_pickaxe','木镐','Wooden Pickaxe'],['stone_pickaxe','石镐','Stone Pickaxe'],['iron_pickaxe','铁镐','Iron Pickaxe'],['diamond_pickaxe','钻石镐','Diamond Pickaxe'],
+  ['iron_axe','铁斧','Iron Axe'],['iron_shovel','铁锹','Iron Shovel'],['iron_hoe','铁锄','Iron Hoe'],
+  ['iron_sword','铁剑','Iron Sword'],['diamond_sword','钻石剑','Diamond Sword'],['bow','弓','Bow'],['arrow','箭','Arrow'],
+  ['shield','盾牌','Shield'],['fishing_rod','钓鱼竿','Fishing Rod'],['shears','剪刀','Shears'],
+  ['torch','火把','Torch'],['chest','箱子','Chest'],['barrel','木桶','Barrel'],['crafting_table','工作台','Crafting Table'],
+  ['furnace','熔炉','Furnace'],['bucket','桶','Bucket'],['water_bucket','水桶','Water Bucket'],['lava_bucket','熔岩桶','Lava Bucket'],
+  ['oak_sapling','橡树树苗','Oak Sapling'],['ladder','梯子','Ladder'],['rail','铁轨','Rail'],['tnt','TNT','TNT']
+]);
+var MC_ENTITIES = opts([
+  ['zombie','僵尸','Zombie'],['skeleton','骷髅','Skeleton'],['creeper','苦力怕','Creeper'],['spider','蜘蛛','Spider'],
+  ['enderman','末影人','Enderman'],['witch','女巫','Witch'],['slime','史莱姆','Slime'],['drowned','溺尸','Drowned'],
+  ['husk','尸壳','Husk'],['stray','流浪者','Stray'],['phantom','幻翼','Phantom'],['pillager','掠夺者','Pillager'],
+  ['vindicator','卫道士','Vindicator'],['ravager','劫掠兽','Ravager'],['blaze','烈焰人','Blaze'],['ghast','恶魂','Ghast'],
+  ['magma_cube','岩浆怪','Magma Cube'],['piglin','猪灵','Piglin'],['zombified_piglin','僵尸猪灵','Zombified Piglin'],
+  ['wither_skeleton','凋灵骷髅','Wither Skeleton'],['shulker','潜影贝','Shulker'],['warden','监守者','Warden'],
+  ['cow','牛','Cow'],['pig','猪','Pig'],['sheep','羊','Sheep'],['chicken','鸡','Chicken'],
+  ['horse','马','Horse'],['donkey','驴','Donkey'],['wolf','狼','Wolf'],['cat','猫','Cat'],
+  ['rabbit','兔子','Rabbit'],['fox','狐狸','Fox'],['bee','蜜蜂','Bee'],['squid','鱿鱼','Squid'],
+  ['villager','村民','Villager'],['iron_golem','铁傀儡','Iron Golem'],['snow_golem','雪傀儡','Snow Golem'],
+  ['allay','悦灵','Allay'],['axolotl','美西螈','Axolotl'],['player','玩家','Player']
+]);
+</script>
+<script>
+// ==================== 自定义块定义 ====================
+// 颜色：事件 55(金) 动作 45(黄) 移动 210(蓝) 感知 180(青) 容器 300(品红) 控制 25(橙) 输出 280(紫) 选择器 130(绿)
+var C_EVT = 55, C_ACT = 45, C_MOVE = 210, C_SENSE = 180, C_BOX = 300, C_CTRL = 25, C_OUT = 280, C_PICK = 130;
+
+function defBlock(name, json) {
+  Blockly.Blocks[name] = { init: function () { this.jsonInit(json); } };
+}
+function stmt(json, colour) {
+  json.previousStatement = null; json.nextStatement = null; json.colour = colour; return json;
+}
+function out(json, colour, type) {
+  json.output = type || null; json.colour = colour; return json;
+}
+
+// ---- 事件（金，Scratch 式帽子块：只能作为脚本开头） ----
+defBlock('event_start', { message0: T('▶ 当行为启动时', '▶ when behavior starts'),
+  nextStatement: null, colour: C_EVT, hat: 'cap',
+  tooltip: T('启动播放列表时从这里开始执行', 'runs when the behavior starts') });
+defBlock('event_chat', { message0: T('💬 当玩家发送 %1 时', '💬 when a player says %1'),
+  args0: [{ type: 'field_input', name: 'TEXT', text: T('你好', 'hi') }],
+  nextStatement: null, colour: C_EVT, hat: 'cap',
+  tooltip: T('聊天包含该文本时触发（留空=任意消息）；发送者/内容存入变量 chat_sender / chat_message',
+    'fires when chat contains the text (empty=any); sender/message stored in chat_sender / chat_message') });
+
+// ---- 选择器（绿） ----
+defBlock('mc_item', out({ message0: T('物品 %1', 'item %1'),
+  args0: [{ type: 'field_dropdown', name: 'ID', options: MC_ITEMS }] }, C_PICK, 'String'));
+defBlock('mc_item_custom', out({ message0: T('物品ID %1', 'item id %1'),
+  args0: [{ type: 'field_input', name: 'ID', text: 'minecraft:stone' }] }, C_PICK, 'String'));
+defBlock('mc_entity', out({ message0: T('实体 %1', 'entity %1'),
+  args0: [{ type: 'field_dropdown', name: 'ID', options: MC_ENTITIES }] }, C_PICK, 'String'));
+
+// ---- 动作（黄） ----
+defBlock('bot_say', stmt({ message0: T('说 %1', 'say %1'),
+  args0: [{ type: 'input_value', name: 'TEXT' }] }, C_ACT));
+defBlock('bot_attack', stmt({ message0: T('攻击 %1 间隔 %2', 'attack %1 interval %2'),
+  args0: [{ type: 'field_dropdown', name: 'MODE', options: [[T('单次','once'),'once'],[T('持续','continuous'),'continuous'],[T('间隔','interval'),'interval']] },
+          { type: 'input_value', name: 'INTERVAL', check: 'Number' }] }, C_ACT));
+defBlock('bot_use', stmt({ message0: T('使用/右键 %1 间隔 %2', 'use %1 interval %2'),
+  args0: [{ type: 'field_dropdown', name: 'MODE', options: [[T('单次','once'),'once'],[T('持续','continuous'),'continuous'],[T('间隔','interval'),'interval']] },
+          { type: 'input_value', name: 'INTERVAL', check: 'Number' }] }, C_ACT));
+defBlock('bot_stop_attack', stmt({ message0: T('停止攻击', 'stop attacking') }, C_ACT));
+defBlock('bot_stop_use', stmt({ message0: T('停止使用', 'stop using') }, C_ACT));
+defBlock('bot_slot', stmt({ message0: T('切换手持槽位到 %1', 'select hotbar slot %1'),
+  args0: [{ type: 'input_value', name: 'N', check: 'Number' }] }, C_ACT));
+defBlock('bot_swap_hands', stmt({ message0: T('交换主副手', 'swap hands') }, C_ACT));
+defBlock('bot_drop', stmt({ message0: T('丢弃手持物品 %1', 'drop held item %1'),
+  args0: [{ type: 'field_dropdown', name: 'STACK', options: [[T('一个','one'),'false'],[T('整组','stack'),'true']] }] }, C_ACT));
+defBlock('bot_mount', stmt({ message0: T('骑乘附近坐骑', 'mount nearby entity') }, C_ACT));
+defBlock('bot_dismount', stmt({ message0: T('下马', 'dismount') }, C_ACT));
+
+// ---- 移动（蓝） ----
+defBlock('bot_move', stmt({ message0: T('向 %1 移动 %2 tick(留空=持续)', 'move %1 for %2 ticks (empty=keep)'),
+  args0: [{ type: 'field_dropdown', name: 'DIR', options: [[T('前','forward'),'forward'],[T('后','backward'),'backward'],[T('左','left'),'left'],[T('右','right'),'right']] },
+          { type: 'input_value', name: 'TICKS', check: 'Number' }] }, C_MOVE));
+defBlock('bot_stop_move', stmt({ message0: T('停止移动', 'stop moving') }, C_MOVE));
+defBlock('bot_jump', stmt({ message0: T('跳跃', 'jump') }, C_MOVE));
+defBlock('bot_sneak', stmt({ message0: T('潜行 %1', 'sneak %1'),
+  args0: [{ type: 'field_dropdown', name: 'ON', options: [[T('开','on'),'true'],[T('关','off'),'false']] }] }, C_MOVE));
+defBlock('bot_sprint', stmt({ message0: T('疾跑 %1', 'sprint %1'),
+  args0: [{ type: 'field_dropdown', name: 'ON', options: [[T('开','on'),'true'],[T('关','off'),'false']] }] }, C_MOVE));
+defBlock('bot_look', stmt({ message0: T('看向 %1', 'look %1'),
+  args0: [{ type: 'field_dropdown', name: 'DIR', options: [[T('上','up'),'up'],[T('下','down'),'down'],[T('左','left'),'left'],[T('右','right'),'right'],[T('北','north'),'north'],[T('南','south'),'south'],[T('西','west'),'west'],[T('东','east'),'east']] }] }, C_MOVE));
+defBlock('bot_look_at', stmt({ message0: T('看向坐标 x %1 y %2 z %3', 'look at x %1 y %2 z %3'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' }],
+  inputsInline: true }, C_MOVE));
+defBlock('bot_turn', stmt({ message0: T('转动视角 偏航 %1 俯仰 %2', 'turn yaw %1 pitch %2'),
+  args0: [{ type: 'input_value', name: 'YAW', check: 'Number' }, { type: 'input_value', name: 'PITCH', check: 'Number' }],
+  inputsInline: true }, C_MOVE));
+defBlock('bot_goto', stmt({ message0: T('寻路到 x %1 y %2 z %3 (等待到达)', 'pathfind to x %1 y %2 z %3 (wait)'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' }],
+  inputsInline: true }, C_MOVE));
+defBlock('bot_goto_stop', stmt({ message0: T('取消寻路', 'cancel pathfinding') }, C_MOVE));
+
+// ---- 容器（品红）：自动拟真流程（远则寻路靠近 → 看向 → 打开 → 操作） ----
+defBlock('bot_open_container', stmt({ message0: T('打开容器 x %1 y %2 z %3', 'open container x %1 y %2 z %3'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' }],
+  inputsInline: true, tooltip: T('够不到会先寻路到附近，再看向容器打开（盖子/声音真实生效）', 'pathfinds closer if out of reach, then looks at it and opens for real') }, C_BOX));
+defBlock('bot_close_container', stmt({ message0: T('关闭容器', 'close container') }, C_BOX));
+defBlock('bot_take_container', stmt({ message0: T('从容器 x %1 y %2 z %3 取出 %4 数量 %5 实际数存 %6', 'take from x %1 y %2 z %3 item %4 count %5 into %6'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' },
+          { type: 'input_value', name: 'ITEM' }, { type: 'input_value', name: 'COUNT', check: 'Number' },
+          { type: 'field_variable', name: 'VAR', variable: T('取到数量', 'taken') }],
+  inputsInline: true }, C_BOX));
+defBlock('bot_put_container', stmt({ message0: T('向容器 x %1 y %2 z %3 放入 %4 数量 %5 实际数存 %6', 'put into x %1 y %2 z %3 item %4 count %5 into %6'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' },
+          { type: 'input_value', name: 'ITEM' }, { type: 'input_value', name: 'COUNT', check: 'Number' },
+          { type: 'field_variable', name: 'VAR', variable: T('放入数量', 'put') }],
+  inputsInline: true }, C_BOX));
+defBlock('bot_read_container', stmt({ message0: T('读取容器 x %1 y %2 z %3 清单存变量 %4', 'read container x %1 y %2 z %3 into %4'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' },
+          { type: 'input_value', name: 'Z', check: 'Number' }, { type: 'field_variable', name: 'VAR', variable: 'items' }],
+  inputsInline: true }, C_BOX));
+defBlock('bot_dump_container', stmt({ message0: T('导出容器 x %1 y %2 z %3 到 %4 格式 %5', 'dump container x %1 y %2 z %3 to %4 format %5'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' },
+          { type: 'input_value', name: 'Z', check: 'Number' },
+          { type: 'field_input', name: 'FILE', text: 'container' },
+          { type: 'field_dropdown', name: 'FORMAT', options: [['txt','txt'],['json','json'],['csv','csv']] }],
+  inputsInline: true }, C_BOX));
+
+// ---- 容器传感器（品红输出块） ----
+defBlock('sensor_container_slots', out({ message0: T('容器 x %1 y %2 z %3 格子数', 'slots of container x %1 y %2 z %3'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' }],
+  inputsInline: true }, C_BOX, 'Number'));
+defBlock('sensor_container_item', out({ message0: T('容器 x %1 y %2 z %3 第 %4 格物品', 'item in slot %4 of container x %1 y %2 z %3'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' },
+          { type: 'input_value', name: 'Z', check: 'Number' }, { type: 'input_value', name: 'SLOT', check: 'Number' }],
+  inputsInline: true }, C_BOX, 'String'));
+defBlock('sensor_container_slot_count', out({ message0: T('容器 x %1 y %2 z %3 第 %4 格数量', 'count in slot %4 of container x %1 y %2 z %3'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' },
+          { type: 'input_value', name: 'Z', check: 'Number' }, { type: 'input_value', name: 'SLOT', check: 'Number' }],
+  inputsInline: true }, C_BOX, 'Number'));
+defBlock('sensor_container_count', out({ message0: T('容器 x %1 y %2 z %3 内 %4 总数(空=全部)', 'total of %4 in container x %1 y %2 z %3 (empty=all)'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' },
+          { type: 'input_value', name: 'Z', check: 'Number' }, { type: 'input_value', name: 'ITEM' }],
+  inputsInline: true }, C_BOX, 'Number'));
+
+// ---- 感知（青） ----
+defBlock('sensor_health', out({ message0: T('血量', 'health') }, C_SENSE, 'Number'));
+defBlock('sensor_food', out({ message0: T('饥饿值', 'food level') }, C_SENSE, 'Number'));
+defBlock('sensor_pos', out({ message0: T('坐标 %1', 'position %1'),
+  args0: [{ type: 'field_dropdown', name: 'AXIS', options: [['X','posX'],['Y','posY'],['Z','posZ']] }] }, C_SENSE, 'Number'));
+defBlock('sensor_dimension', out({ message0: T('所在维度', 'dimension') }, C_SENSE, 'String'));
+defBlock('sensor_held_item', out({ message0: T('手持物品ID', 'held item id') }, C_SENSE, 'String'));
+defBlock('sensor_inv_count', out({ message0: T('背包内 %1 数量(空=全部)', 'count of %1 in inventory (empty=all)'),
+  args0: [{ type: 'input_value', name: 'ITEM' }] }, C_SENSE, 'Number'));
+defBlock('sensor_nearby', out({ message0: T('%1 格内 %2 数量(空=所有生物)', 'count of %2 within %1 blocks (empty=all)'),
+  args0: [{ type: 'input_value', name: 'RANGE', check: 'Number' }, { type: 'input_value', name: 'TYPE' }],
+  inputsInline: true }, C_SENSE, 'Number'));
+defBlock('sensor_is_pathfinding', out({ message0: T('正在寻路?', 'is pathfinding?') }, C_SENSE, 'Boolean'));
+defBlock('sensor_time_of_day', out({ message0: T('当日时间(tick)', 'time of day (ticks)') }, C_SENSE, 'Number'));
+
+// ---- 控制（橙） ----
+defBlock('bot_wait', stmt({ message0: T('等待 %1 tick', 'wait %1 ticks'),
+  args0: [{ type: 'input_value', name: 'TICKS', check: 'Number' }] }, C_CTRL));
+defBlock('bot_forever', { message0: T('永远重复 %1', 'forever %1'),
+  args0: [{ type: 'input_statement', name: 'DO' }], previousStatement: null, colour: C_CTRL });
+defBlock('bot_stop_self', { message0: T('结束本行为', 'stop this behavior'), previousStatement: null, colour: C_CTRL });
+defBlock('bot_stop_all', { message0: T('停止一切动作并结束', 'stop everything and end'), previousStatement: null, colour: C_CTRL });
+
+// ---- 运算扩展 ----
+defBlock('bot_minmax', out({ message0: '%1 %2 %3',
+  args0: [{ type: 'input_value', name: 'A', check: 'Number' },
+          { type: 'field_dropdown', name: 'OP', options: [[T('较小值','min'),'min'],[T('较大值','max'),'max']] },
+          { type: 'input_value', name: 'B', check: 'Number' }],
+  inputsInline: true }, '%{BKY_MATH_HUE}', 'Number'));
+
+// ---- 输出（紫） ----
+defBlock('bot_output', stmt({ message0: T('输出到文件 %1 格式 %2 内容 %3', 'output to file %1 format %2 content %3'),
+  args0: [{ type: 'field_input', name: 'FILE', text: 'output' },
+          { type: 'field_dropdown', name: 'FORMAT', options: [['txt','txt'],['json','json'],['csv','csv']] },
+          { type: 'input_value', name: 'CONTENT' }] }, C_OUT));
+defBlock('bot_dump_inventory', stmt({ message0: T('导出背包清单到 %1 格式 %2', 'dump inventory to %1 format %2'),
+  args0: [{ type: 'field_input', name: 'FILE', text: 'inventory' },
+          { type: 'field_dropdown', name: 'FORMAT', options: [['txt','txt'],['json','json'],['csv','csv']] }] }, C_OUT));
+</script>
+<script>
+// ==================== 工具箱 ====================
+function numShadow(v) { return { shadow: { type: 'math_number', fields: { NUM: v } } }; }
+function itemShadow() { return { shadow: { type: 'mc_item', fields: { ID: 'minecraft:cobblestone' } } }; }
+function xyz(x, y, z) { return { X: numShadow(x), Y: numShadow(y), Z: numShadow(z) }; }
+
+var TOOLBOX = { kind: 'categoryToolbox', contents: [
+  { kind: 'category', name: T('事件', 'Events'), colour: C_EVT, contents: [
+    { kind: 'block', type: 'event_start' },
+    { kind: 'block', type: 'event_chat' } ] },
+  { kind: 'category', name: T('动作', 'Actions'), colour: C_ACT, contents: [
+    { kind: 'block', type: 'bot_say', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: T('你好', 'hello') } } } } },
+    { kind: 'block', type: 'bot_attack', inputs: { INTERVAL: numShadow(20) } },
+    { kind: 'block', type: 'bot_use', inputs: { INTERVAL: numShadow(20) } },
+    { kind: 'block', type: 'bot_stop_attack' }, { kind: 'block', type: 'bot_stop_use' },
+    { kind: 'block', type: 'bot_slot', inputs: { N: numShadow(0) } },
+    { kind: 'block', type: 'bot_swap_hands' }, { kind: 'block', type: 'bot_drop' },
+    { kind: 'block', type: 'bot_mount' }, { kind: 'block', type: 'bot_dismount' } ] },
+  { kind: 'category', name: T('移动', 'Motion'), colour: C_MOVE, contents: [
+    { kind: 'block', type: 'bot_move' },
+    { kind: 'block', type: 'bot_stop_move' }, { kind: 'block', type: 'bot_jump' },
+    { kind: 'block', type: 'bot_sneak' }, { kind: 'block', type: 'bot_sprint' },
+    { kind: 'block', type: 'bot_look' },
+    { kind: 'block', type: 'bot_look_at', inputs: xyz(0, 64, 0) },
+    { kind: 'block', type: 'bot_turn', inputs: { YAW: numShadow(90), PITCH: numShadow(0) } },
+    { kind: 'block', type: 'bot_goto', inputs: xyz(0, 64, 0) },
+    { kind: 'block', type: 'bot_goto_stop' } ] },
+  { kind: 'category', name: T('容器', 'Containers'), colour: C_BOX, contents: [
+    { kind: 'block', type: 'bot_open_container', inputs: xyz(0, 64, 0) },
+    { kind: 'block', type: 'bot_take_container', inputs: Object.assign(xyz(0, 64, 0), { ITEM: itemShadow(), COUNT: numShadow(64) }) },
+    { kind: 'block', type: 'bot_put_container', inputs: Object.assign(xyz(0, 64, 0), { ITEM: itemShadow(), COUNT: numShadow(64) }) },
+    { kind: 'block', type: 'bot_read_container', inputs: xyz(0, 64, 0) },
+    { kind: 'block', type: 'bot_dump_container', inputs: xyz(0, 64, 0) },
+    { kind: 'block', type: 'bot_close_container' },
+    { kind: 'block', type: 'sensor_container_slots', inputs: xyz(0, 64, 0) },
+    { kind: 'block', type: 'sensor_container_item', inputs: Object.assign(xyz(0, 64, 0), { SLOT: numShadow(0) }) },
+    { kind: 'block', type: 'sensor_container_slot_count', inputs: Object.assign(xyz(0, 64, 0), { SLOT: numShadow(0) }) },
+    { kind: 'block', type: 'sensor_container_count', inputs: Object.assign(xyz(0, 64, 0), { ITEM: { shadow: { type: 'text', fields: { TEXT: '' } } } }) } ] },
+  { kind: 'category', name: T('选择器', 'Pickers'), colour: C_PICK, contents: [
+    { kind: 'block', type: 'mc_item' },
+    { kind: 'block', type: 'mc_item_custom' },
+    { kind: 'block', type: 'mc_entity' } ] },
+  { kind: 'category', name: T('感知', 'Sensing'), colour: C_SENSE, contents: [
+    { kind: 'block', type: 'sensor_health' }, { kind: 'block', type: 'sensor_food' },
+    { kind: 'block', type: 'sensor_pos' }, { kind: 'block', type: 'sensor_dimension' },
+    { kind: 'block', type: 'sensor_held_item' },
+    { kind: 'block', type: 'sensor_inv_count', inputs: { ITEM: itemShadow() } },
+    { kind: 'block', type: 'sensor_nearby', inputs: { RANGE: numShadow(8), TYPE: { shadow: { type: 'text', fields: { TEXT: '' } } } } },
+    { kind: 'block', type: 'sensor_is_pathfinding' }, { kind: 'block', type: 'sensor_time_of_day' } ] },
+  { kind: 'category', name: T('控制', 'Control'), colour: C_CTRL, contents: [
+    { kind: 'block', type: 'bot_wait', inputs: { TICKS: numShadow(20) } },
+    { kind: 'block', type: 'controls_repeat_ext', inputs: { TIMES: numShadow(10) } },
+    { kind: 'block', type: 'controls_whileUntil' },
+    { kind: 'block', type: 'controls_if' },
+    { kind: 'block', type: 'controls_if', extraState: { hasElse: true } },
+    { kind: 'block', type: 'bot_forever' },
+    { kind: 'block', type: 'bot_stop_self' }, { kind: 'block', type: 'bot_stop_all' } ] },
+  { kind: 'category', name: T('运算', 'Operators'), colour: '%{BKY_MATH_HUE}', contents: [
+    { kind: 'block', type: 'math_number' },
+    { kind: 'block', type: 'math_arithmetic' },
+    { kind: 'block', type: 'math_single' },
+    { kind: 'block', type: 'math_round' },
+    { kind: 'block', type: 'math_modulo' },
+    { kind: 'block', type: 'bot_minmax', inputs: { A: numShadow(1), B: numShadow(2) } },
+    { kind: 'block', type: 'math_random_int', inputs: { FROM: numShadow(1), TO: numShadow(10) } },
+    { kind: 'block', type: 'logic_compare' },
+    { kind: 'block', type: 'logic_operation' },
+    { kind: 'block', type: 'logic_negate' },
+    { kind: 'block', type: 'logic_boolean' },
+    { kind: 'block', type: 'text' },
+    { kind: 'block', type: 'text_join' } ] },
+  { kind: 'category', name: T('变量', 'Variables'), custom: 'VARIABLE', colour: '%{BKY_VARIABLES_HUE}' },
+  { kind: 'category', name: T('函数', 'Functions'), custom: 'PROCEDURE', colour: '%{BKY_PROCEDURES_HUE}' },
+  { kind: 'category', name: T('输出', 'Output'), colour: C_OUT, contents: [
+    { kind: 'block', type: 'bot_output', inputs: { CONTENT: { shadow: { type: 'text', fields: { TEXT: '' } } } } },
+    { kind: 'block', type: 'bot_dump_inventory' } ] }
+] };
+
+// ==================== 主题与工作区 ====================
+var theme = Blockly.Theme.defineTheme('mybot-dark', {
+  base: Blockly.Themes.Classic,
+  componentStyles: {
+    workspaceBackgroundColour: '#0f1319', toolboxBackgroundColour: '#171d26',
+    toolboxForegroundColour: '#e6edf3', flyoutBackgroundColour: '#141a23',
+    flyoutForegroundColour: '#e6edf3', flyoutOpacity: 0.98,
+    scrollbarColour: '#3a4557', insertionMarkerColour: '#22d3ee',
+    insertionMarkerOpacity: 0.5, cursorColour: '#22d3ee'
+  },
+  fontStyle: { family: '-apple-system, Segoe UI, Microsoft YaHei UI, sans-serif', size: 10.5 }
+});
+
+var workspace = Blockly.inject('blocklyDiv', {
+  toolbox: TOOLBOX, theme: theme, renderer: 'zelos',
+  media: 'vendor/blockly/media/',
+  grid: { spacing: 26, length: 2, colour: '#1c2431', snap: true },
+  zoom: { controls: true, wheel: true, startScale: 0.75, maxScale: 2, minScale: 0.3, pinch: true },
+  trashcan: true, maxTrashcanContents: 64, sounds: false,
+  move: { scrollbars: true, drag: true, wheel: false }
+});
+
+var statusEl = document.getElementById('statusbar');
+var statusMsg = document.getElementById('statusMsg');
+function status(msg, cls) { statusMsg.textContent = msg; statusEl.className = cls || ''; }
+status(T('就绪 — 拖出积木编排行为；删除的积木可从右下角回收站找回',
+  'Ready - drag blocks to build; deleted blocks can be recovered from the trashcan'));
+
+// ==================== 序列化：工作区 → program AST ====================
+var errors;
+function err(block, msg) { errors.push(msg); if (block) { block.setWarningText(msg); block.select(); } }
+
+function expr(block) {
+  if (!block) return null;
+  switch (block.type) {
+    case 'math_number': return { e: 'num', v: Number(block.getFieldValue('NUM')) || 0 };
+    case 'text': return { e: 'str', v: block.getFieldValue('TEXT') || '' };
+    case 'logic_boolean': return { e: 'bool', v: block.getFieldValue('BOOL') === 'TRUE' };
+    case 'variables_get': return { e: 'var', n: block.getField('VAR').getText() };
+    case 'mc_item': case 'mc_item_custom': case 'mc_entity':
+      return { e: 'str', v: block.getFieldValue('ID') || '' };
+    case 'math_arithmetic': {
+      var op = { ADD: '+', MINUS: '-', MULTIPLY: '*', DIVIDE: '/', POWER: 'pow' }[block.getFieldValue('OP')];
+      return { e: 'bin', o: op, l: vin(block, 'A'), r: vin(block, 'B') };
+    }
+    case 'math_single': {
+      var sop = { ROOT: 'sqrt', ABS: 'abs', NEG: 'neg' }[block.getFieldValue('OP')];
+      if (!sop) { err(block, T('不支持该数学函数（仅 平方根/绝对值/相反数）', 'unsupported math function')); return { e: 'num', v: 0 }; }
+      return { e: 'un', o: sop, v: vin(block, 'NUM') };
+    }
+    case 'math_round': {
+      var rop = { ROUND: 'round', ROUNDUP: 'ceil', ROUNDDOWN: 'floor' }[block.getFieldValue('OP')];
+      return { e: 'un', o: rop, v: vin(block, 'NUM') };
+    }
+    case 'math_modulo':
+      return { e: 'bin', o: '%', l: vin(block, 'DIVIDEND'), r: vin(block, 'DIVISOR') };
+    case 'bot_minmax':
+      return { e: 'bin', o: block.getFieldValue('OP'), l: vin(block, 'A'), r: vin(block, 'B') };
+    case 'math_random_int':
+      return { e: 'sensor', n: 'random', args: [vin(block, 'FROM'), vin(block, 'TO')] };
+    case 'logic_compare': {
+      var cmp = { EQ: '==', NEQ: '!=', LT: '<', LTE: '<=', GT: '>', GTE: '>=' }[block.getFieldValue('OP')];
+      return { e: 'bin', o: cmp, l: vin(block, 'A'), r: vin(block, 'B') };
+    }
+    case 'logic_operation':
+      return { e: 'bin', o: block.getFieldValue('OP') === 'AND' ? 'and' : 'or', l: vin(block, 'A'), r: vin(block, 'B') };
+    case 'logic_negate': return { e: 'un', o: 'not', v: vin(block, 'BOOL') };
+    case 'text_join': {
+      var n = block.inputList.filter(function (i) { return i.name && i.name.indexOf('ADD') === 0; }).length;
+      var acc = null;
+      for (var i = 0; i < n; i++) {
+        var piece = vin(block, 'ADD' + i);
+        acc = acc === null ? piece : { e: 'bin', o: 'concat', l: acc, r: piece };
+      }
+      return acc || { e: 'str', v: '' };
+    }
+    case 'sensor_health': return { e: 'sensor', n: 'health' };
+    case 'sensor_food': return { e: 'sensor', n: 'food' };
+    case 'sensor_pos': return { e: 'sensor', n: block.getFieldValue('AXIS') };
+    case 'sensor_dimension': return { e: 'sensor', n: 'dimension' };
+    case 'sensor_held_item': return { e: 'sensor', n: 'heldItem' };
+    case 'sensor_inv_count': return { e: 'sensor', n: 'invCount', args: [vin(block, 'ITEM')] };
+    case 'sensor_nearby': return { e: 'sensor', n: 'nearbyEntities', args: [vin(block, 'RANGE'), vin(block, 'TYPE')] };
+    case 'sensor_container_slots':
+      return { e: 'sensor', n: 'containerSlots', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z')] };
+    case 'sensor_container_item':
+      return { e: 'sensor', n: 'containerItem', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z'), vin(block, 'SLOT')] };
+    case 'sensor_container_slot_count':
+      return { e: 'sensor', n: 'containerSlotCount', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z'), vin(block, 'SLOT')] };
+    case 'sensor_container_count':
+      return { e: 'sensor', n: 'containerCount', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z'), vin(block, 'ITEM')] };
+    case 'sensor_is_pathfinding': return { e: 'sensor', n: 'isPathfinding' };
+    case 'sensor_time_of_day': return { e: 'sensor', n: 'timeOfDay' };
+    default:
+      err(block, T('未知表达式积木: ', 'unknown expression block: ') + block.type);
+      return { e: 'num', v: 0 };
+  }
+}
+
+/** 读取值输入（含 shadow），缺失返回 null */
+function vin(block, inputName) {
+  var target = block.getInputTargetBlock(inputName);
+  return target ? expr(target) : null;
+}
+
+/** 读取必填值输入，缺失时报错 */
+function vreq(block, inputName, label) {
+  var v = vin(block, inputName);
+  if (v === null) err(block, T('缺少输入: ', 'missing input: ') + label);
+  return v === null ? { e: 'num', v: 0 } : v;
+}
+
+function stmts(first) {
+  var list = [];
+  for (var b = first; b; b = b.getNextBlock()) {
+    if (b.isShadow()) continue;
+    b.setWarningText(null);
+    var s = stmt1(b);
+    if (s) list.push(s);
+  }
+  return list;
+}
+
+function posArgs(b, s) {
+  s.x = vreq(b, 'X', 'x'); s.y = vreq(b, 'Y', 'y'); s.z = vreq(b, 'Z', 'z');
+  return s;
+}
+
+function stmt1(b) {
+  switch (b.type) {
+    case 'bot_say': return { op: 'say', text: vreq(b, 'TEXT', 'text') };
+    case 'bot_wait': return { op: 'wait', ticks: vreq(b, 'TICKS', 'ticks') };
+    case 'bot_move': {
+      var s = { op: 'move', dir: b.getFieldValue('DIR') };
+      var t = vin(b, 'TICKS');
+      if (t !== null) s.ticks = t;
+      return s;
+    }
+    case 'bot_stop_move': return { op: 'stopMove' };
+    case 'bot_jump': return { op: 'jump' };
+    case 'bot_sneak': return { op: 'sneak', on: { e: 'bool', v: b.getFieldValue('ON') === 'true' } };
+    case 'bot_sprint': return { op: 'sprint', on: { e: 'bool', v: b.getFieldValue('ON') === 'true' } };
+    case 'bot_look': return { op: 'look', dir: b.getFieldValue('DIR') };
+    case 'bot_look_at': return posArgs(b, { op: 'lookAt' });
+    case 'bot_turn': return { op: 'turn', yaw: vreq(b, 'YAW', 'yaw'), pitch: vreq(b, 'PITCH', 'pitch') };
+    case 'bot_goto': return posArgs(b, { op: 'goto' });
+    case 'bot_goto_stop': return { op: 'gotoStop' };
+    case 'bot_attack': {
+      var s = { op: 'attack', mode: b.getFieldValue('MODE') };
+      if (s.mode === 'interval') s.interval = vreq(b, 'INTERVAL', 'interval');
+      return s;
+    }
+    case 'bot_use': {
+      var s = { op: 'use', mode: b.getFieldValue('MODE') };
+      if (s.mode === 'interval') s.interval = vreq(b, 'INTERVAL', 'interval');
+      return s;
+    }
+    case 'bot_stop_attack': return { op: 'stopAttack' };
+    case 'bot_stop_use': return { op: 'stopUse' };
+    case 'bot_slot': return { op: 'slot', n: vreq(b, 'N', 'slot') };
+    case 'bot_swap_hands': return { op: 'swapHands' };
+    case 'bot_drop': return { op: 'drop', stack: { e: 'bool', v: b.getFieldValue('STACK') === 'true' } };
+    case 'bot_mount': return { op: 'mount' };
+    case 'bot_dismount': return { op: 'dismount' };
+    case 'bot_open_container': return posArgs(b, { op: 'openContainer' });
+    case 'bot_close_container': return { op: 'closeContainer' };
+    case 'bot_take_container': {
+      var s = posArgs(b, { op: 'takeFromContainer' });
+      s.item = vreq(b, 'ITEM', 'item'); s.count = vreq(b, 'COUNT', 'count');
+      s['var'] = b.getField('VAR').getText();
+      return s;
+    }
+    case 'bot_put_container': {
+      var s = posArgs(b, { op: 'putToContainer' });
+      s.item = vreq(b, 'ITEM', 'item'); s.count = vreq(b, 'COUNT', 'count');
+      s['var'] = b.getField('VAR').getText();
+      return s;
+    }
+    case 'bot_read_container': {
+      var s = posArgs(b, { op: 'readContainer' });
+      s['var'] = b.getField('VAR').getText();
+      return s;
+    }
+    case 'bot_dump_container': {
+      var s = posArgs(b, { op: 'dumpContainer' });
+      s.file = b.getFieldValue('FILE'); s.format = b.getFieldValue('FORMAT');
+      return s;
+    }
+    case 'bot_output': return { op: 'output', file: b.getFieldValue('FILE'), format: b.getFieldValue('FORMAT'),
+      content: vreq(b, 'CONTENT', 'content') };
+    case 'bot_dump_inventory': return { op: 'dumpInventory', file: b.getFieldValue('FILE'), format: b.getFieldValue('FORMAT') };
+    case 'variables_set': return { op: 'set', 'var': b.getField('VAR').getText(), value: vreq(b, 'VALUE', 'value') };
+    case 'math_change': return { op: 'change', 'var': b.getField('VAR').getText(), value: vreq(b, 'DELTA', 'delta') };
+    case 'controls_repeat_ext': return { op: 'repeat', times: vreq(b, 'TIMES', 'times'), body: stmts(b.getInputTargetBlock('DO')) };
+    case 'controls_whileUntil': {
+      var cond = vreq(b, 'BOOL', 'condition');
+      if (b.getFieldValue('MODE') === 'UNTIL') cond = { e: 'un', o: 'not', v: cond };
+      return { op: 'while', cond: cond, body: stmts(b.getInputTargetBlock('DO')) };
+    }
+    case 'bot_forever': return { op: 'forever', body: stmts(b.getInputTargetBlock('DO')) };
+    case 'controls_if': return convertIf(b, 0);
+    case 'bot_stop_self': return { op: 'stopSelf' };
+    case 'bot_stop_all': return { op: 'stopAll' };
+    case 'procedures_defnoreturn': {
+      var def = b.getProcedureDef(); // [名称, 参数名数组, 是否有返回值]
+      return { op: 'def', name: def[0], params: def[1].join(','),
+        body: stmts(b.getInputTargetBlock('STACK')) };
+    }
+    case 'procedures_callnoreturn': {
+      var s = { op: 'call', name: b.getFieldValue('NAME') };
+      var argCount = (b.arguments_ || []).length;
+      for (var i = 0; i < argCount; i++) {
+        s['arg' + i] = vreq(b, 'ARG' + i, T('参数', 'argument ') + i);
+      }
+      return s;
+    }
+    case 'procedures_defreturn': case 'procedures_callreturn': case 'procedures_ifreturn':
+      err(b, T('暂不支持带返回值的函数，请用普通函数 + 变量传递结果', 'functions with return are not supported yet'));
+      return null;
+    default:
+      err(b, T('未知语句积木: ', 'unknown statement block: ') + b.type);
+      return null;
+  }
+}
+
+/** controls_if 的 IF0/IF1/... 链转为嵌套 if/else */
+function convertIf(b, idx) {
+  var s = { op: 'if', cond: vreq(b, 'IF' + idx, 'condition'), then: stmts(b.getInputTargetBlock('DO' + idx)) };
+  if (b.getInput('IF' + (idx + 1))) {
+    s['else'] = [convertIf(b, idx + 1)];
+  } else if (b.getInput('ELSE')) {
+    s['else'] = stmts(b.getInputTargetBlock('ELSE'));
+  }
+  return s;
+}
+
+function serialize() {
+  errors = [];
+  var tops = workspace.getTopBlocks(true).filter(function (b) { return !b.isShadow(); });
+  var program = [];
+  tops.forEach(function (t) {
+    // 帽子块：本体为其后继链
+    if (t.type === 'event_start') {
+      t.setWarningText(null);
+      program.push({ op: 'onStart', body: stmts(t.getNextBlock()) });
+    } else if (t.type === 'event_chat') {
+      t.setWarningText(null);
+      program.push({ op: 'onChat', text: { e: 'str', v: t.getFieldValue('TEXT') || '' },
+        body: stmts(t.getNextBlock()) });
+    } else {
+      program = program.concat(stmts(t));
+    }
+  });
+  return { program: program, errors: errors };
+}
+
+// ==================== 顶栏交互 ====================
+function $(id) { return document.getElementById(id); }
+
+function currentFileName() {
+  var n = ($('bhName').value || 'behavior').trim();
+  return n.replace(/[\\/:*?"<>|]/g, '_') + '.json';
+}
+
+$('btnSave').onclick = function () {
+  var result = serialize();
+  if (result.errors.length > 0) {
+    status(T('无法保存，存在 ' + result.errors.length + ' 个问题：', 'cannot save: ') + result.errors[0], 'err');
+    return;
+  }
+  if (result.program.length === 0) {
+    status(T('无法保存：工作区为空', 'cannot save: workspace is empty'), 'err');
+    return;
+  }
+  var data = {
+    format: 1,
+    name: $('bhName').value || 'behavior',
+    description: $('bhDesc').value || '',
+    loop: $('bhLoop').checked,
+    program: result.program,
+    blockly: Blockly.serialization.workspaces.save(workspace)
+  };
+  var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = currentFileName();
+  a.click();
+  URL.revokeObjectURL(a.href);
+  status(T('已保存 ' + a.download + ' — 放入 config/my-bot-mod/behaviors/ 后在游戏内重扫即可',
+    'saved ' + a.download + ' - drop into config/my-bot-mod/behaviors/ and rescan in game'), 'ok');
+};
+
+$('btnOpen').onclick = function () { $('fileInput').click(); };
+$('fileInput').onchange = function (ev) {
+  var file = ev.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function () {
+    try {
+      var data = JSON.parse(reader.result);
+      if (!data.blockly) {
+        status(T('该文件缺少编辑器数据（blockly 字段），无法回读', 'file has no editor data (blockly field)'), 'err');
+        return;
+      }
+      Blockly.serialization.workspaces.load(data.blockly, workspace);
+      $('bhName').value = data.name || '';
+      $('bhDesc').value = data.description || '';
+      $('bhLoop').checked = !!data.loop;
+      status(T('已打开 ', 'opened ') + file.name, 'ok');
+    } catch (e) {
+      status(T('打开失败: ', 'open failed: ') + e.message, 'err');
+    }
+    ev.target.value = '';
+  };
+  reader.readAsText(file, 'utf-8');
+};
+
+$('btnNew').onclick = function () {
+  if (workspace.getAllBlocks(false).length > 0
+      && !confirm(T('清空当前工作区？（已删积木可从回收站找回）', 'Clear the workspace?'))) {
+    return;
+  }
+  workspace.clear();
+  $('bhName').value = ''; $('bhDesc').value = ''; $('bhLoop').checked = false;
+  status(T('已新建', 'new workspace'), 'ok');
+};
+
+$('btnUndo').onclick = function () { workspace.undo(false); };
+$('btnRedo').onclick = function () { workspace.undo(true); };
+$('btnCenter').onclick = function () { workspace.scrollCenter(); workspace.setScale(0.75); };
+
+$('btnLang').textContent = LANG === 'zh' ? 'EN' : '中文';
+$('btnLang').onclick = function () {
+  localStorage.setItem('bh_lang', LANG === 'zh' ? 'en' : 'zh');
+  location.reload();
+};
+
+// 顶栏文案本地化
+$('lbName').textContent = T('行为名', 'NAME');
+$('lbDesc').textContent = T('描述', 'DESCRIPTION');
+$('lbLoop').textContent = T('循环', 'Loop');
+$('lbSave').textContent = T('保存', 'Save');
+$('btnUndo').setAttribute('data-tip', T('撤销 Ctrl+Z', 'Undo Ctrl+Z'));
+$('btnRedo').setAttribute('data-tip', T('重做 Ctrl+Y', 'Redo Ctrl+Y'));
+$('btnCenter').setAttribute('data-tip', T('居中视图', 'Center view'));
+$('btnNew').setAttribute('data-tip', T('新建', 'New'));
+$('btnOpen').setAttribute('data-tip', T('打开 .json', 'Open .json'));
+
+// ==================== 自动草稿与块计数 ====================
+var draftTimer = null;
+function updateCount() {
+  var n = workspace.getAllBlocks(false).filter(function (b) { return !b.isShadow(); }).length;
+  $('blockCount').textContent = T(n + ' 积木', n + ' blocks');
+}
+workspace.addChangeListener(function (e) {
+  if (e.isUiEvent) return;
+  updateCount();
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(function () {
+    try {
+      localStorage.setItem('bh_draft', JSON.stringify({
+        name: $('bhName').value, desc: $('bhDesc').value, loop: $('bhLoop').checked,
+        blockly: Blockly.serialization.workspaces.save(workspace)
+      }));
+    } catch (ignored) { }
+  }, 800);
+});
+(function restoreDraft() {
+  try {
+    var draft = JSON.parse(localStorage.getItem('bh_draft') || 'null');
+    if (draft && draft.blockly) {
+      Blockly.serialization.workspaces.load(draft.blockly, workspace);
+      $('bhName').value = draft.name || '';
+      $('bhDesc').value = draft.desc || '';
+      $('bhLoop').checked = !!draft.loop;
+      status(T('已恢复上次的草稿', 'restored previous draft'), '');
+    }
+  } catch (ignored) { }
+  updateCount();
+})();
+
+window.addEventListener('resize', function () { Blockly.svgResize(workspace); });
+</script>
+</body>
+</html>

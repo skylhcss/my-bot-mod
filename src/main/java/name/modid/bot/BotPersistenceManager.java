@@ -249,6 +249,15 @@ public class BotPersistenceManager extends SavedData {
             }
             data.put("Settings", settingsTag);
 
+            // 行为播放列表（文件名列表，随驻留保存）
+            ListTag behaviorsTag = new ListTag();
+            for (String behaviorName : name.modid.behavior.BehaviorManager.getAssigned(bot)) {
+                behaviorsTag.add(net.minecraft.nbt.StringTag.valueOf(behaviorName));
+            }
+            if (!behaviorsTag.isEmpty()) {
+                data.put("Behaviors", behaviorsTag);
+            }
+
             // 物品栏（直接以 NBT 存储，无 SNBT 字符串往返）
             ListTag inventoryList = new ListTag();
             bot.getInventory().save(inventoryList);
@@ -536,6 +545,16 @@ public class BotPersistenceManager extends SavedData {
                                 bot.getSettings().set(k, BotSettings.Override.byId(settingsTag.getInt(k)));
                             }
                         }
+                    }
+
+                    // 恢复行为播放列表（已不存在的行为文件静默忽略；不自动启动）
+                    if (data.contains("Behaviors")) {
+                        ListTag behaviorsTag = data.getList("Behaviors", 8);
+                        java.util.List<String> behaviorNames = new java.util.ArrayList<>();
+                        for (int bi = 0; bi < behaviorsTag.size(); bi++) {
+                            behaviorNames.add(behaviorsTag.getString(bi));
+                        }
+                        name.modid.behavior.BehaviorManager.restoreAssigned(bot, behaviorNames);
                     }
 
                     // 恢复物品栏（直接读 NBT）

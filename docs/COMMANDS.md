@@ -47,6 +47,15 @@ My Bot Mod 提供 `/bot`（控制假人）与 `/botmod`（配置/信息）两组
 | `/bot <name> mount` | 骑乘附近白名单实体 |
 | `/bot <name> dismount` | 下马 |
 
+### 行为脚本（v1.3.3，详见 [行为系统](BEHAVIORS.md)）
+| 命令 | 说明 |
+|------|------|
+| `/bot <name> behavior list` | 列出可用行为与该假人的播放列表 |
+| `/bot <name> behavior assign <文件>` | 把行为加入播放列表 |
+| `/bot <name> behavior unassign <文件>` | 把行为移出播放列表 |
+| `/bot <name> behavior start` / `stop` | 启动 / 停止执行播放列表 |
+| `/bot <name> behavior reload` | 重扫 config/my-bot-mod/behaviors/ 文件夹 |
+
 ### 背包 / 面板（也可**右键假人**打开设置面板）
 | 命令 | 说明 |
 |------|------|

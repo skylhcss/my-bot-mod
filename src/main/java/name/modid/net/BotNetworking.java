@@ -48,10 +48,23 @@ public class BotNetworking {
     public static final ResourceLocation BOT_SKIN =
         new ResourceLocation("my-bot-mod", "bot_skin");
 
+    /** C2S：请求行为列表（附指定假人的播放列表状态） */
+    public static final ResourceLocation REQUEST_BEHAVIOR_LIST =
+        new ResourceLocation("my-bot-mod", "request_behavior_list");
+
+    /** C2S：行为指令（0=分配 1=移除 2=启动 3=停止 4=重扫 5=上移） */
+    public static final ResourceLocation BEHAVIOR_COMMAND =
+        new ResourceLocation("my-bot-mod", "behavior_command");
+
+    /** S2C：行为列表（可用行为 + 指定假人状态 + 解析错误） */
+    public static final ResourceLocation BEHAVIOR_LIST =
+        new ResourceLocation("my-bot-mod", "behavior_list");
+
     /** 网络协议版本（C2S 包携带并由服务端校验，防旧客户端/异常输入） */
     public static final int PROTOCOL_VERSION = 1;
     private static final int MAX_NAME_LEN = 16;
     private static final int MAX_KEY_LEN = 32;
+    private static final int MAX_BEHAVIOR_LEN = 128;
 
     /** 创建带协议版本前缀的 C2S 缓冲（客户端发送 C2S 包时使用） */
     public static FriendlyByteBuf c2s() {
@@ -109,6 +122,24 @@ public class BotNetworking {
                 double z = buf.readDouble();
                 server.execute(() -> handleBatonAction(player, actionType, botName, x, y, z));
             });
+
+        // 请求行为列表
+        ServerPlayNetworking.registerGlobalReceiver(REQUEST_BEHAVIOR_LIST,
+            (server, player, handler, buf, responseSender) -> {
+                if (badVersion(buf)) return;
+                String botName = buf.readUtf(MAX_NAME_LEN);
+                server.execute(() -> sendBehaviorList(player, botName));
+            });
+
+        // 行为指令（分配/移除/启动/停止/重扫）
+        ServerPlayNetworking.registerGlobalReceiver(BEHAVIOR_COMMAND,
+            (server, player, handler, buf, responseSender) -> {
+                if (badVersion(buf)) return;
+                int action = buf.readVarInt();
+                String botName = buf.readUtf(MAX_NAME_LEN);
+                String behaviorName = buf.readUtf(MAX_BEHAVIOR_LEN);
+                server.execute(() -> handleBehaviorCommand(player, action, botName, behaviorName));
+            });
     }
 
     /**
@@ -133,6 +164,9 @@ public class BotNetworking {
             player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return;
         }
+
+        // 指挥棒下令优先：暂停该假人正在运行的行为脚本，避免抢控制权
+        name.modid.behavior.BehaviorManager.stop(bot);
 
         if (actionType == 0) {
             // 寻路模式：禁止跨维度寻路——假人不在指挥者所在维度时直接拒绝
@@ -225,5 +259,89 @@ public class BotNetworking {
             writer.accept(buf);
             ServerPlayNetworking.send(player, BOT_LIST_UPDATE, buf);
         }
+    }
+
+    // ==================== 行为系统 ====================
+
+    /**
+     * 处理行为指令：0=分配 1=移除 2=启动 3=停止 4=重扫；完成后回发最新列表
+     */
+    private static void handleBehaviorCommand(ServerPlayer player, int action, String botName, String behaviorName) {
+        var config = name.modid.config.ModConfig.getInstance();
+        if (!player.hasPermissions(2) && !config.allowNonOpControlBot) {
+            return;
+        }
+        if (action == 4) {
+            name.modid.behavior.BehaviorManager.reload();
+            sendBehaviorList(player, botName);
+            return;
+        }
+        BotPlayer bot = BotManager.getBot(botName);
+        if (bot != null) {
+            switch (action) {
+                case 0 -> {
+                    if (name.modid.behavior.BehaviorManager.assign(bot, behaviorName)) {
+                        name.modid.bot.BotPersistenceManager.saveBot(bot);
+                    }
+                }
+                case 1 -> {
+                    if (name.modid.behavior.BehaviorManager.unassign(bot, behaviorName)) {
+                        name.modid.bot.BotPersistenceManager.saveBot(bot);
+                    }
+                }
+                case 2 -> name.modid.behavior.BehaviorManager.start(bot);
+                case 3 -> name.modid.behavior.BehaviorManager.stop(bot);
+                case 5 -> {
+                    if (name.modid.behavior.BehaviorManager.moveUp(bot, behaviorName)) {
+                        name.modid.bot.BotPersistenceManager.saveBot(bot);
+                    }
+                }
+                default -> {
+                }
+            }
+        }
+        sendBehaviorList(player, botName);
+    }
+
+    /**
+     * 下发行为列表：可用行为（文件名/显示名/描述/块数/循环）+ 指定假人的播放列表与运行态 + 解析错误
+     */
+    public static void sendBehaviorList(ServerPlayer player, String botName) {
+        var names = name.modid.behavior.BehaviorManager.getBehaviorNames();
+        FriendlyByteBuf buf = PacketByteBufs.create();
+        buf.writeVarInt(names.size());
+        for (String n : names) {
+            var program = name.modid.behavior.BehaviorManager.getProgram(n);
+            buf.writeUtf(n);
+            buf.writeUtf(program == null ? "" : truncate(program.name, 100), MAX_BEHAVIOR_LEN);
+            buf.writeUtf(program == null ? "" : truncate(program.description, 240), 256);
+            buf.writeVarInt(program == null ? 0 : program.statementCount());
+            buf.writeBoolean(program != null && program.loop);
+        }
+        // 指定假人的状态
+        BotPlayer bot = botName.isEmpty() ? null : BotManager.getBot(botName);
+        buf.writeUtf(botName);
+        var assigned = bot == null ? java.util.List.<String>of()
+            : name.modid.behavior.BehaviorManager.getAssigned(bot);
+        buf.writeVarInt(assigned.size());
+        for (String n : assigned) {
+            buf.writeUtf(n);
+        }
+        buf.writeBoolean(bot != null && name.modid.behavior.BehaviorManager.isRunning(bot));
+        // 解析错误
+        var errors = name.modid.behavior.BehaviorManager.getErrors();
+        buf.writeVarInt(errors.size());
+        for (var e : errors.entrySet()) {
+            buf.writeUtf(e.getKey());
+            buf.writeUtf(truncate(e.getValue(), 480), 512);
+        }
+        ServerPlayNetworking.send(player, BEHAVIOR_LIST, buf);
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        return s.length() <= max ? s : s.substring(0, max);
     }
 }

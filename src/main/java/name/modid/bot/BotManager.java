@@ -185,6 +185,9 @@ public class BotManager {
             botsByUUID.remove(bot.getUUID());
             MinecraftServer server = bot.getServer();
 
+            // 清理行为运行状态与播放列表
+            name.modid.behavior.BehaviorManager.onBotRemoved(bot.getUUID());
+
             // 规范移除：触发连接断开，走原版 PlayerList.remove 完整清理
             // （保存数据、退出队伍、从 playersByUUID 移除、从世界移除实体、广播移除信息包）
             bot.connection.onDisconnect(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.bot.removed"));

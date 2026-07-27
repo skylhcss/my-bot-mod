@@ -93,11 +93,46 @@ public class MyBotModClient implements ClientModInitializer {
                 client.execute(() -> BotSkinTextureLoader.setPngName(uuid, png));
             });
 
-        // 断开连接时释放 PNG 皮肤动态纹理，避免跨存档累积；并重置指挥棒状态
+        // 注册 S2C：行为列表（可用行为 + 指定假人状态 + 解析错误）
+        ClientPlayNetworking.registerGlobalReceiver(BotNetworking.BEHAVIOR_LIST,
+            (client, handler, buf, responseSender) -> {
+                int count = buf.readVarInt();
+                java.util.List<BehaviorClientData.BehaviorEntry> behaviors = new java.util.ArrayList<>();
+                for (int i = 0; i < count; i++) {
+                    behaviors.add(new BehaviorClientData.BehaviorEntry(
+                        buf.readUtf(), buf.readUtf(), buf.readUtf(), buf.readVarInt(), buf.readBoolean()));
+                }
+                String botName = buf.readUtf();
+                int assignedCount = buf.readVarInt();
+                java.util.List<String> assigned = new java.util.ArrayList<>();
+                for (int i = 0; i < assignedCount; i++) {
+                    assigned.add(buf.readUtf());
+                }
+                boolean running = buf.readBoolean();
+                int errorCount = buf.readVarInt();
+                java.util.Map<String, String> errors = new java.util.LinkedHashMap<>();
+                for (int i = 0; i < errorCount; i++) {
+                    errors.put(buf.readUtf(), buf.readUtf());
+                }
+                BehaviorClientData.State state = new BehaviorClientData.State(
+                    java.util.List.copyOf(behaviors), botName, java.util.List.copyOf(assigned), running,
+                    java.util.Collections.unmodifiableMap(errors));
+                client.execute(() -> {
+                    BehaviorClientData.set(state);
+                    if (client.screen instanceof name.modid.client.screen.ModernConfigScreen ms) {
+                        ms.refreshCurrentPage();
+                    }
+                });
+            });
+
+        // 断开连接时释放 PNG 皮肤动态纹理，避免跨存档累积；并重置指挥棒与行为页状态
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
             client.execute(() -> {
                 BotSkinTextureLoader.clearCache();
                 name.modid.client.baton.BatonClientState.reset();
+                BehaviorClientData.set(new BehaviorClientData.State(
+                    java.util.List.of(), "", java.util.List.of(), false, java.util.Map.of()));
+                name.modid.client.screen.pages.BehaviorPage.resetSession();
             }));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

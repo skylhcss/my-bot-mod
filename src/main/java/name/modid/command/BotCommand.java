@@ -6,8 +6,10 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import name.modid.behavior.BehaviorManager;
 import name.modid.bot.BotActionController;
 import name.modid.bot.BotManager;
+import name.modid.bot.BotPersistenceManager;
 import name.modid.bot.BotPlayer;
 import name.modid.menu.BotInventoryMenu;
 import name.modid.net.BotNetworking;
@@ -109,6 +111,46 @@ public class BotCommand {
                     )
                     .then(Commands.literal("jump")
                         .executes(ctx -> toggleBotState(ctx, "jump", false))
+                    )
+                )
+                // /bot <name> behavior - 行为脚本管理
+                .then(Commands.literal("behavior")
+                    .then(Commands.literal("list")
+                        .executes(BotCommand::behaviorList)
+                    )
+                    .then(Commands.literal("assign")
+                        .then(Commands.argument("behaviorFile", StringArgumentType.string())
+                            .suggests((ctx, builder) -> {
+                                for (String name : BehaviorManager.getBehaviorNames()) {
+                                    builder.suggest(StringArgumentType.escapeIfRequired(name));
+                                }
+                                return builder.buildFuture();
+                            })
+                            .executes(BotCommand::behaviorAssign)
+                        )
+                    )
+                    .then(Commands.literal("unassign")
+                        .then(Commands.argument("behaviorFile", StringArgumentType.string())
+                            .suggests((ctx, builder) -> {
+                                BotPlayer b = BotManager.getBot(StringArgumentType.getString(ctx, "botName"));
+                                if (b != null) {
+                                    for (String name : BehaviorManager.getAssigned(b)) {
+                                        builder.suggest(StringArgumentType.escapeIfRequired(name));
+                                    }
+                                }
+                                return builder.buildFuture();
+                            })
+                            .executes(BotCommand::behaviorUnassign)
+                        )
+                    )
+                    .then(Commands.literal("start")
+                        .executes(BotCommand::behaviorStart)
+                    )
+                    .then(Commands.literal("stop")
+                        .executes(BotCommand::behaviorStop)
+                    )
+                    .then(Commands.literal("reload")
+                        .executes(BotCommand::behaviorReload)
                     )
                 )
                 // /bot <name> sneak
@@ -668,8 +710,119 @@ public class BotCommand {
             return 0;
         }
 
+        // 手动停止同时暂停行为脚本（避免脚本与手动指令抢控制权）
+        BehaviorManager.stop(bot);
         bot.getActionController().stopAll();
         ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.stop.all", botName), true);
+        return 1;
+    }
+
+    // ==================== 行为脚本命令 ====================
+
+    /** 解析 botName 参数并取假人，不存在时发送失败消息 */
+    private static BotPlayer resolveBot(CommandContext<CommandSourceStack> ctx) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        BotPlayer bot = BotManager.getBot(botName);
+        if (bot == null) {
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
+        }
+        return bot;
+    }
+
+    /** /bot <name> behavior list — 列出可用行为与该假人的播放列表 */
+    private static int behaviorList(CommandContext<CommandSourceStack> ctx) {
+        BotPlayer bot = resolveBot(ctx);
+        if (bot == null) {
+            return 0;
+        }
+        var available = BehaviorManager.getBehaviorNames();
+        var assigned = BehaviorManager.getAssigned(bot);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.list.available",
+            available.size(), available.isEmpty() ? "-" : String.join(", ", available)), false);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.list.assigned",
+            bot.getName().getString(), assigned.isEmpty() ? "-" : String.join(" -> ", assigned)), false);
+        String running = BehaviorManager.currentBehaviorName(bot);
+        if (running != null) {
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.list.running",
+                running), false);
+        }
+        var errors = BehaviorManager.getErrors();
+        if (!errors.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.list.errors",
+                errors.size(), String.join(", ", errors.keySet())), false);
+        }
+        return 1;
+    }
+
+    /** /bot <name> behavior assign <file> */
+    private static int behaviorAssign(CommandContext<CommandSourceStack> ctx) {
+        BotPlayer bot = resolveBot(ctx);
+        if (bot == null) {
+            return 0;
+        }
+        String file = StringArgumentType.getString(ctx, "behaviorFile");
+        if (!BehaviorManager.assign(bot, file)) {
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.behavior.assign.fail", file));
+            return 0;
+        }
+        BotPersistenceManager.saveBot(bot);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.assign.ok",
+            file, bot.getName().getString()), true);
+        return 1;
+    }
+
+    /** /bot <name> behavior unassign <file> */
+    private static int behaviorUnassign(CommandContext<CommandSourceStack> ctx) {
+        BotPlayer bot = resolveBot(ctx);
+        if (bot == null) {
+            return 0;
+        }
+        String file = StringArgumentType.getString(ctx, "behaviorFile");
+        if (!BehaviorManager.unassign(bot, file)) {
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.behavior.unassign.fail", file));
+            return 0;
+        }
+        BotPersistenceManager.saveBot(bot);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.unassign.ok",
+            file, bot.getName().getString()), true);
+        return 1;
+    }
+
+    /** /bot <name> behavior start */
+    private static int behaviorStart(CommandContext<CommandSourceStack> ctx) {
+        BotPlayer bot = resolveBot(ctx);
+        if (bot == null) {
+            return 0;
+        }
+        if (!BehaviorManager.start(bot)) {
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.behavior.start.fail",
+                bot.getName().getString()));
+            return 0;
+        }
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.start.ok",
+            bot.getName().getString()), true);
+        return 1;
+    }
+
+    /** /bot <name> behavior stop */
+    private static int behaviorStop(CommandContext<CommandSourceStack> ctx) {
+        BotPlayer bot = resolveBot(ctx);
+        if (bot == null) {
+            return 0;
+        }
+        BehaviorManager.stop(bot);
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.stop.ok",
+            bot.getName().getString()), true);
+        return 1;
+    }
+
+    /** /bot <name> behavior reload — 重新扫描行为文件夹 */
+    private static int behaviorReload(CommandContext<CommandSourceStack> ctx) {
+        BehaviorManager.reload();
+        int count = BehaviorManager.getBehaviorNames().size();
+        int errors = BehaviorManager.getErrors().size();
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.behavior.reload.ok",
+            count, errors), true);
         return 1;
     }
 

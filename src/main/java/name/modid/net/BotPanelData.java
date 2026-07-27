@@ -1,5 +1,6 @@
 package name.modid.net;
 
+import name.modid.behavior.BehaviorManager;
 import name.modid.bot.BotActionController;
 import name.modid.bot.BotPlayer;
 import name.modid.bot.BotSettings;
@@ -34,7 +35,9 @@ public record BotPanelData(
     // 当前活动状态：0=空闲 1=战斗中 2=寻路中 3=跟随中
     int status,
     // 饥饿值（0-20）
-    int food
+    int food,
+    // 正在运行的行为名（空串=未运行）
+    String behavior
 ) {
 
     /**
@@ -61,8 +64,15 @@ public record BotPanelData(
             s.glowing.id(),
             s.fireImmune.id(),
             statusOf(bot),
-            bot.getFoodData().getFoodLevel()
+            bot.getFoodData().getFoodLevel(),
+            behaviorOf(bot)
         );
+    }
+
+    /** 正在运行的行为名（未运行返回空串） */
+    private static String behaviorOf(BotPlayer bot) {
+        String behaviorName = BehaviorManager.currentBehaviorName(bot);
+        return behaviorName == null ? "" : behaviorName;
     }
 
     /** 计算假人当前活动状态：战斗中 &gt; 寻路中 &gt; 空闲（跟随功能未实现，暂不产生 3） */
@@ -111,6 +121,7 @@ public record BotPanelData(
         buf.writeVarInt(fireImmune);
         buf.writeVarInt(status);
         buf.writeVarInt(food);
+        buf.writeUtf(behavior, 128);
     }
 
     public static BotPanelData read(FriendlyByteBuf buf) {
@@ -133,7 +144,8 @@ public record BotPanelData(
             buf.readVarInt(),
             buf.readVarInt(),
             buf.readVarInt(),
-            buf.readVarInt()
+            buf.readVarInt(),
+            buf.readUtf(128)
         );
     }
 }

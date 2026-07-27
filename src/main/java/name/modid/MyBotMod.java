@@ -41,6 +41,17 @@ public class MyBotMod implements ModInitializer {
 		// 初始化 run/skins 文件夹
 		BotSkinManager.initializeSkinFolder();
 
+		// 初始化行为系统（扫描 config/my-bot-mod/behaviors/）
+		name.modid.behavior.BehaviorManager.init();
+
+		// 玩家聊天 → 行为脚本 onChat 事件（假人自身的 say 为系统消息，不经过此事件，不会自触发）
+		net.fabricmc.fabric.api.message.v1.ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
+			if (!(sender instanceof name.modid.bot.BotPlayer)) {
+				name.modid.behavior.BehaviorManager.onPlayerChat(
+					sender.getName().getString(), message.signedContent());
+			}
+		});
+
 		// 注册物品（指挥棒）
 		name.modid.item.ModItems.register();
 
@@ -92,8 +103,10 @@ public class MyBotMod implements ModInitializer {
 			BotPersistenceManager.resetLoadedFlag(server);
 		});
 		
-		// 注册服务器 tick 事件（每 100 tick 刷新一次区块票据）
+		// 注册服务器 tick 事件（每 100 tick 刷新一次区块票据；每 tick 驱动行为脚本）
 		net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(server -> {
+			// 行为脚本解释器（内部无运行行为时为空操作）
+			name.modid.behavior.BehaviorManager.tick(server);
 			// 每 100 tick（5秒）刷新一次
 			if (server.getTickCount() % 100 == 0) {
 				BotPersistenceManager.refreshAllChunkTickets(server);
