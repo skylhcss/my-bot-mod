@@ -49,7 +49,8 @@ saves/
 screenshots/
 resourcepacks/
 shaderpacks/
-/config/
+/config/*
+!/config/checkstyle/
 mods/
 *.log
 
