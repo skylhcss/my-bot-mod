@@ -24,20 +24,21 @@ import java.util.Set;
  */
 public final class BehaviorParser {
 
-    /** 支持的语句操作名（含控制流与自定义函数） */
+    /** 支持的语句操作名（含控制流、事件帽子、自定义函数与列表操作） */
     private static final Set<String> KNOWN_OPS = Set.of(
         "say", "wait", "move", "stopMove", "jump", "sneak", "sprint",
         "look", "lookAt", "turn",
         "attack", "use", "stopAttack", "stopUse",
-        "slot", "swapHands", "drop",
+        "slot", "swapHands", "drop", "equipItem", "dropOf", "lookAtEntity",
         "goto", "gotoStop", "mount", "dismount",
         "openContainer", "closeContainer", "takeFromContainer", "putToContainer",
         "readContainer", "dumpContainer", "dumpInventory", "output",
         "set", "change",
-        "repeat", "while", "forever", "if",
-        "def", "call",
-        "onStart", "onChat",
-        "stopSelf", "stopAll"
+        "listAdd", "listInsert", "listRemove", "listSet", "listClear",
+        "repeat", "while", "forever", "if", "waitUntil",
+        "def", "call", "broadcast",
+        "onStart", "onChat", "onBroadcast", "onHealthBelow", "onEntityNear",
+        "stopThread", "stopSelf", "stopAll"
     );
 
     /** 支持的二元运算符 */
@@ -51,12 +52,20 @@ public final class BehaviorParser {
         "not", "neg", "abs", "floor", "ceil", "round", "sqrt"
     );
 
-    /** 支持的传感器名 */
+    /** 支持的传感器名（含纯函数：字符串/列表/三角） */
     private static final Set<String> SENSORS = Set.of(
         "health", "food", "posX", "posY", "posZ", "dimension", "heldItem",
         "invCount", "nearbyEntities", "containerCount", "isPathfinding",
         "timeOfDay", "random",
-        "containerSlots", "containerItem", "containerSlotCount"
+        "containerSlots", "containerItem", "containerSlotCount",
+        "blockAt", "isRaining", "isDay", "onGround", "inWater", "onFire", "sneaking",
+        "xpLevel", "armor", "air", "maxHealth", "botName",
+        "nearestPlayerName", "nearestPlayerDistance", "distanceTo",
+        "strLen", "strContains", "strSub", "strUpper", "strLower", "strTrim",
+        "strCharAt", "strIndexOf",
+        "sin", "cos", "tan",
+        "listGet", "listLen", "listContains", "listIndexOf", "listJoin",
+        "listSplit", "listRandom"
     );
 
     private BehaviorParser() {
@@ -173,6 +182,16 @@ public final class BehaviorParser {
                 return new BehaviorProgram.Str(require(obj, "v", file, path).getAsString());
             case "bool":
                 return new BehaviorProgram.Bool(require(obj, "v", file, path).getAsBoolean());
+            case "list": {
+                List<Expr> items = new ArrayList<>();
+                if (obj.has("items") && obj.get("items").isJsonArray()) {
+                    JsonArray arr = obj.getAsJsonArray("items");
+                    for (int i = 0; i < arr.size(); i++) {
+                        items.add(parseExpr(file, arr.get(i), path + ".items[" + i + "]"));
+                    }
+                }
+                return new BehaviorProgram.ListLit(items);
+            }
             case "var":
                 return new BehaviorProgram.Var(require(obj, "n", file, path).getAsString());
             case "bin": {

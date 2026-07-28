@@ -101,7 +101,6 @@
   <div class="divider"></div>
   <div class="field"><label id="lbName">行为名</label><input type="text" id="bhName" placeholder="my-behavior"></div>
   <div class="field"><label id="lbDesc">描述</label><input type="text" id="bhDesc" placeholder="..."></div>
-  <label class="switch"><input type="checkbox" id="bhLoop"><span class="track"></span><span class="lbl" id="lbLoop">循环</span></label>
   <div class="grow"></div>
   <button class="ibtn" id="btnUndo" data-tip="撤销 Ctrl+Z"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
   <button class="ibtn" id="btnRedo" data-tip="重做 Ctrl+Y"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
@@ -191,6 +190,122 @@ defBlock('event_chat', { message0: T('💬 当玩家发送 %1 时', '💬 when a
   nextStatement: null, colour: C_EVT, hat: 'cap',
   tooltip: T('聊天包含该文本时触发（留空=任意消息）；发送者/内容存入变量 chat_sender / chat_message',
     'fires when chat contains the text (empty=any); sender/message stored in chat_sender / chat_message') });
+defBlock('event_broadcast', { message0: T('📡 当收到广播 %1 时', '📡 when I receive %1'),
+  args0: [{ type: 'field_input', name: 'NAME', text: T('信号', 'signal') }],
+  nextStatement: null, colour: C_EVT, hat: 'cap',
+  tooltip: T('收到同名广播时触发（跨假人，配合"发送广播"积木）', 'fires on matching broadcast (cross-bot)') });
+defBlock('event_health', { message0: T('❤ 当血量低于 %1 时', '❤ when health drops below %1'),
+  args0: [{ type: 'field_number', name: 'VALUE', value: 10, min: 1, max: 20 }],
+  nextStatement: null, colour: C_EVT, hat: 'cap' });
+defBlock('event_entity', { message0: T('🐾 当 %1 格内出现 %2 时', '🐾 when %2 appears within %1 blocks'),
+  args0: [{ type: 'field_number', name: 'RANGE', value: 8, min: 1, max: 32 },
+          { type: 'field_input', name: 'TYPE', text: 'minecraft:zombie' }],
+  nextStatement: null, colour: C_EVT, hat: 'cap',
+  tooltip: T('实体从无到有时触发一次（类型留空=任意生物）', 'edge-triggered; empty type = any living entity') });
+
+// ---- 控制/线程扩展（橙） ----
+defBlock('bot_wait_until', stmt({ message0: T('等待直到 %1', 'wait until %1'),
+  args0: [{ type: 'input_value', name: 'COND', check: 'Boolean' }] }, C_CTRL));
+defBlock('bot_broadcast', stmt({ message0: T('📡 发送广播 %1', '📡 broadcast %1'),
+  args0: [{ type: 'field_input', name: 'NAME', text: T('信号', 'signal') }],
+  tooltip: T('触发所有假人的"当收到广播"帽子块', 'fires all bots\' receive hats') }, C_CTRL));
+defBlock('bot_stop_thread', { message0: T('停止本脚本（线程）', 'stop this script'), previousStatement: null, colour: C_CTRL });
+
+// ---- 动作扩展（黄） ----
+defBlock('bot_equip', stmt({ message0: T('把背包里的 %1 拿到手上', 'equip %1 from inventory'),
+  args0: [{ type: 'input_value', name: 'ITEM' }] }, C_ACT));
+defBlock('bot_drop_of', stmt({ message0: T('丢弃背包里的 %1 数量 %2', 'drop %1 x %2 from inventory'),
+  args0: [{ type: 'input_value', name: 'ITEM' }, { type: 'input_value', name: 'COUNT', check: 'Number' }],
+  inputsInline: true }, C_ACT));
+defBlock('bot_look_entity', stmt({ message0: T('看向最近的 %1 (%2 格内)', 'look at nearest %1 within %2'),
+  args0: [{ type: 'input_value', name: 'TYPE' }, { type: 'input_value', name: 'RANGE', check: 'Number' }],
+  inputsInline: true }, C_ACT));
+
+// ---- 感知扩展（青） ----
+function sensor0(name, zh, en, type) { defBlock(name, out({ message0: T(zh, en) }, C_SENSE, type)); }
+sensor0('sensor_max_health', '血量上限', 'max health', 'Number');
+sensor0('sensor_xp', '经验等级', 'XP level', 'Number');
+sensor0('sensor_armor', '护甲值', 'armor', 'Number');
+sensor0('sensor_air', '氧气值', 'air supply', 'Number');
+sensor0('sensor_on_ground', '在地面?', 'on ground?', 'Boolean');
+sensor0('sensor_in_water', '在水中?', 'in water?', 'Boolean');
+sensor0('sensor_on_fire', '着火中?', 'on fire?', 'Boolean');
+sensor0('sensor_sneaking', '潜行中?', 'sneaking?', 'Boolean');
+sensor0('sensor_is_raining', '正在下雨?', 'raining?', 'Boolean');
+sensor0('sensor_is_day', '白天?', 'daytime?', 'Boolean');
+sensor0('sensor_bot_name', '自己的名字', 'my name', 'String');
+sensor0('sensor_nearest_player', '最近玩家名', 'nearest player name', 'String');
+sensor0('sensor_nearest_player_dist', '最近玩家距离', 'nearest player distance', 'Number');
+defBlock('sensor_block_at', out({ message0: T('方块 x %1 y %2 z %3', 'block at x %1 y %2 z %3'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' }],
+  inputsInline: true }, C_SENSE, 'String'));
+defBlock('sensor_distance_to', out({ message0: T('到 x %1 y %2 z %3 的距离', 'distance to x %1 y %2 z %3'),
+  args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' }],
+  inputsInline: true }, C_SENSE, 'Number'));
+
+// ---- 文本处理（绿，输出块） ----
+defBlock('str_len', out({ message0: T('%1 的长度', 'length of %1'),
+  args0: [{ type: 'input_value', name: 'S' }] }, 160, 'Number'));
+defBlock('str_contains', out({ message0: T('%1 包含 %2 ?', '%1 contains %2 ?'),
+  args0: [{ type: 'input_value', name: 'S' }, { type: 'input_value', name: 'SUB' }],
+  inputsInline: true }, 160, 'Boolean'));
+defBlock('str_sub', out({ message0: T('%1 的第 %2 到 %3 个字符', 'substring of %1 from %2 to %3'),
+  args0: [{ type: 'input_value', name: 'S' }, { type: 'input_value', name: 'FROM', check: 'Number' }, { type: 'input_value', name: 'TO', check: 'Number' }],
+  inputsInline: true }, 160, 'String'));
+defBlock('str_char_at', out({ message0: T('%1 的第 %2 个字符', 'char %2 of %1'),
+  args0: [{ type: 'input_value', name: 'S' }, { type: 'input_value', name: 'I', check: 'Number' }],
+  inputsInline: true }, 160, 'String'));
+defBlock('str_index_of', out({ message0: T('%2 在 %1 中的位置(0=没有)', 'position of %2 in %1 (0=none)'),
+  args0: [{ type: 'input_value', name: 'S' }, { type: 'input_value', name: 'SUB' }],
+  inputsInline: true }, 160, 'Number'));
+defBlock('str_case', out({ message0: T('%1 转 %2', '%1 to %2'),
+  args0: [{ type: 'input_value', name: 'S' },
+          { type: 'field_dropdown', name: 'MODE', options: [[T('大写','UPPER'),'strUpper'],[T('小写','lower'),'strLower'],[T('去首尾空格','trim'),'strTrim']] }] }, 160, 'String'));
+
+// ---- 列表（紫红，Scratch 风格 1-based） ----
+var C_LIST = 340;
+defBlock('list_create', out({ message0: T('新建列表 %1 %2 %3', 'list of %1 %2 %3'),
+  args0: [{ type: 'input_value', name: 'A' }, { type: 'input_value', name: 'B' }, { type: 'input_value', name: 'C' }],
+  inputsInline: true, tooltip: T('留空的项会被忽略', 'empty slots are skipped') }, C_LIST, 'Array'));
+defBlock('list_add', stmt({ message0: T('向列表 %1 加入 %2', 'add %2 to list %1'),
+  args0: [{ type: 'field_variable', name: 'VAR', variable: T('列表', 'list') }, { type: 'input_value', name: 'VALUE' }] }, C_LIST));
+defBlock('list_insert', stmt({ message0: T('在列表 %1 第 %2 项插入 %3', 'insert %3 at %2 of %1'),
+  args0: [{ type: 'field_variable', name: 'VAR', variable: T('列表', 'list') },
+          { type: 'input_value', name: 'INDEX', check: 'Number' }, { type: 'input_value', name: 'VALUE' }],
+  inputsInline: true }, C_LIST));
+defBlock('list_remove', stmt({ message0: T('删除列表 %1 的第 %2 项', 'delete item %2 of %1'),
+  args0: [{ type: 'field_variable', name: 'VAR', variable: T('列表', 'list') },
+          { type: 'input_value', name: 'INDEX', check: 'Number' }],
+  inputsInline: true }, C_LIST));
+defBlock('list_set', stmt({ message0: T('把列表 %1 的第 %2 项替换为 %3', 'replace item %2 of %1 with %3'),
+  args0: [{ type: 'field_variable', name: 'VAR', variable: T('列表', 'list') },
+          { type: 'input_value', name: 'INDEX', check: 'Number' }, { type: 'input_value', name: 'VALUE' }],
+  inputsInline: true }, C_LIST));
+defBlock('list_clear', stmt({ message0: T('清空列表 %1', 'clear list %1'),
+  args0: [{ type: 'field_variable', name: 'VAR', variable: T('列表', 'list') }] }, C_LIST));
+defBlock('list_get', out({ message0: T('列表 %1 的第 %2 项', 'item %2 of %1'),
+  args0: [{ type: 'input_value', name: 'LIST' }, { type: 'input_value', name: 'INDEX', check: 'Number' }],
+  inputsInline: true }, C_LIST, null));
+defBlock('list_len', out({ message0: T('列表 %1 的长度', 'length of %1'),
+  args0: [{ type: 'input_value', name: 'LIST' }] }, C_LIST, 'Number'));
+defBlock('list_contains', out({ message0: T('列表 %1 包含 %2 ?', '%1 contains %2 ?'),
+  args0: [{ type: 'input_value', name: 'LIST' }, { type: 'input_value', name: 'VALUE' }],
+  inputsInline: true }, C_LIST, 'Boolean'));
+defBlock('list_index_of', out({ message0: T('%2 在列表 %1 中的位置(0=没有)', 'position of %2 in %1'),
+  args0: [{ type: 'input_value', name: 'LIST' }, { type: 'input_value', name: 'VALUE' }],
+  inputsInline: true }, C_LIST, 'Number'));
+defBlock('list_join', out({ message0: T('用 %2 拼接列表 %1', 'join %1 with %2'),
+  args0: [{ type: 'input_value', name: 'LIST' }, { type: 'input_value', name: 'SEP' }],
+  inputsInline: true }, C_LIST, 'String'));
+defBlock('list_split', out({ message0: T('把文本 %1 按 %2 拆为列表', 'split %1 by %2'),
+  args0: [{ type: 'input_value', name: 'S' }, { type: 'input_value', name: 'SEP' }],
+  inputsInline: true }, C_LIST, 'Array'));
+defBlock('list_random', out({ message0: T('列表 %1 的随机一项', 'random item of %1'),
+  args0: [{ type: 'input_value', name: 'LIST' }] }, C_LIST, null));
+defBlock('list_first', out({ message0: T('列表 %1 的第一项', 'first item of %1'),
+  args0: [{ type: 'input_value', name: 'LIST' }] }, C_LIST, null));
+defBlock('list_last', out({ message0: T('列表 %1 的最后一项', 'last item of %1'),
+  args0: [{ type: 'input_value', name: 'LIST' }] }, C_LIST, null));
 
 // ---- 选择器（绿） ----
 defBlock('mc_item', out({ message0: T('物品 %1', 'item %1'),
@@ -333,13 +448,19 @@ function xyz(x, y, z) { return { X: numShadow(x), Y: numShadow(y), Z: numShadow(
 var TOOLBOX = { kind: 'categoryToolbox', contents: [
   { kind: 'category', name: T('事件', 'Events'), colour: C_EVT, contents: [
     { kind: 'block', type: 'event_start' },
-    { kind: 'block', type: 'event_chat' } ] },
+    { kind: 'block', type: 'event_chat' },
+    { kind: 'block', type: 'event_broadcast' },
+    { kind: 'block', type: 'event_health' },
+    { kind: 'block', type: 'event_entity' } ] },
   { kind: 'category', name: T('动作', 'Actions'), colour: C_ACT, contents: [
     { kind: 'block', type: 'bot_say', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: T('你好', 'hello') } } } } },
     { kind: 'block', type: 'bot_attack', inputs: { INTERVAL: numShadow(20) } },
     { kind: 'block', type: 'bot_use', inputs: { INTERVAL: numShadow(20) } },
     { kind: 'block', type: 'bot_stop_attack' }, { kind: 'block', type: 'bot_stop_use' },
     { kind: 'block', type: 'bot_slot', inputs: { N: numShadow(0) } },
+    { kind: 'block', type: 'bot_equip', inputs: { ITEM: itemShadow() } },
+    { kind: 'block', type: 'bot_drop_of', inputs: { ITEM: itemShadow(), COUNT: numShadow(64) } },
+    { kind: 'block', type: 'bot_look_entity', inputs: { TYPE: { shadow: { type: 'mc_entity', fields: { ID: 'minecraft:zombie' } } }, RANGE: numShadow(16) } },
     { kind: 'block', type: 'bot_swap_hands' }, { kind: 'block', type: 'bot_drop' },
     { kind: 'block', type: 'bot_mount' }, { kind: 'block', type: 'bot_dismount' } ] },
   { kind: 'category', name: T('移动', 'Motion'), colour: C_MOVE, contents: [
@@ -367,24 +488,37 @@ var TOOLBOX = { kind: 'categoryToolbox', contents: [
     { kind: 'block', type: 'mc_item_custom' },
     { kind: 'block', type: 'mc_entity' } ] },
   { kind: 'category', name: T('感知', 'Sensing'), colour: C_SENSE, contents: [
-    { kind: 'block', type: 'sensor_health' }, { kind: 'block', type: 'sensor_food' },
+    { kind: 'block', type: 'sensor_health' }, { kind: 'block', type: 'sensor_max_health' },
+    { kind: 'block', type: 'sensor_food' }, { kind: 'block', type: 'sensor_xp' },
+    { kind: 'block', type: 'sensor_armor' }, { kind: 'block', type: 'sensor_air' },
     { kind: 'block', type: 'sensor_pos' }, { kind: 'block', type: 'sensor_dimension' },
-    { kind: 'block', type: 'sensor_held_item' },
+    { kind: 'block', type: 'sensor_held_item' }, { kind: 'block', type: 'sensor_bot_name' },
+    { kind: 'block', type: 'sensor_on_ground' }, { kind: 'block', type: 'sensor_in_water' },
+    { kind: 'block', type: 'sensor_on_fire' }, { kind: 'block', type: 'sensor_sneaking' },
+    { kind: 'block', type: 'sensor_is_raining' }, { kind: 'block', type: 'sensor_is_day' },
+    { kind: 'block', type: 'sensor_block_at', inputs: xyz(0, 64, 0) },
+    { kind: 'block', type: 'sensor_distance_to', inputs: xyz(0, 64, 0) },
+    { kind: 'block', type: 'sensor_nearest_player' }, { kind: 'block', type: 'sensor_nearest_player_dist' },
     { kind: 'block', type: 'sensor_inv_count', inputs: { ITEM: itemShadow() } },
     { kind: 'block', type: 'sensor_nearby', inputs: { RANGE: numShadow(8), TYPE: { shadow: { type: 'text', fields: { TEXT: '' } } } } },
     { kind: 'block', type: 'sensor_is_pathfinding' }, { kind: 'block', type: 'sensor_time_of_day' } ] },
   { kind: 'category', name: T('控制', 'Control'), colour: C_CTRL, contents: [
     { kind: 'block', type: 'bot_wait', inputs: { TICKS: numShadow(20) } },
+    { kind: 'block', type: 'bot_wait_until' },
     { kind: 'block', type: 'controls_repeat_ext', inputs: { TIMES: numShadow(10) } },
     { kind: 'block', type: 'controls_whileUntil' },
     { kind: 'block', type: 'controls_if' },
     { kind: 'block', type: 'controls_if', extraState: { hasElse: true } },
     { kind: 'block', type: 'bot_forever' },
+    { kind: 'block', type: 'bot_broadcast' },
+    { kind: 'block', type: 'bot_stop_thread' },
     { kind: 'block', type: 'bot_stop_self' }, { kind: 'block', type: 'bot_stop_all' } ] },
   { kind: 'category', name: T('运算', 'Operators'), colour: '%{BKY_MATH_HUE}', contents: [
     { kind: 'block', type: 'math_number' },
     { kind: 'block', type: 'math_arithmetic' },
     { kind: 'block', type: 'math_single' },
+    { kind: 'block', type: 'math_trig' },
+    { kind: 'block', type: 'math_constant' },
     { kind: 'block', type: 'math_round' },
     { kind: 'block', type: 'math_modulo' },
     { kind: 'block', type: 'bot_minmax', inputs: { A: numShadow(1), B: numShadow(2) } },
@@ -392,9 +526,34 @@ var TOOLBOX = { kind: 'categoryToolbox', contents: [
     { kind: 'block', type: 'logic_compare' },
     { kind: 'block', type: 'logic_operation' },
     { kind: 'block', type: 'logic_negate' },
-    { kind: 'block', type: 'logic_boolean' },
+    { kind: 'block', type: 'logic_boolean' } ] },
+  { kind: 'category', name: T('文本', 'Text'), colour: 160, contents: [
     { kind: 'block', type: 'text' },
-    { kind: 'block', type: 'text_join' } ] },
+    { kind: 'block', type: 'text_join' },
+    { kind: 'block', type: 'str_len', inputs: { S: { shadow: { type: 'text', fields: { TEXT: 'abc' } } } } },
+    { kind: 'block', type: 'str_contains', inputs: { S: { shadow: { type: 'text', fields: { TEXT: 'hello' } } }, SUB: { shadow: { type: 'text', fields: { TEXT: 'he' } } } } },
+    { kind: 'block', type: 'str_sub', inputs: { S: { shadow: { type: 'text', fields: { TEXT: 'abcdef' } } }, FROM: numShadow(1), TO: numShadow(3) } },
+    { kind: 'block', type: 'str_char_at', inputs: { S: { shadow: { type: 'text', fields: { TEXT: 'abc' } } }, I: numShadow(1) } },
+    { kind: 'block', type: 'str_index_of', inputs: { S: { shadow: { type: 'text', fields: { TEXT: 'hello' } } }, SUB: { shadow: { type: 'text', fields: { TEXT: 'l' } } } } },
+    { kind: 'block', type: 'str_case', inputs: { S: { shadow: { type: 'text', fields: { TEXT: 'abc' } } } } },
+    { kind: 'block', type: 'text_isEmpty', inputs: { VALUE: { shadow: { type: 'text', fields: { TEXT: '' } } } } },
+    { kind: 'block', type: 'text_append', inputs: { TEXT: { shadow: { type: 'text', fields: { TEXT: '!' } } } } } ] },
+  { kind: 'category', name: T('列表', 'Lists'), colour: C_LIST, contents: [
+    { kind: 'block', type: 'list_create', inputs: { A: { shadow: { type: 'text', fields: { TEXT: 'a' } } }, B: { shadow: { type: 'text', fields: { TEXT: 'b' } } } } },
+    { kind: 'block', type: 'list_add' },
+    { kind: 'block', type: 'list_insert', inputs: { INDEX: numShadow(1) } },
+    { kind: 'block', type: 'list_remove', inputs: { INDEX: numShadow(1) } },
+    { kind: 'block', type: 'list_set', inputs: { INDEX: numShadow(1) } },
+    { kind: 'block', type: 'list_clear' },
+    { kind: 'block', type: 'list_get', inputs: { INDEX: numShadow(1) } },
+    { kind: 'block', type: 'list_len' },
+    { kind: 'block', type: 'list_contains' },
+    { kind: 'block', type: 'list_index_of' },
+    { kind: 'block', type: 'list_join', inputs: { SEP: { shadow: { type: 'text', fields: { TEXT: ', ' } } } } },
+    { kind: 'block', type: 'list_split', inputs: { S: { shadow: { type: 'text', fields: { TEXT: 'a,b,c' } } }, SEP: { shadow: { type: 'text', fields: { TEXT: ',' } } } } },
+    { kind: 'block', type: 'list_random' },
+    { kind: 'block', type: 'list_first' },
+    { kind: 'block', type: 'list_last' } ] },
   { kind: 'category', name: T('变量', 'Variables'), custom: 'VARIABLE', colour: '%{BKY_VARIABLES_HUE}' },
   { kind: 'category', name: T('函数', 'Functions'), custom: 'PROCEDURE', colour: '%{BKY_PROCEDURES_HUE}' },
   { kind: 'category', name: T('输出', 'Output'), colour: C_OUT, contents: [
@@ -452,6 +611,11 @@ function expr(block) {
       if (!sop) { err(block, T('不支持该数学函数（仅 平方根/绝对值/相反数）', 'unsupported math function')); return { e: 'num', v: 0 }; }
       return { e: 'un', o: sop, v: vin(block, 'NUM') };
     }
+    case 'math_trig': {
+      var top = { SIN: 'sin', COS: 'cos', TAN: 'tan' }[block.getFieldValue('OP')];
+      if (!top) { err(block, T('仅支持 sin/cos/tan', 'only sin/cos/tan supported')); return { e: 'num', v: 0 }; }
+      return { e: 'sensor', n: top, args: [vin(block, 'NUM')] };
+    }
     case 'math_round': {
       var rop = { ROUND: 'round', ROUNDUP: 'ceil', ROUNDDOWN: 'floor' }[block.getFieldValue('OP')];
       return { e: 'un', o: rop, v: vin(block, 'NUM') };
@@ -495,6 +659,59 @@ function expr(block) {
       return { e: 'sensor', n: 'containerCount', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z'), vin(block, 'ITEM')] };
     case 'sensor_is_pathfinding': return { e: 'sensor', n: 'isPathfinding' };
     case 'sensor_time_of_day': return { e: 'sensor', n: 'timeOfDay' };
+    // 新增无参传感器（块名 → 函数名）
+    case 'sensor_max_health': return { e: 'sensor', n: 'maxHealth' };
+    case 'sensor_xp': return { e: 'sensor', n: 'xpLevel' };
+    case 'sensor_armor': return { e: 'sensor', n: 'armor' };
+    case 'sensor_air': return { e: 'sensor', n: 'air' };
+    case 'sensor_on_ground': return { e: 'sensor', n: 'onGround' };
+    case 'sensor_in_water': return { e: 'sensor', n: 'inWater' };
+    case 'sensor_on_fire': return { e: 'sensor', n: 'onFire' };
+    case 'sensor_sneaking': return { e: 'sensor', n: 'sneaking' };
+    case 'sensor_is_raining': return { e: 'sensor', n: 'isRaining' };
+    case 'sensor_is_day': return { e: 'sensor', n: 'isDay' };
+    case 'sensor_bot_name': return { e: 'sensor', n: 'botName' };
+    case 'sensor_nearest_player': return { e: 'sensor', n: 'nearestPlayerName' };
+    case 'sensor_nearest_player_dist': return { e: 'sensor', n: 'nearestPlayerDistance' };
+    case 'sensor_block_at':
+      return { e: 'sensor', n: 'blockAt', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z')] };
+    case 'sensor_distance_to':
+      return { e: 'sensor', n: 'distanceTo', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z')] };
+    // 文本函数
+    case 'str_len': return { e: 'sensor', n: 'strLen', args: [vin(block, 'S')] };
+    case 'str_contains': return { e: 'sensor', n: 'strContains', args: [vin(block, 'S'), vin(block, 'SUB')] };
+    case 'str_sub': return { e: 'sensor', n: 'strSub', args: [vin(block, 'S'), vin(block, 'FROM'), vin(block, 'TO')] };
+    case 'str_char_at': return { e: 'sensor', n: 'strCharAt', args: [vin(block, 'S'), vin(block, 'I')] };
+    case 'str_index_of': return { e: 'sensor', n: 'strIndexOf', args: [vin(block, 'S'), vin(block, 'SUB')] };
+    case 'str_case': return { e: 'sensor', n: block.getFieldValue('MODE'), args: [vin(block, 'S')] };
+    // 列表函数
+    case 'list_create': {
+      var items = [];
+      ['A', 'B', 'C'].forEach(function (k) {
+        var v = vin(block, k);
+        if (v !== null) items.push(v);
+      });
+      return { e: 'list', items: items };
+    }
+    case 'list_get': return { e: 'sensor', n: 'listGet', args: [vin(block, 'LIST'), vin(block, 'INDEX')] };
+    case 'list_len': return { e: 'sensor', n: 'listLen', args: [vin(block, 'LIST')] };
+    case 'list_contains': return { e: 'sensor', n: 'listContains', args: [vin(block, 'LIST'), vin(block, 'VALUE')] };
+    case 'list_index_of': return { e: 'sensor', n: 'listIndexOf', args: [vin(block, 'LIST'), vin(block, 'VALUE')] };
+    case 'list_join': return { e: 'sensor', n: 'listJoin', args: [vin(block, 'LIST'), vin(block, 'SEP')] };
+    case 'list_split': return { e: 'sensor', n: 'listSplit', args: [vin(block, 'S'), vin(block, 'SEP')] };
+    case 'list_random': return { e: 'sensor', n: 'listRandom', args: [vin(block, 'LIST')] };
+    case 'list_first': return { e: 'sensor', n: 'listGet', args: [vin(block, 'LIST'), { e: 'num', v: 1 }] };
+    case 'list_last': {
+      var ll = vin(block, 'LIST');
+      return { e: 'sensor', n: 'listGet', args: [ll, { e: 'sensor', n: 'listLen', args: [ll] }] };
+    }
+    case 'math_constant': {
+      var cv = { PI: Math.PI, E: Math.E, GOLDEN_RATIO: (1 + Math.sqrt(5)) / 2, SQRT2: Math.SQRT2, SQRT1_2: Math.SQRT1_2 }[block.getFieldValue('CONSTANT')];
+      if (cv === undefined) { err(block, T('不支持该常量', 'unsupported constant')); return { e: 'num', v: 0 }; }
+      return { e: 'num', v: cv };
+    }
+    case 'text_isEmpty':
+      return { e: 'bin', o: '==', l: { e: 'sensor', n: 'strLen', args: [vin(block, 'VALUE')] }, r: { e: 'num', v: 0 } };
     default:
       err(block, T('未知表达式积木: ', 'unknown expression block: ') + block.type);
       return { e: 'num', v: 0 };
@@ -534,6 +751,24 @@ function stmt1(b) {
   switch (b.type) {
     case 'bot_say': return { op: 'say', text: vreq(b, 'TEXT', 'text') };
     case 'bot_wait': return { op: 'wait', ticks: vreq(b, 'TICKS', 'ticks') };
+    case 'bot_wait_until': return { op: 'waitUntil', cond: vreq(b, 'COND', 'condition') };
+    case 'bot_broadcast': return { op: 'broadcast', name: b.getFieldValue('NAME') || '' };
+    case 'bot_stop_thread': return { op: 'stopThread' };
+    case 'bot_equip': return { op: 'equipItem', item: vreq(b, 'ITEM', 'item') };
+    case 'bot_drop_of': return { op: 'dropOf', item: vreq(b, 'ITEM', 'item'), count: vreq(b, 'COUNT', 'count') };
+    case 'bot_look_entity': return { op: 'lookAtEntity', type: vreq(b, 'TYPE', 'type'), range: vreq(b, 'RANGE', 'range') };
+    case 'list_add': return { op: 'listAdd', 'var': b.getField('VAR').getText(), value: vreq(b, 'VALUE', 'value') };
+    case 'list_insert': return { op: 'listInsert', 'var': b.getField('VAR').getText(),
+      index: vreq(b, 'INDEX', 'index'), value: vreq(b, 'VALUE', 'value') };
+    case 'list_remove': return { op: 'listRemove', 'var': b.getField('VAR').getText(), index: vreq(b, 'INDEX', 'index') };
+    case 'list_set': return { op: 'listSet', 'var': b.getField('VAR').getText(),
+      index: vreq(b, 'INDEX', 'index'), value: vreq(b, 'VALUE', 'value') };
+    case 'list_clear': return { op: 'listClear', 'var': b.getField('VAR').getText() };
+    case 'text_append': {
+      var avn = b.getField('VAR').getText();
+      return { op: 'set', 'var': avn,
+        value: { e: 'bin', o: 'concat', l: { e: 'var', n: avn }, r: vreq(b, 'TEXT', 'text') } };
+    }
     case 'bot_move': {
       var s = { op: 'move', dir: b.getFieldValue('DIR') };
       var t = vin(b, 'TICKS');
@@ -651,6 +886,18 @@ function serialize() {
       t.setWarningText(null);
       program.push({ op: 'onChat', text: { e: 'str', v: t.getFieldValue('TEXT') || '' },
         body: stmts(t.getNextBlock()) });
+    } else if (t.type === 'event_broadcast') {
+      t.setWarningText(null);
+      program.push({ op: 'onBroadcast', name: t.getFieldValue('NAME') || '',
+        body: stmts(t.getNextBlock()) });
+    } else if (t.type === 'event_health') {
+      t.setWarningText(null);
+      program.push({ op: 'onHealthBelow', value: Number(t.getFieldValue('VALUE')) || 10,
+        body: stmts(t.getNextBlock()) });
+    } else if (t.type === 'event_entity') {
+      t.setWarningText(null);
+      program.push({ op: 'onEntityNear', range: Number(t.getFieldValue('RANGE')) || 8,
+        type: t.getFieldValue('TYPE') || '', body: stmts(t.getNextBlock()) });
     } else {
       program = program.concat(stmts(t));
     }
@@ -680,7 +927,7 @@ $('btnSave').onclick = function () {
     format: 1,
     name: $('bhName').value || 'behavior',
     description: $('bhDesc').value || '',
-    loop: $('bhLoop').checked,
+    loop: false, // 循环语义由"永远重复"积木与事件帽子块表达
     program: result.program,
     blockly: Blockly.serialization.workspaces.save(workspace)
   };
@@ -709,7 +956,6 @@ $('fileInput').onchange = function (ev) {
       Blockly.serialization.workspaces.load(data.blockly, workspace);
       $('bhName').value = data.name || '';
       $('bhDesc').value = data.description || '';
-      $('bhLoop').checked = !!data.loop;
       status(T('已打开 ', 'opened ') + file.name, 'ok');
     } catch (e) {
       status(T('打开失败: ', 'open failed: ') + e.message, 'err');
@@ -725,7 +971,7 @@ $('btnNew').onclick = function () {
     return;
   }
   workspace.clear();
-  $('bhName').value = ''; $('bhDesc').value = ''; $('bhLoop').checked = false;
+  $('bhName').value = ''; $('bhDesc').value = '';
   status(T('已新建', 'new workspace'), 'ok');
 };
 
@@ -742,7 +988,6 @@ $('btnLang').onclick = function () {
 // 顶栏文案本地化
 $('lbName').textContent = T('行为名', 'NAME');
 $('lbDesc').textContent = T('描述', 'DESCRIPTION');
-$('lbLoop').textContent = T('循环', 'Loop');
 $('lbSave').textContent = T('保存', 'Save');
 $('btnUndo').setAttribute('data-tip', T('撤销 Ctrl+Z', 'Undo Ctrl+Z'));
 $('btnRedo').setAttribute('data-tip', T('重做 Ctrl+Y', 'Redo Ctrl+Y'));
@@ -763,7 +1008,7 @@ workspace.addChangeListener(function (e) {
   draftTimer = setTimeout(function () {
     try {
       localStorage.setItem('bh_draft', JSON.stringify({
-        name: $('bhName').value, desc: $('bhDesc').value, loop: $('bhLoop').checked,
+        name: $('bhName').value, desc: $('bhDesc').value,
         blockly: Blockly.serialization.workspaces.save(workspace)
       }));
     } catch (ignored) { }
@@ -776,7 +1021,6 @@ workspace.addChangeListener(function (e) {
       Blockly.serialization.workspaces.load(draft.blockly, workspace);
       $('bhName').value = draft.name || '';
       $('bhDesc').value = draft.desc || '';
-      $('bhLoop').checked = !!draft.loop;
       status(T('已恢复上次的草稿', 'restored previous draft'), '');
     }
   } catch (ignored) { }

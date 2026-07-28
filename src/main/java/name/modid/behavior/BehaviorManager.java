@@ -249,6 +249,18 @@ public final class BehaviorManager {
         }
     }
 
+    /** 行为内 broadcast 语句：分发给所有运行中的行为（跨假人，含发送者自己） */
+    public static void broadcastEvent(String name) {
+        if (name == null || name.isEmpty() || RUNNING.isEmpty()) {
+            return;
+        }
+        for (Active active : RUNNING.values()) {
+            if (active.runtime != null && !active.runtime.isFinished()) {
+                active.runtime.onBroadcastMessage(name);
+            }
+        }
+    }
+
     // ==================== tick 驱动 ====================
 
     /** 每服务器 tick 调用：驱动所有运行中的行为 */

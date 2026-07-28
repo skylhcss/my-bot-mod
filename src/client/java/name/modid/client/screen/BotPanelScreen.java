@@ -87,10 +87,17 @@ public class BotPanelScreen extends Screen {
         }
 
         this.addRenderableWidget(new ModernButton(leftX, buttonsTop + step * 3, colW, rowH,
-            Component.translatable("gui.my-bot-mod.panel.stop"), b -> run("bot " + data.name() + " stop")));
+            Component.translatable("gui.my-bot-mod.panel.behaviors"),
+            b -> {
+                if (this.minecraft != null) {
+                    this.minecraft.setScreen(new BotBehaviorScreen(data.name(), this));
+                }
+            }));
         this.addRenderableWidget(new ModernButton(leftX, buttonsTop + step * 4, colW, rowH,
+            Component.translatable("gui.my-bot-mod.panel.stop"), b -> run("bot " + data.name() + " stop")));
+        this.addRenderableWidget(new ModernButton(leftX, buttonsTop + step * 5, colW, rowH,
             Component.translatable("gui.my-bot-mod.panel.tphere"), b -> run("bot " + data.name() + " tphere")));
-        deleteButton = new ModernButton(leftX, buttonsTop + step * 5, colW, rowH,
+        deleteButton = new ModernButton(leftX, buttonsTop + step * 6, colW, rowH,
             Component.translatable("gui.my-bot-mod.panel.delete"), b -> onDeleteClicked());
         this.addRenderableWidget(deleteButton);
 

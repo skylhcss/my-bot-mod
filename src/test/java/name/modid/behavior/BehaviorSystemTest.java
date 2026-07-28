@@ -342,6 +342,111 @@ class BehaviorSystemTest {
         assertEquals(1, r.getVar("n").asNumber());
     }
 
+    // ==================== 多线程（并联）与列表与广播 ====================
+
+    @Test
+    @DisplayName("多个 onStart 帽子块并联执行（互不阻塞）")
+    void parallelThreads() throws Exception {
+        // 线程 A：wait 5 后置 a=1；线程 B：立即置 b=1。B 不被 A 的 wait 阻塞
+        BehaviorRuntime r = new BehaviorRuntime(null, parse("{\"program\":["
+            + "{\"op\":\"onStart\",\"body\":[{\"op\":\"wait\",\"ticks\":5},{\"op\":\"set\",\"var\":\"a\",\"value\":1}]},"
+            + "{\"op\":\"onStart\",\"body\":[{\"op\":\"set\",\"var\":\"b\",\"value\":1}]}"
+            + "]}"));
+        r.tick();
+        assertEquals(1, r.getVar("b").asNumber(), "线程 B 首 tick 完成，不被 A 阻塞");
+        assertEquals(0, r.getVar("a").asNumber(), "线程 A 仍在 wait");
+        for (int i = 0; i < 6; i++) {
+            r.tick();
+        }
+        assertEquals(1, r.getVar("a").asNumber());
+        assertTrue(r.isFinished());
+    }
+
+    @Test
+    @DisplayName("waitUntil 挂起直到条件成立（由另一线程推进）")
+    void waitUntilCrossThread() throws Exception {
+        BehaviorRuntime r = new BehaviorRuntime(null, parse("{\"program\":["
+            + "{\"op\":\"onStart\",\"body\":["
+            + "  {\"op\":\"waitUntil\",\"cond\":{\"e\":\"bin\",\"o\":\">=\",\"l\":{\"e\":\"var\",\"n\":\"flag\"},\"r\":1}},"
+            + "  {\"op\":\"set\",\"var\":\"done\",\"value\":1}]},"
+            + "{\"op\":\"onStart\",\"body\":[{\"op\":\"wait\",\"ticks\":3},{\"op\":\"set\",\"var\":\"flag\",\"value\":1}]}"
+            + "]}"));
+        r.tick();
+        r.tick();
+        assertEquals(0, r.getVar("done").asNumber(), "条件未满足应挂起");
+        for (int i = 0; i < 5; i++) {
+            r.tick();
+        }
+        assertEquals(1, r.getVar("done").asNumber());
+    }
+
+    @Test
+    @DisplayName("列表语句与函数：增删改查/长度/拼接/拆分（1-based）")
+    void listOperations() throws Exception {
+        BehaviorRuntime r = run("{\"program\":["
+            + "{\"op\":\"listAdd\",\"var\":\"l\",\"value\":\"a\"},"
+            + "{\"op\":\"listAdd\",\"var\":\"l\",\"value\":\"b\"},"
+            + "{\"op\":\"listInsert\",\"var\":\"l\",\"index\":1,\"value\":\"x\"},"
+            + "{\"op\":\"listSet\",\"var\":\"l\",\"index\":3,\"value\":\"c\"},"
+            + "{\"op\":\"set\",\"var\":\"len\",\"value\":{\"e\":\"sensor\",\"n\":\"listLen\",\"args\":[{\"e\":\"var\",\"n\":\"l\"}]}},"
+            + "{\"op\":\"set\",\"var\":\"first\",\"value\":{\"e\":\"sensor\",\"n\":\"listGet\",\"args\":[{\"e\":\"var\",\"n\":\"l\"},1]}},"
+            + "{\"op\":\"set\",\"var\":\"joined\",\"value\":{\"e\":\"sensor\",\"n\":\"listJoin\",\"args\":[{\"e\":\"var\",\"n\":\"l\"},\"-\"]}},"
+            + "{\"op\":\"listRemove\",\"var\":\"l\",\"index\":1},"
+            + "{\"op\":\"set\",\"var\":\"len2\",\"value\":{\"e\":\"sensor\",\"n\":\"listLen\",\"args\":[{\"e\":\"var\",\"n\":\"l\"}]}},"
+            + "{\"op\":\"set\",\"var\":\"parts\",\"value\":{\"e\":\"sensor\",\"n\":\"listSplit\",\"args\":[\"1,2,3\",\",\"]}},"
+            + "{\"op\":\"set\",\"var\":\"plen\",\"value\":{\"e\":\"sensor\",\"n\":\"listLen\",\"args\":[{\"e\":\"var\",\"n\":\"parts\"}]}}"
+            + "]}", 10);
+        assertEquals(3, r.getVar("len").asNumber());
+        assertEquals("x", r.getVar("first").asString());
+        assertEquals("x-a-c", r.getVar("joined").asString());
+        assertEquals(2, r.getVar("len2").asNumber());
+        assertEquals(3, r.getVar("plen").asNumber());
+    }
+
+    @Test
+    @DisplayName("列表字面量与 contains/indexOf")
+    void listLiteralAndSearch() throws Exception {
+        BehaviorRuntime r = run("{\"program\":["
+            + "{\"op\":\"set\",\"var\":\"l\",\"value\":{\"e\":\"list\",\"items\":[10,20,30]}},"
+            + "{\"op\":\"set\",\"var\":\"has\",\"value\":{\"e\":\"sensor\",\"n\":\"listContains\",\"args\":[{\"e\":\"var\",\"n\":\"l\"},20]}},"
+            + "{\"op\":\"set\",\"var\":\"at\",\"value\":{\"e\":\"sensor\",\"n\":\"listIndexOf\",\"args\":[{\"e\":\"var\",\"n\":\"l\"},30]}}"
+            + "]}", 10);
+        assertTrue(r.getVar("has").asBool());
+        assertEquals(3, r.getVar("at").asNumber());
+    }
+
+    @Test
+    @DisplayName("onBroadcast 触发专属线程（其他线程不受影响）")
+    void broadcastTriggers() throws Exception {
+        BehaviorRuntime r = new BehaviorRuntime(null, parse("{\"program\":["
+            + "{\"op\":\"onBroadcast\",\"name\":\"go\",\"body\":[{\"op\":\"change\",\"var\":\"n\",\"value\":1}]}"
+            + "]}"));
+        r.tick();
+        assertFalse(r.isFinished(), "含广播触发器应驻留");
+        assertFalse(r.onBroadcastMessage("other"));
+        assertTrue(r.onBroadcastMessage("GO"), "大小写不敏感全等匹配");
+        r.tick();
+        assertEquals(1, r.getVar("n").asNumber());
+        assertTrue(r.onBroadcastMessage("go"), "重触发重启该线程");
+        r.tick();
+        assertEquals(2, r.getVar("n").asNumber());
+    }
+
+    @Test
+    @DisplayName("字符串函数：长度/包含/子串/大小写")
+    void stringFunctions() throws Exception {
+        BehaviorRuntime r = run("{\"program\":["
+            + "{\"op\":\"set\",\"var\":\"len\",\"value\":{\"e\":\"sensor\",\"n\":\"strLen\",\"args\":[\"hello\"]}},"
+            + "{\"op\":\"set\",\"var\":\"has\",\"value\":{\"e\":\"sensor\",\"n\":\"strContains\",\"args\":[\"Hello World\",\"world\"]}},"
+            + "{\"op\":\"set\",\"var\":\"sub\",\"value\":{\"e\":\"sensor\",\"n\":\"strSub\",\"args\":[\"abcdef\",2,4]}},"
+            + "{\"op\":\"set\",\"var\":\"up\",\"value\":{\"e\":\"sensor\",\"n\":\"strUpper\",\"args\":[\"abc\"]}}"
+            + "]}", 10);
+        assertEquals(5, r.getVar("len").asNumber());
+        assertTrue(r.getVar("has").asBool());
+        assertEquals("bcd", r.getVar("sub").asString());
+        assertEquals("ABC", r.getVar("up").asString());
+    }
+
     // ==================== 文件名清洗 ====================
 
     @Test

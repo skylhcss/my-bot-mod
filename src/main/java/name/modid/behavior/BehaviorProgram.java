@@ -71,8 +71,8 @@ public final class BehaviorProgram {
 
     // ==================== 表达式 ====================
 
-    /** 表达式节点：字面量 / 变量 / 一元 / 二元 / 传感器 */
-    public sealed interface Expr permits Num, Str, Bool, Var, Bin, Un, Sensor {
+    /** 表达式节点：字面量 / 列表 / 变量 / 一元 / 二元 / 传感器 */
+    public sealed interface Expr permits Num, Str, Bool, ListLit, Var, Bin, Un, Sensor {
     }
 
     /** 数字字面量 */
@@ -85,6 +85,10 @@ public final class BehaviorProgram {
 
     /** 布尔字面量 */
     public record Bool(boolean v) implements Expr {
+    }
+
+    /** 列表字面量（元素为任意表达式） */
+    public record ListLit(List<Expr> items) implements Expr {
     }
 
     /** 变量引用 */

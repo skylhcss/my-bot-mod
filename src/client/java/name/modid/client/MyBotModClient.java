@@ -119,20 +119,19 @@ public class MyBotModClient implements ClientModInitializer {
                     java.util.Collections.unmodifiableMap(errors));
                 client.execute(() -> {
                     BehaviorClientData.set(state);
-                    if (client.screen instanceof name.modid.client.screen.ModernConfigScreen ms) {
-                        ms.refreshCurrentPage();
+                    if (client.screen instanceof name.modid.client.screen.BotBehaviorScreen bs) {
+                        bs.refresh();
                     }
                 });
             });
 
-        // 断开连接时释放 PNG 皮肤动态纹理，避免跨存档累积；并重置指挥棒与行为页状态
+        // 断开连接时释放 PNG 皮肤动态纹理，避免跨存档累积；并重置指挥棒与行为缓存
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) ->
             client.execute(() -> {
                 BotSkinTextureLoader.clearCache();
                 name.modid.client.baton.BatonClientState.reset();
                 BehaviorClientData.set(new BehaviorClientData.State(
                     java.util.List.of(), "", java.util.List.of(), false, java.util.Map.of()));
-                name.modid.client.screen.pages.BehaviorPage.resetSession();
             }));
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {

@@ -121,9 +121,10 @@ MIT License. Author: **Skyline_hcss**. Bots are intended for singleplayer and pr
 ### 📖 文档
 [命令参考](docs/COMMANDS.md) · [配置指南](docs/CONFIG.md) · [行为系统](docs/BEHAVIORS.md) · [皮肤系统](docs/SKINS.md) · [开发文档](docs/DEVELOPMENT.md) · [常见问题](docs/FAQ.md) · [更新日志](CHANGELOG.md)
 
-### 📝 最新更新（v1.3.3-alpha 预览版）
-- 🧩 **假人行为系统**：类 Scratch 的 Blockly 图形化编辑器（60+ 积木/11 分类，现代化深色 UI，离线可用），游戏内行为管理页 + 播放列表
-- ⚡ **事件积木**：当行为启动时 / 当玩家发送"…"时（聊天触发，可驻留监听）
+### 📝 最新更新（v1.3.3-beta 预览版）
+- 🧩 **假人行为系统**：类 Scratch 的 Blockly 图形化编辑器（**120+ 积木/13 分类**，含列表与文本处理，现代化深色 UI，离线可用）
+- 🧵 **多脚本并行**：多个帽子块并联执行互不阻塞；每假人专属行为管理界面（右键面板），实时刷新
+- ⚡ **事件积木**：行为启动/玩家发言/收到广播（跨假人协作）/血量过低/实体接近
 - 📦 **容器拟真交互**：够不着先寻路靠近→看向→真实开箱→取出/放入/盘点（箱盖与声音生效）
 - 📄 **外置输出**：行为可将数据写入 my-bot-mod-exports/（txt / JSON Lines / CSV）
 - 🔧 含 v1.3.2 全部内容（配置界面重构、新配置项、寻路增强、全面双语等）

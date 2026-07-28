@@ -37,10 +37,9 @@ public class ModernConfigScreen extends Screen {
 
     // 分类页面
     private final List<ConfigPage> pages = new ArrayList<>();
-    private static final String[] CATEGORY_KEYS = {"general", "combat", "survival", "pathfinding", "behaviors", "advanced", "bots"};
+    private static final String[] CATEGORY_KEYS = {"general", "combat", "survival", "pathfinding", "advanced", "bots"};
     private static final net.minecraft.world.item.Item[] CATEGORY_ITEMS = {
-        Items.LEVER, Items.IRON_SWORD, Items.COOKED_BEEF, Items.COMPASS,
-        Items.REPEATING_COMMAND_BLOCK, Items.COMPARATOR, Items.PLAYER_HEAD
+        Items.LEVER, Items.IRON_SWORD, Items.COOKED_BEEF, Items.COMPASS, Items.COMPARATOR, Items.PLAYER_HEAD
     };
 
     // 浏览器式标签状态（static 以便重开时恢复）
@@ -92,7 +91,6 @@ public class ModernConfigScreen extends Screen {
         pages.add(new CombatPage(this, config));
         pages.add(new SurvivalPage(this, config));
         pages.add(new PathfindingPage(this, config));
-        pages.add(new BehaviorPage(this, config));
         pages.add(new AdvancedPage(this, config));
         pages.add(new BotsPage(this, config));
 

@@ -20,7 +20,8 @@ jobs:
       - name: setup jdk
         uses: actions/setup-java@v5
         with:
-          java-version: '17'
+          # Loom 1.16 要求 Gradle 运行在 JVM 21+（产物仍为 release 17，兼容 Java 17+）
+          java-version: '21'
           distribution: 'temurin'
       - name: make gradle wrapper executable
         run: chmod +x ./gradlew

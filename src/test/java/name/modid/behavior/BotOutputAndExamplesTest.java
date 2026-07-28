@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -126,18 +127,22 @@ class BotOutputAndExamplesTest {
     }
 
     @Test
-    @DisplayName("巡逻示例可在纯逻辑模式下推进（挂起/恢复不崩溃）")
+    @DisplayName("巡逻示例：两个帽子块并联（onStart 巡逻 + onChat 问候）")
     void patrolExampleRuns() throws Exception {
         Path file = repoRoot().resolve("editor").resolve("examples").resolve("patrol-greeter.json");
         BehaviorProgram program;
         try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
             program = BehaviorParser.parse("patrol-greeter.json", reader);
         }
-        assertTrue(program.loop);
-        // 注：首语句为 say（需实体），纯逻辑模式跳过实体交互类语句的执行验证，
-        // 此处仅验证解析结构：say/wait/move/wait/turn 共 5 条顶层语句
-        assertEquals(5, program.body.size());
-        assertEquals("say", program.body.get(0).op());
-        assertEquals("turn", program.body.get(4).op());
+        assertEquals(2, program.body.size());
+        assertEquals("onStart", program.body.get(0).op());
+        assertEquals("onChat", program.body.get(1).op());
+        // 纯逻辑模式：含 onChat 触发器应驻留，聊天命中后回应变量可用
+        BehaviorRuntime r = new BehaviorRuntime(null, program);
+        for (int i = 0; i < 5; i++) {
+            r.tick();
+        }
+        assertFalse(r.isFinished(), "含聊天触发器应驻留监听");
+        assertTrue(r.onChatMessage("Steve", "你好呀"), "包含匹配应命中");
     }
 }
