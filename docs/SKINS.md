@@ -32,7 +32,7 @@ skins/
 
 ## 添加 Base64 皮肤
 
-1. 取 UUID：`https://api.mojang.com/users/profiles/minecraft/<玩家名>`
+1. 取玩家 UUID：原 `https://api.mojang.com/users/profiles/minecraft/<玩家名>` 端点已被 Mojang 退役，可改用第三方镜像（如 `https://playerdb.co/api/player/minecraft/<玩家名>`）或从游戏内获取。
 2. 取皮肤数据：`https://sessionserver.mojang.com/session/minecraft/profile/<UUID>?unsigned=false`
 3. 提取 `properties[0].value`（Base64 字符串）。
 4. 存为 `.txt` 放入 `skins/`（**不要**命名为 `README.txt`）。
@@ -46,7 +46,7 @@ skins/
 
 - **皮肤没加载 / 显示默认**：检查文件夹位置与日志路径，确认 PNG 尺寸/扩展名正确，重启游戏。
 - **Base64 未加载**：确认不是 `README.txt`、字符串完整无多余空白。
-- **Mojang 获取失败**：检查网络与玩家名是否存在；会自动回退到 PNG/默认皮肤。
+- **Mojang 获取失败**：检查网络与玩家名是否存在；会自动回退到 PNG/默认皮肤。注意：模组内置的名字→UUID 查询端点（api.mojang.com）已被 Mojang 退役，正版皮肤获取可能因此失败，建议直接用 PNG 方式。
 
 ---
 

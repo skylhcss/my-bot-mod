@@ -77,10 +77,14 @@ public class BotSkinTextureLoader {
     /** 设置某假人的 PNG 皮肤文件名（收到 S2C BOT_SKIN 时调用，主线程） */
     public static void setPngName(UUID botUUID, String pngName) {
         if (pngName == null || pngName.isEmpty()) {
-            pngNameByBot.remove(botUUID);
-        } else {
-            pngNameByBot.put(botUUID, pngName);
+            removeCache(botUUID);
+            return;
         }
+        // 换了新文件名：释放旧纹理并清缓存，强制按新名重载（否则渲染命中旧纹理永不更新）
+        if (!pngName.equals(pngNameByBot.get(botUUID))) {
+            removeCache(botUUID);
+        }
+        pngNameByBot.put(botUUID, pngName);
         failedSkins.remove(botUUID); // 允许用新名字重试
     }
 
@@ -96,6 +100,13 @@ public class BotSkinTextureLoader {
      * @return 纹理资源位置
      */
     public static ResourceLocation loadPngSkinTexture(UUID botUUID, String pngFileName) {
+        // 文件名校验：拒绝路径分隔符/".."/非 .png，防止路径穿越读取任意文件
+        // （用 File.separatorChar 而非反斜杠字符字面量，避免 Stonecutter 词法解析异常）
+        if (pngFileName == null || pngFileName.indexOf('/') >= 0 || pngFileName.indexOf(File.separatorChar) >= 0
+                || pngFileName.contains("..") || !pngFileName.toLowerCase(java.util.Locale.ROOT).endsWith(".png")) {
+            failedSkins.add(botUUID);
+            return null;
+        }
         // 命中缓存直接返回（渲染热路径）
         ResourceLocation cached = pngSkinTextures.get(botUUID);
         if (cached != null) return cached;
@@ -106,6 +117,15 @@ public class BotSkinTextureLoader {
         // 提交后台任务：读盘 + 解码在 IO 线程，纹理注册回主线程
         SKIN_IO_EXECUTOR.submit(() -> loadSkinAsync(botUUID, pngFileName));
         return null;
+    }
+
+    /** 皮肤纹理 ID（1.21+ ResourceLocation 构造器私有，改用工厂方法） */
+    private static ResourceLocation skinLocation(UUID botUUID) {
+        //? if >=1.21 {
+        /*return ResourceLocation.fromNamespaceAndPath("my-bot-mod", "skins/bot_" + botUUID.toString());
+        *///?} else {
+        return new ResourceLocation("my-bot-mod", "skins/bot_" + botUUID.toString());
+        //?}
     }
 
     /** 后台读取并解码 PNG，成功后回主线程注册纹理 */
@@ -139,7 +159,7 @@ public class BotSkinTextureLoader {
                         return;
                     }
                     DynamicTexture texture = new DynamicTexture(image);
-                    ResourceLocation location = new ResourceLocation("my-bot-mod", "skins/bot_" + botUUID.toString());
+                    ResourceLocation location = skinLocation(botUUID);
                     Minecraft.getInstance().getTextureManager().register(location, texture);
                     pngSkinTextures.put(botUUID, location);
                     MyBotMod.LOGGER.info("成功加载 PNG 皮肤: {} -> {}", pngFileName, location);

@@ -37,12 +37,6 @@ public class GeneralPage extends ConfigPage {
             config.enableBotFeature = true; config.save(); enableBot.setSelected(true);
         }));
         
-        ModernCheckbox carpetCompat = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.general.carpet_compat"), config.carpetModCompatibility);
-        carpetCompat.setOnChanged(() -> { config.carpetModCompatibility = carpetCompat.selected(); config.save(); });
-        switchSection.addItem(carpetCompat, new ResetButton(0, 0, () -> {
-            config.carpetModCompatibility = true; config.save(); carpetCompat.setSelected(true);
-        }));
-        
         // Section 2: 服务器设置
         SectionCard serverSection = addSection(Component.translatable("gui.my-bot-mod.general.section.server").getString());
         

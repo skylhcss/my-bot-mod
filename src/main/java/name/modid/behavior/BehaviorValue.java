@@ -59,7 +59,9 @@ public final class BehaviorValue {
             return l.size();
         }
         try {
-            return Double.parseDouble(((String) raw).trim());
+            // parseDouble 会接受 "NaN"/"Infinity" 字面量，非有限值归零防止传播挂死条件循环
+            double v = Double.parseDouble(((String) raw).trim());
+            return Double.isFinite(v) ? v : 0;
         } catch (NumberFormatException e) {
             return 0;
         }

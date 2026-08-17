@@ -6,7 +6,7 @@ import name.modid.client.screen.widget.ModernButton;
 import name.modid.client.screen.widget.UI;
 import name.modid.config.ModConfig;
 import name.modid.net.BotNetworking;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import name.modid.client.BotClientNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -310,15 +310,14 @@ public class ModernConfigScreen extends Screen {
 
     private void requestBotListIfNeeded() {
         if (currentPage instanceof BotsPage && this.minecraft != null && this.minecraft.getConnection() != null) {
-            ClientPlayNetworking.send(BotNetworking.REQUEST_BOT_LIST, BotNetworking.c2s());
+            BotClientNetworking.sendRequestBotList(BotNetworking.c2s());
         }
     }
 
-    /** 假人列表 S2C 到达后刷新"假人"标签页 */
+    /** 假人列表 S2C 到达后刷新“假人”标签页（保留滚动位置） */
     public void refreshCurrentPage() {
         if (currentPage instanceof BotsPage) {
-            int pad = DesignTokens.SCROLL_AREA_PADDING;
-            currentPage.init(panelX + pad, contentY, panelWidth - pad * 2, contentHeight, this.minecraft, this.font);
+            currentPage.rebuild();
         }
     }
 

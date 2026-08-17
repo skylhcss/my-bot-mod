@@ -28,11 +28,11 @@ public class BotSkinManager {
     // PNG 皮肤文件列表
     private static final List<File> PNG_SKIN_FILES = new ArrayList<>();
     
-    // 皮肤缓存
-    private static final Map<String, Property> skinCache = new HashMap<>();
+    // 皮肤缓存（并发安全：单机模式下服务端与客户端线程同 JVM 共存）
+    private static final Map<String, Property> skinCache = new java.util.concurrent.ConcurrentHashMap<>();
     
     // 负面缓存：已知没有 Mojang 皮肤的玩家名（避免重复阻塞 HTTP 请求）
-    private static final Set<String> negativeCache = new HashSet<>();
+    private static final Set<String> negativeCache = java.util.concurrent.ConcurrentHashMap.newKeySet();
     
     // 皮肤文件夹路径（在游戏目录下）
     private static File skinFolder = null;

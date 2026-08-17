@@ -69,16 +69,22 @@ sourceSets {
 processResources {
 	def version = project.version
 	def mcDep = project.mc_dep
+	// 1.20.5+ 需 Java 21；1.20.1–1.20.4 为 Java 17
+	def javaDep = ['1.20.1', '1.20.2', '1.20.4'].contains(project.minecraft_version) ? '>=17' : '>=21'
 	inputs.property "version", version
 	inputs.property "mc_dep", mcDep
+	inputs.property "java_dep", javaDep
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version, "mc_dep": mcDep
+		expand "version": version, "mc_dep": mcDep, "java_dep": javaDep
 	}
 }
 
+// 1.20.5+ 需 Java 21；1.20.1–1.20.4 保持 Java 17
+def javaRelease = ['1.20.1', '1.20.2', '1.20.4'].contains(project.minecraft_version) ? 17 : 21
+
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 17
+	it.options.release = javaRelease
 }
 
 java {
@@ -87,8 +93,8 @@ java {
 	// If you remove this line, sources will not be generated.
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_17
-	targetCompatibility = JavaVersion.VERSION_17
+	sourceCompatibility = javaRelease == 17 ? JavaVersion.VERSION_17 : JavaVersion.VERSION_21
+	targetCompatibility = javaRelease == 17 ? JavaVersion.VERSION_17 : JavaVersion.VERSION_21
 }
 
 // 静态检查：违规将阻断构建（CI 质量门控）

@@ -31,6 +31,20 @@ public class FakeServerGamePacketListenerImpl extends ServerGamePacketListenerIm
         // no-op
     }
 
+    /**
+     * 假人无客户端，服务端下行包无需真正发送。覆盖 send 直接丢弃，
+     * 避免底层 Connection 因永不连接而把所有出站包堆入 pendingActions 队列造成内存泄漏。
+     */
+    @Override
+    public void send(net.minecraft.network.protocol.Packet<?> packet) {
+        // no-op：丢弃所有下行包
+    }
+
+    @Override
+    public void send(net.minecraft.network.protocol.Packet<?> packet, net.minecraft.network.PacketSendListener listener) {
+        // no-op：丢弃所有下行包（含发送回调）
+    }
+
     // 覆盖所有方法，使其不执行任何操作
     @Override public void handlePlayerInput(ServerboundPlayerInputPacket packet) {}
     @Override public void handleMoveVehicle(ServerboundMoveVehiclePacket packet) {}
@@ -41,7 +55,9 @@ public class FakeServerGamePacketListenerImpl extends ServerGamePacketListenerIm
     @Override public void handleCustomCommandSuggestions(ServerboundCommandSuggestionPacket packet) {}
     @Override public void handleSetCommandBlock(ServerboundSetCommandBlockPacket packet) {}
     @Override public void handleSetCommandMinecart(ServerboundSetCommandMinecartPacket packet) {}
+    //? if <1.21.4 {
     @Override public void handlePickItem(ServerboundPickItemPacket packet) {}
+    //?}
     @Override public void handleRenameItem(ServerboundRenameItemPacket packet) {}
     @Override public void handleSetBeaconPacket(ServerboundSetBeaconPacket packet) {}
     @Override public void handleSetStructureBlock(ServerboundSetStructureBlockPacket packet) {}
@@ -49,8 +65,10 @@ public class FakeServerGamePacketListenerImpl extends ServerGamePacketListenerIm
     @Override public void handleJigsawGenerate(ServerboundJigsawGeneratePacket packet) {}
     @Override public void handleSelectTrade(ServerboundSelectTradePacket packet) {}
     @Override public void handleEditBook(ServerboundEditBookPacket packet) {}
+    //? if <1.20.5 {
     @Override public void handleEntityTagQuery(ServerboundEntityTagQuery packet) {}
     @Override public void handleBlockEntityTagQuery(ServerboundBlockEntityTagQuery packet) {}
+    //?}
     @Override public void handleMovePlayer(ServerboundMovePlayerPacket packet) {}
     @Override public void handlePlayerAction(ServerboundPlayerActionPacket packet) {}
     @Override public void handleUseItemOn(ServerboundUseItemOnPacket packet) {}

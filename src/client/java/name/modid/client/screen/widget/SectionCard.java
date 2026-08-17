@@ -23,6 +23,8 @@ public class SectionCard {
     private boolean collapsed = false;
     private final List<AbstractWidget> items = new ArrayList<>();
     private final List<ResetButton> resets = new ArrayList<>();
+    /** 行尾多按钮组（与 items 平行；无则 null） */
+    private final List<AbstractWidget[]> trailings = new ArrayList<>();
 
     // 搜索过滤状态
     private boolean[] itemVisible = new boolean[0];
@@ -53,11 +55,20 @@ public class SectionCard {
     public void addItem(AbstractWidget widget, ResetButton reset) {
         items.add(widget);
         resets.add(reset);
+        trailings.add(null);
     }
 
     public void addItem(AbstractWidget widget) {
         items.add(widget);
         resets.add(null);
+        trailings.add(null);
+    }
+
+    /** 添加一个配置项与行尾按钮组（按钮保持自身宽度，靠右排列） */
+    public void addItemWithTrailing(AbstractWidget widget, AbstractWidget... trailing) {
+        items.add(widget);
+        resets.add(null);
+        trailings.add(trailing == null || trailing.length == 0 ? null : trailing);
     }
 
     /**
@@ -110,8 +121,6 @@ public class SectionCard {
         }
 
         int currentY = cardY + DesignTokens.CARD_V_PADDING + DesignTokens.CARD_TITLE_HEIGHT + DesignTokens.CARD_TITLE_GAP;
-        // 留出右侧一个 reset 按钮的宽度（reset 紧贴右内边距），控件文字居中时不会被 reset 遮挡
-        int itemWidth = cardWidth - DesignTokens.CARD_H_PADDING * 2 - DesignTokens.RESET_SIZE - 2;
 
         boolean placedAny = false;
         for (int i = 0; i < items.size(); i++) {
@@ -119,7 +128,16 @@ public class SectionCard {
                 continue;
             }
             AbstractWidget item = items.get(i);
+            // 行尾按钮组总宽（保持各自宽度 + 1px 间距）
+            AbstractWidget[] trailing = i < trailings.size() ? trailings.get(i) : null;
+            int trailingWidth = 0;
+            if (trailing != null) {
+                for (AbstractWidget t : trailing) {
+                    trailingWidth += t.getWidth() + 1;
+                }
+            }
             // 统一行高，避免不同控件（slider/checkbox/button）自定义高度造成重叠
+            int itemWidth = cardWidth - DesignTokens.CARD_H_PADDING * 2 - DesignTokens.RESET_SIZE - 2 - trailingWidth;
             item.setX(cardX + DesignTokens.CARD_H_PADDING);
             item.setY(currentY);
             item.setWidth(itemWidth);
@@ -127,6 +145,17 @@ public class SectionCard {
             else if (item instanceof ModernSlider sl) sl.setHeight(DesignTokens.ROW_HEIGHT);
             else if (item instanceof ModernButton btn) btn.setHeight(DesignTokens.ROW_HEIGHT);
             else if (item instanceof ResetButton rb) rb.setHeight(DesignTokens.ROW_HEIGHT);
+
+            // 行尾按钮靠右排列（在 reset 位左侧）
+            if (trailing != null) {
+                int tx = cardX + cardWidth - DesignTokens.CARD_H_PADDING - DesignTokens.RESET_SIZE - 2 - trailingWidth;
+                for (AbstractWidget t : trailing) {
+                    t.setX(tx);
+                    t.setY(currentY);
+                    if (t instanceof ModernButton tb) tb.setHeight(DesignTokens.ROW_HEIGHT);
+                    tx += t.getWidth() + 1;
+                }
+            }
 
             ResetButton reset = resets.get(i);
             if (reset != null) {
@@ -183,6 +212,12 @@ public class SectionCard {
                 continue;
             }
             items.get(i).render(graphics, mouseX, mouseY, partialTick);
+            AbstractWidget[] trailing = i < trailings.size() ? trailings.get(i) : null;
+            if (trailing != null) {
+                for (AbstractWidget t : trailing) {
+                    t.render(graphics, mouseX, mouseY, partialTick);
+                }
+            }
             ResetButton reset = resets.get(i);
             if (reset != null) {
                 reset.render(graphics, mouseX, mouseY, partialTick);
@@ -204,6 +239,10 @@ public class SectionCard {
                 continue;
             }
             all.add(items.get(i));
+            AbstractWidget[] trailing = i < trailings.size() ? trailings.get(i) : null;
+            if (trailing != null) {
+                all.addAll(Arrays.asList(trailing));
+            }
             ResetButton reset = resets.get(i);
             if (reset != null) {
                 all.add(reset);

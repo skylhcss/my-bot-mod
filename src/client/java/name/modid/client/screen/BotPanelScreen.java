@@ -6,7 +6,7 @@ import name.modid.client.screen.widget.ModernButton;
 import name.modid.client.screen.widget.UI;
 import name.modid.net.BotNetworking;
 import name.modid.net.BotPanelData;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import name.modid.client.BotClientNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.multiplayer.ClientPacketListener;
@@ -50,6 +50,8 @@ public class BotPanelScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        // 重建界面（窗口缩放/GUI 缩放）时删除按钮文案会复位为“删除”，同步重置确认态，避免二次确认失效导致误删
+        confirmingDelete = false;
         panelX = DesignTokens.PANEL_H_MARGIN;
         panelY = DesignTokens.PANEL_TOP_MARGIN;
         panelWidth = this.width - DesignTokens.PANEL_H_MARGIN * 2;
@@ -130,7 +132,7 @@ public class BotPanelScreen extends Screen {
         buf.writeUtf(data.name());
         buf.writeUtf(key);
         buf.writeVarInt(overrides[idx]);
-        ClientPlayNetworking.send(BotNetworking.UPDATE_SETTING, buf);
+        BotClientNetworking.sendUpdateSetting(buf);
     }
 
     private void run(String command) {
@@ -140,14 +142,14 @@ public class BotPanelScreen extends Screen {
         }
     }
 
-    /** 删除假人：二次确认（首次点击仅提示，再次点击才执行） */
+    /** 删除假人：二次确认（首次点击仅提示，再次点击才执行）；确认后走 kill confirm 直接执行 */
     private void onDeleteClicked() {
         if (!confirmingDelete) {
             confirmingDelete = true;
             deleteButton.setMessage(Component.translatable("gui.my-bot-mod.panel.confirm_delete"));
             return;
         }
-        run("bot " + data.name() + " kill");
+        run("bot " + data.name() + " kill confirm");
         this.onClose();
     }
 

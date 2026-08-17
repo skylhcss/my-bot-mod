@@ -8,6 +8,7 @@ import java.io.StringReader;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -445,6 +446,86 @@ class BehaviorSystemTest {
         assertTrue(r.getVar("has").asBool());
         assertEquals("bcd", r.getVar("sub").asString());
         assertEquals("ABC", r.getVar("up").asString());
+    }
+
+    @Test
+    @DisplayName("新传感器白名单可解析且纯逻辑模式不崩溃（holding/fishHooked/facing 等）")
+    void newSensorsParseAndRunSafely() throws Exception {
+        BehaviorRuntime r = run("{\"program\":["
+            + "{\"op\":\"set\",\"var\":\"a\",\"value\":{\"e\":\"sensor\",\"n\":\"holding\",\"args\":[\"minecraft:fishing_rod\"]}},"
+            + "{\"op\":\"set\",\"var\":\"b\",\"value\":{\"e\":\"sensor\",\"n\":\"hasItem\",\"args\":[\"minecraft:cod\"]}},"
+            + "{\"op\":\"set\",\"var\":\"c\",\"value\":{\"e\":\"sensor\",\"n\":\"fishHooked\"}},"
+            + "{\"op\":\"set\",\"var\":\"d\",\"value\":{\"e\":\"sensor\",\"n\":\"usingItem\"}},"
+            + "{\"op\":\"set\",\"var\":\"e\",\"value\":{\"e\":\"sensor\",\"n\":\"blockBelow\"}},"
+            + "{\"op\":\"set\",\"var\":\"f\",\"value\":{\"e\":\"sensor\",\"n\":\"facing\",\"args\":[\"yaw\"]}}"
+            + "]}", 10);
+        // 纯逻辑模式（bot=null）：依赖实体的传感器返回默认值，不抛异常
+        assertFalse(r.getVar("c").asBool());
+        assertEquals(0, r.getVar("f").asNumber());
+        assertNull(r.getLastError());
+    }
+
+    @Test
+    @DisplayName("持续看向与最近实体定位白名单可解析且纯逻辑不崩溃（followEntity/nearestEntity*）")
+    void followAndNearestEntityParse() throws Exception {
+        BehaviorRuntime r = run("{\"program\":["
+            + "{\"op\":\"followEntity\",\"type\":\"minecraft:tnt\",\"range\":24},"
+            + "{\"op\":\"stopFollow\"},"
+            + "{\"op\":\"set\",\"var\":\"y\",\"value\":{\"e\":\"sensor\",\"n\":\"nearestEntityCoord\",\"args\":[16,\"minecraft:ender_pearl\",\"y\"]}},"
+            + "{\"op\":\"set\",\"var\":\"d\",\"value\":{\"e\":\"sensor\",\"n\":\"nearestEntityDistance\",\"args\":[16,\"minecraft:zombie\"]}},"
+            + "{\"op\":\"set\",\"var\":\"x\",\"value\":{\"e\":\"sensor\",\"n\":\"nearestEntityExists\",\"args\":[16,\"minecraft:snowball\"]}}"
+            + "]}", 10);
+        // 纯逻辑模式（bot=null）：实体传感器返回默认值，不抛异常
+        assertEquals(0, r.getVar("y").asNumber());
+        assertFalse(r.getVar("x").asBool());
+        assertNull(r.getLastError());
+    }
+
+    // ==================== 新输出积木（纯逻辑模式可执行） ====================
+
+    @Test
+    @DisplayName("outputRaw/outputTemplate/outputTable 在纯逻辑模式可执行并落盘")
+    void newOutputOpsRun(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tempDir) throws Exception {
+        BotOutput.overrideDir = tempDir;
+        try {
+            BehaviorRuntime r = run("{\"program\":["
+                + "{\"op\":\"set\",\"var\":\"n\",\"value\":7},"
+                + "{\"op\":\"outputRaw\",\"file\":\"r\",\"content\":\"raw line\"},"
+                + "{\"op\":\"outputTemplate\",\"file\":\"t\",\"format\":\"txt\",\"template\":\"{bot} n={var:n}\"},"
+                + "{\"op\":\"outputTable\",\"file\":\"tb\",\"header\":{\"e\":\"list\",\"items\":[\"k\",\"v\"]},\"row\":{\"e\":\"list\",\"items\":[\"a\",\"b\"]}}"
+                + "]}", 10);
+            assertNull(r.getLastError());
+            BotOutput.flush();
+            assertEquals(java.util.List.of("raw line"),
+                java.nio.file.Files.readAllLines(tempDir.resolve("r.txt"), java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals(java.util.List.of("test n=7"),
+                java.nio.file.Files.readAllLines(tempDir.resolve("t.txt"), java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals(java.util.List.of("k,v", "a,b"),
+                java.nio.file.Files.readAllLines(tempDir.resolve("tb.csv"), java.nio.charset.StandardCharsets.UTF_8));
+        } finally {
+            BotOutput.overrideDir = null;
+        }
+    }
+
+    // ==================== 游戏内编辑器产物的表达式形态（全量 {e:...} 对象形式） ====================
+
+    @Test
+    @DisplayName("编辑器序列化的全部表达式形态（num/str/bool/var/bin/un/list）可解析且求值正确")
+    void editorEmittedExprFormsParse() throws Exception {
+        BehaviorRuntime r = run("{\"program\":["
+            + "{\"op\":\"set\",\"var\":\"a\",\"value\":{\"e\":\"num\",\"v\":6}},"
+            + "{\"op\":\"set\",\"var\":\"b\",\"value\":{\"e\":\"bin\",\"o\":\"*\",\"l\":{\"e\":\"var\",\"n\":\"a\"},\"r\":{\"e\":\"num\",\"v\":7}}},"
+            + "{\"op\":\"set\",\"var\":\"c\",\"value\":{\"e\":\"un\",\"o\":\"neg\",\"v\":{\"e\":\"var\",\"n\":\"b\"}}},"
+            + "{\"op\":\"set\",\"var\":\"d\",\"value\":{\"e\":\"bool\",\"v\":true}},"
+            + "{\"op\":\"set\",\"var\":\"s\",\"value\":{\"e\":\"str\",\"v\":\"hi\"}},"
+            + "{\"op\":\"set\",\"var\":\"l\",\"value\":{\"e\":\"list\",\"items\":[{\"e\":\"num\",\"v\":1},{\"e\":\"str\",\"v\":\"x\"}]}}"
+            + "]}", 10);
+        assertNull(r.getLastError());
+        assertEquals(42, r.getVar("b").asNumber());
+        assertEquals(-42, r.getVar("c").asNumber());
+        assertTrue(r.getVar("d").asBool());
+        assertEquals("hi", r.getVar("s").asString());
+        assertEquals(2, r.getVar("l").asList().size());
     }
 
     // ==================== 文件名清洗 ====================

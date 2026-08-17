@@ -51,6 +51,8 @@ public class BotManager {
      */
     public static BotPlayer createBot(MinecraftServer server, ServerPlayer creator, String botName, Vec3 position, GameType gameMode,
                                       ServerLevel targetLevel, UUID botUuid, UUID creatorUuid, String creatorName) {
+        BotPlayer bot = null;
+        boolean placed = false;
         try {
             var config = name.modid.config.ModConfig.getInstance();
             
@@ -64,8 +66,8 @@ public class BotManager {
                 return null;
             }
             
-            // 检查每位玩家的假人数量上限
-            if (config.maxBotsPerPlayer > 0 && creator != null
+            // 检查每位玩家的假人数量上限（botUuid 非 null = 驻留恢复，属恢复而非新建，旁路该限额）
+            if (config.maxBotsPerPlayer > 0 && botUuid == null && creator != null
                     && getBotsByCreator(creator).size() >= config.maxBotsPerPlayer) {
                 return null;
             }
@@ -98,7 +100,7 @@ public class BotManager {
             Connection connection = new Connection(PacketFlow.SERVERBOUND);
             
             // 创建假人（创建者身份：驻留恢复时为原始创建者，否则为当前玩家）
-            BotPlayer bot = new BotPlayer(server, level, profile, connection,
+            bot = new BotPlayer(server, level, profile, connection,
                 creatorUuid != null ? creatorUuid : creator.getUUID(),
                 creatorName != null ? creatorName : creator.getName().getString());
             
@@ -117,15 +119,28 @@ public class BotManager {
             // 参考 Carpet Mod 的 EntityPlayerMPFake 做法
             //? if >=1.20.2 {
             /*server.getPlayerList().placeNewPlayer(connection, bot,
+                //? if >=1.20.5 {
+                net.minecraft.server.network.CommonListenerCookie.createInitial(profile, false));
+                //?} else {
                 net.minecraft.server.network.CommonListenerCookie.createInitial(profile));
+                //?}
             *///?} else {
             server.getPlayerList().placeNewPlayer(connection, bot);
             //?}
+            placed = true;
 
             // placeNewPlayer 可能按存档/出生点重置位置，纠正到目标位置与朝向
-            bot.teleportTo(level, spawnPos.x, spawnPos.y, spawnPos.z, yaw, pitch);
+            teleportCrossLevel(bot, level, spawnPos.x, spawnPos.y, spawnPos.z, yaw, pitch);
             bot.setYHeadRot(yaw);
             bot.setHealth(bot.getMaxHealth());
+
+            // 创造飞行继承：新建假人时若创建者正在飞行（创造/旁观模式），
+            // 假人同样进入飞行状态并在空中悬停（驻留恢复不继承，由保存的状态自行恢复）
+            // 注意：不继承创建者的飞行速度，使用假人自身默认值
+            if (botUuid == null && creator != null && creator.getAbilities().flying) {
+                bot.getAbilities().mayfly = true;
+                bot.getAbilities().flying = true;
+            }
 
             // 发送头部旋转包，确保客户端正确渲染假人的头部朝向
             server.getPlayerList().broadcastAll(
@@ -154,10 +169,42 @@ public class BotManager {
             return bot;
         } catch (Exception e) {
             MyBotMod.LOGGER.error("创建假人 {} 时发生错误: {}", botName, e.getMessage(), e);
+            // 回滚：placeNewPlayer 已注册假玩家，必须走 PlayerList.remove 完整清理，
+            // 否则会残留不在 bots 映射中的"幽灵玩家"（无法命令移除、持续占用玩家槽位）
+            if (bot != null) {
+                bots.remove(botName.toLowerCase());
+                botsByUUID.remove(bot.getUUID());
+                if (placed) {
+                    try {
+                        disconnectBot(bot, net.minecraft.network.chat.Component.literal("bot creation failed, rolled back"));
+                    } catch (Exception rollbackError) {
+                        MyBotMod.LOGGER.error("回滚假人 {} 失败: {}", botName, rollbackError.getMessage());
+                    }
+                }
+            }
             return null;
         }
     }
     
+    /** 断开假人连接（1.21+ onDisconnect 改收 DisconnectionDetails） */
+    private static void disconnectBot(BotPlayer bot, net.minecraft.network.chat.Component reason) {
+        //? if >=1.21 {
+        /*bot.connection.onDisconnect(new net.minecraft.network.DisconnectionDetails(reason));
+        *///?} else {
+        bot.connection.onDisconnect(reason);
+        //?}
+    }
+
+    /** 跨维度传送（1.21.2+ teleportTo 增加相对移动集合参数；用 Set.of() 空集避免引用版本间包名不稳定的 RelativeMovement） */
+    public static void teleportCrossLevel(BotPlayer bot, net.minecraft.server.level.ServerLevel level,
+                                          double x, double y, double z, float yaw, float pitch) {
+        //? if >=1.21.2 {
+        /*bot.teleportTo(level, x, y, z, java.util.Set.of(), yaw, pitch, false);
+        *///?} else {
+        bot.teleportTo(level, x, y, z, yaw, pitch);
+        //?}
+    }
+
     /**
      * 验证假人名字是否有效
      * Minecraft 玩家名规则：
@@ -190,7 +237,7 @@ public class BotManager {
 
             // 规范移除：触发连接断开，走原版 PlayerList.remove 完整清理
             // （保存数据、退出队伍、从 playersByUUID 移除、从世界移除实体、广播移除信息包）
-            bot.connection.onDisconnect(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.bot.removed"));
+            disconnectBot(bot, net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.bot.removed"));
 
             // 删除驻留数据
             BotPersistenceManager.deleteBot(server, botName);

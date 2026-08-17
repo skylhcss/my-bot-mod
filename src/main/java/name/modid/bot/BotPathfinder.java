@@ -5,7 +5,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -14,7 +13,6 @@ import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -23,7 +21,8 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.*;
 
 /**
- * 假人寻路器（非阻塞 / 分帧增量 A*）
+ * 假人寻路器（同步优化 A*）
+ * 发起寻路时一次性完成搜索（以迭代/节点上限与高效数据结构约束最坏开销），随后逐格跟随。
  * 节点为可占据位置：脚踩固体（陆地站立）或处于水面（游泳）。
  * 借鉴 Baritone / Minecraft 原生寻路的核心设计。
  *
@@ -36,20 +35,8 @@ import java.util.*;
  */
 public class BotPathfinder {
 
-    /** 单次寻路最大迭代次数（跨 tick 累计） */
+    /** 单次寻路最大迭代次数（硬上限，约束最坏搜索开销） */
     private static final int MAX_ITERATIONS = 15000;
-
-    /** 每 tick 搜索时间预算（纳秒，约 1.2ms），优先按时间分帧，避免卡服 */
-    private static final long SEARCH_BUDGET_NANOS = 1_200_000L;
-
-    /** 每 tick 迭代硬上限（兜底，防止极端情况下时间预算失效） */
-    private static final int MAX_ITERATIONS_PER_TICK = 2000;
-
-    /** 全局每 tick 寻路总时间预算（纳秒，跨所有假人共享，约 4ms，防多假人同时寻路卡服） */
-    private static final long GLOBAL_BUDGET_NANOS = 4_000_000L;
-    /** 全局预算的当前 tick 号与剩余纳秒（仅服务器线程访问，无需同步） */
-    private static long globalTickId = -1;
-    private static long globalBudgetRemaining = 0;
 
     /** 开放集合最大大小 */
     private static final int MAX_OPEN_SET_SIZE = 25000;
@@ -88,7 +75,7 @@ public class BotPathfinder {
     private static final int PARKOUR_MAX_DIST = 4;
 
     /** 寻路器状态 */
-    private enum State { IDLE, COMPUTING, FOLLOWING }
+    private enum State { IDLE, FOLLOWING }
 
     private final BotPlayer bot;
 
@@ -108,19 +95,6 @@ public class BotPathfinder {
     private final LongOpenHashSet avoidPositions = new LongOpenHashSet();
     private int tickCounter;
     private int recomputeCooldown;
-
-    // ==================== A* 搜索状态（COMPUTING 期间有效） ====================
-    private PriorityQueue<PathNode> openSet;
-    private LongOpenHashSet closedSet;
-    private Long2ObjectOpenHashMap<PathNode> nodeMap;
-    private BlockPos searchStart;
-    private BlockPos searchEnd;
-    private PathNode searchStartNode;
-    private PathNode bestNode;
-    private float bestH;
-    private int iterations;
-    /** 本次搜索是否为"重算"（重算期间保留旧路径继续行走） */
-    private boolean recomputing;
 
     /** 单次搜索内的方块状态缓存，减少世界访问（fastutil 免装箱） */
     private final Long2ObjectOpenHashMap<BlockState> stateCache = new Long2ObjectOpenHashMap<>();
@@ -143,9 +117,9 @@ public class BotPathfinder {
     }
 
     /**
-     * 开始寻路到指定位置
+     * 开始寻路到指定位置（同步执行一次完整 A* 搜索）
      * @param target 目标位置（会自动寻找最近的可占据位置）
-     * @return 目标附近存在可占据位置并已开始搜索则返回 true；否则 false
+     * @return 找到完整或部分路径并开始跟随则返回 true；目标不可解析/不可达返回 false
      */
     public boolean pathTo(BlockPos target) {
         // 最大寻路距离限制（可配置，超出直接拒绝）
@@ -173,7 +147,16 @@ public class BotPathfinder {
         }
         this.destination = end;
 
-        initSearch(start, end, false);
+        List<BlockPos> path = runSearch(start, end);
+        if (path == null || path.isEmpty()) {
+            this.state = State.IDLE;
+            return false;
+        }
+        this.currentPath = path;
+        this.currentWaypointIndex = 0;
+        this.state = State.FOLLOWING;
+        // 立即跳过已在身后/已越过的起始路标，避免新路径起点在身后导致回头
+        advanceWaypoint();
         return true;
     }
 
@@ -188,9 +171,6 @@ public class BotPathfinder {
         this.avoidPositions.clear();
         this.tickCounter = 0;
         this.recomputeCooldown = 0;
-        this.openSet = null;
-        this.closedSet = null;
-        this.nodeMap = null;
         this.stateCache.clear();
         bot.getActionController().stopMovement();
         bot.getActionController().setSprint(false);
@@ -215,44 +195,94 @@ public class BotPathfinder {
             return;
         }
 
-        // 有路径就跟随（重算期间也继续走旧路径，避免停顿）
+        // 有路径就跟随
         if (currentPath != null && !currentPath.isEmpty()) {
             followPath();
             if (state == State.IDLE) return; // followPath 可能已取消
         }
 
-        // 推进分帧搜索
-        if (state == State.COMPUTING) {
-            stepSearch();
-        }
-
-        // 跟随期间定期重算
+        // 跟随期间定期重算（同步完成，新路径立即生效）
         if (state == State.FOLLOWING && tickCounter % PATH_RECALC_INTERVAL == 0) {
             tryRecompute();
         }
     }
 
-    // ==================== 分帧 A* ====================
+    // ==================== 同步优化 A* ====================
 
-    private void initSearch(BlockPos start, BlockPos end, boolean recompute) {
+    /**
+     * 同步执行一次完整 A* 搜索，返回完整路径；未达终点时若最优节点已显著逼近则返回部分路径；不可达返回 null。
+     * 优化要点：fastutil 长键哈希集合/映射（免装箱）、懒删除代替 decrease-key、
+     * 单次搜索方块状态缓存（未加载区块按基岩处理）、可采纳启发式、迭代/节点硬上限。
+     */
+    private List<BlockPos> runSearch(BlockPos start, BlockPos end) {
         stateCache.clear();
-        this.searchStart = start;
-        this.searchEnd = end;
-        this.openSet = new PriorityQueue<>();
-        this.closedSet = new LongOpenHashSet();
-        this.nodeMap = new Long2ObjectOpenHashMap<>();
-        this.searchStartNode = new PathNode(start, null, 0, heuristic(start, end));
-        this.openSet.add(searchStartNode);
-        this.nodeMap.put(start.asLong(), searchStartNode);
-        this.bestNode = searchStartNode;
-        this.bestH = searchStartNode.hCost;
-        this.iterations = 0;
-        this.recomputing = recompute;
-        this.state = State.COMPUTING;
+        PriorityQueue<PathNode> openSet = new PriorityQueue<>();
+        LongOpenHashSet closedSet = new LongOpenHashSet();
+        Long2ObjectOpenHashMap<PathNode> nodeMap = new Long2ObjectOpenHashMap<>();
+
+        PathNode startNode = new PathNode(start, null, 0, heuristic(start, end));
+        openSet.add(startNode);
+        nodeMap.put(start.asLong(), startNode);
+        PathNode bestNode = startNode;
+        float bestH = startNode.hCost;
+        int iterations = 0;
+        PathNode endNode = null;
+
+        while (!openSet.isEmpty()) {
+            if (iterations++ >= MAX_ITERATIONS || openSet.size() > MAX_OPEN_SET_SIZE) {
+                break; // 超限降级：尝试用最优部分路径
+            }
+
+            PathNode current = openSet.poll();
+            if (!current.active) continue; // 懒删除：已被更优路径取代的旧节点
+
+            if (current.pos.equals(end)) {
+                endNode = current;
+                break;
+            }
+
+            closedSet.add(current.pos.asLong());
+            if (current.hCost < bestH) {
+                bestH = current.hCost;
+                bestNode = current;
+            }
+
+            for (BlockPos neighbor : getNeighbors(current.pos)) {
+                long nk = neighbor.asLong();
+                if (closedSet.contains(nk)) continue;
+                if (!avoidPositions.isEmpty() && avoidPositions.contains(nk)) continue;
+
+                float tentativeG = current.gCost + moveCost(current.pos, neighbor);
+                PathNode existing = nodeMap.get(nk);
+                if (existing != null && tentativeG >= existing.gCost) continue;
+                if (existing != null) existing.active = false;
+
+                PathNode newNode = new PathNode(neighbor, current, tentativeG, heuristic(neighbor, end));
+                openSet.add(newNode);
+                nodeMap.put(nk, newNode);
+            }
+        }
+
+        List<BlockPos> result = null;
+        if (endNode != null) {
+            result = reconstructPath(endNode);
+        } else if (bestNode != startNode && bestNode.hCost < heuristic(start, end) * 0.8F) {
+            // 部分路径降级：最优节点已把剩余距离缩短 20% 以上，朝目标逼近
+            result = reconstructPath(bestNode);
+        }
+        // 路径平滑（可配置）：在方块缓存尚有效时合并可直行的路标点
+        if (result != null && name.modid.config.ModConfig.getInstance().pathfindingSmooth) {
+            result = smoothPath(result);
+        }
+        stateCache.clear();
+        return result;
     }
 
-    /** 开始一次重算：保留当前路径继续行走，新路径就绪后再切换 */
-    private void startRecompute() {
+    /** 定期/卡住触发的同步重算：成功则切换新路径，失败保留旧路径继续行走 */
+    private void tryRecompute() {
+        if (recomputeCooldown > 0) {
+            return;
+        }
         recomputeCooldown = RECOMPUTE_COOLDOWN;
         BlockPos start = findStandingPos(bot.blockPosition());
         BlockPos end = findStandingPosNear(target);
@@ -260,120 +290,15 @@ public class BotPathfinder {
             return; // 目标暂不可解析，继续走旧路径
         }
         this.destination = end;
-        initSearch(start, end, true);
         ticksStuck = 0;
-    }
-
-    /** 受冷却与状态约束的重算入口，避免每 tick 重复触发 */
-    private void tryRecompute() {
-        if (state != State.COMPUTING && recomputeCooldown <= 0) {
-            startRecompute();
-        }
-    }
-
-    /** 领取本 tick 的全局预算配额；返回本次可用纳秒（<=0 表示本 tick 应让出，下 tick 再继续） */
-    private static long claimGlobalBudget(long tickId) {
-        if (tickId != globalTickId) {
-            globalTickId = tickId;
-            globalBudgetRemaining = GLOBAL_BUDGET_NANOS;
-        }
-        return Math.min(SEARCH_BUDGET_NANOS, globalBudgetRemaining);
-    }
-
-    private static void consumeGlobalBudget(long nanos) {
-        globalBudgetRemaining -= nanos;
-    }
-
-    /** 推进 A* 搜索，受全局预算 + 本假人时间预算 + 迭代硬上限共同限制 */
-    private void stepSearch() {
-        // 每 tick 推进搜索前清空方块状态缓存，避免跨 tick 使用过时数据导致穿墙或悬空路径
-        stateCache.clear();
-        long tickId = bot.level().getServer().getTickCount();
-        long budgetNanos = claimGlobalBudget(tickId);
-        if (budgetNanos <= 0) return; // 全局预算用尽，本 tick 让出
-        long startNanos = System.nanoTime();
-        try {
-            long deadline = startNanos + budgetNanos;
-            int tickBudget = MAX_ITERATIONS_PER_TICK;
-            while (!openSet.isEmpty() && tickBudget-- > 0) {
-                if (iterations++ >= MAX_ITERATIONS || openSet.size() > MAX_OPEN_SET_SIZE) {
-                    finishSearch(null);
-                    return;
-                }
-
-                PathNode current = openSet.poll();
-                if (!current.active) continue;
-
-                if (current.pos.equals(searchEnd)) {
-                    finishSearch(current);
-                    return;
-                }
-
-                closedSet.add(current.pos.asLong());
-                if (current.hCost < bestH) {
-                    bestH = current.hCost;
-                    bestNode = current;
-                }
-
-                for (BlockPos neighbor : getNeighbors(current.pos)) {
-                    long nk = neighbor.asLong();
-                    if (closedSet.contains(nk)) continue;
-                    if (!avoidPositions.isEmpty() && avoidPositions.contains(nk)) continue;
-
-                    float tentativeG = current.gCost + moveCost(current.pos, neighbor);
-                    PathNode existing = nodeMap.get(nk);
-                    if (existing != null && tentativeG >= existing.gCost) continue;
-                    if (existing != null) existing.active = false;
-
-                    PathNode newNode = new PathNode(neighbor, current, tentativeG, heuristic(neighbor, searchEnd));
-                    openSet.add(newNode);
-                    nodeMap.put(nk, newNode);
-                }
-
-                // 周期性检查时间预算（nanoTime 有开销，每 64 次迭代查一次）
-                if ((tickBudget & 63) == 0 && System.nanoTime() >= deadline) break;
-            }
-
-            if (openSet.isEmpty()) {
-                finishSearch(null); // 搜索耗尽，尝试部分路径
-            }
-        } finally {
-            consumeGlobalBudget(System.nanoTime() - startNanos);
-        }
-    }
-
-    /**
-     * 结束一次搜索。endNode 非空表示找到完整路径，否则尝试用最优部分路径。
-     */
-    private void finishSearch(PathNode endNode) {
-        List<BlockPos> newPath = null;
-        if (endNode != null) {
-            newPath = reconstructPath(endNode);
-        } else if (bestNode != null && bestNode != searchStartNode
-                && bestNode.hCost < heuristic(searchStart, searchEnd) * 0.8F) {
-            newPath = reconstructPath(bestNode);
-        }
-
-        // 释放搜索结构
-        openSet = null;
-        closedSet = null;
-        nodeMap = null;
-        stateCache.clear();
-
+        List<BlockPos> newPath = runSearch(start, end);
         if (newPath != null && !newPath.isEmpty()) {
-            currentPath = smoothPath(newPath);
+            currentPath = newPath;
             currentWaypointIndex = 0;
-            state = State.FOLLOWING;
             // 立即跳过已在身后/已越过的起始路标，避免重算后新路径起点在身后导致回头
             advanceWaypoint();
-        } else if (recomputing && currentPath != null && !currentPath.isEmpty()
-                && currentWaypointIndex < currentPath.size()) {
-            // 重算失败但旧路径仍有未走完的路标，继续走旧路径
-            state = State.FOLLOWING;
-        } else {
-            // 无新路径且旧路径已走完（目的地不可达，如需 2 格跳跃）：放弃，避免原地死循环
-            cancelPath();
         }
+        // 重算失败（null）：保留旧路径继续行走；旧路径也走完时由 followPath 处理
     }
 
     // ==================== 路径跟随 ====================
@@ -388,18 +313,19 @@ public class BotPathfinder {
         advanceWaypoint();
         if (currentWaypointIndex >= currentPath.size()) {
             if (hasReachedDestination()) { cancelPath(); return; }
-            // 已走完当前路径但未达终点：停止残留前进，等待重算，避免失控前冲/漂移
+            // 已走完当前路径但未达终点：停止残留前进，同步重算（受冷却约束），避免失控前冲/漂移
             bot.getActionController().stopMovement();
-            if (state != State.COMPUTING) tryRecompute();
+            tryRecompute();
             return;
         }
 
         BlockPos waypoint = currentPath.get(currentWaypointIndex);
         moveToWaypoint(waypoint);
 
-        // 卡住检测（仅水平距离，避免跳跃/下落/游泳时误判）
+        // 卡住检测（仅水平距离，避免跳跃/下落/游泳时误判；自由落体中不计卡住，垂直下落属正常行进）
         Vec3 currentPos = bot.position();
-        if (lastPos != null) {
+        boolean airborne = !bot.onGround() && !bot.isInWater() && !bot.onClimbable();
+        if (!airborne && lastPos != null) {
             double mdx = currentPos.x - lastPos.x;
             double mdz = currentPos.z - lastPos.z;
             double movedH = Math.sqrt(mdx * mdx + mdz * mdz);
@@ -422,21 +348,21 @@ public class BotPathfinder {
             // 一级：尝试跳跃（越过 1 格小障碍/台阶）
             if (bot.onGround()) bot.getActionController().setJump(true);
         } else if (ticksStuck > STUCK_THRESHOLD) {
-            // 二级：重算路径；多次卡住则将当前位置标记为禁区，下次重算时 A* 会绕行
+            // 二级：重算路径。每次卡住重算都把当前位置与当前路标加入禁区：
+            // A* 是确定性的，不加禁区会反复算回同一条（最初的）路线而卡死；
+            // 不能依赖 consecutiveStuckRecomputes 门槛，因为它在假人移动后会被清零
+            avoidPositions.add(bot.blockPosition().asLong());
+            if (currentPath != null && currentWaypointIndex < currentPath.size()) {
+                avoidPositions.add(currentPath.get(currentWaypointIndex).asLong());
+            }
             consecutiveStuckRecomputes++;
-            if (consecutiveStuckRecomputes >= 4) {
-                // 连续多次卡住仍无法脱困（目的地不可达）：放弃寻路，避免无限原地跳跃
+            // 连续多次卡住，或禁区累积过多（反复受挫说明目的地实际不可达）：放弃，避免无限循环
+            if (consecutiveStuckRecomputes >= 4 || avoidPositions.size() > 48) {
                 cancelPath();
                 return;
             }
-            if (consecutiveStuckRecomputes >= 2) {
-                avoidPositions.add(bot.blockPosition().asLong());
-                if (currentPath != null && currentWaypointIndex < currentPath.size()) {
-                    avoidPositions.add(currentPath.get(currentWaypointIndex).asLong());
-                }
-            }
             ticksStuck = 0;
-            if (state != State.COMPUTING) tryRecompute();
+            tryRecompute();
         }
     }
 
@@ -456,9 +382,8 @@ public class BotPathfinder {
         BlockState s = bot.level().getBlockState(pos);
         if (!isPassableDoor(s)) return;
         if (!s.hasProperty(BlockStateProperties.OPEN) || s.getValue(BlockStateProperties.OPEN)) return;
-        // 触发方块右键交互以打开
-        s.use(bot.level(), bot, InteractionHand.MAIN_HAND,
-            new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false));
+        // 直接切换 OPEN 状态打开门/活板门（规避跨版本不稳定的 BlockState.use 签名；邻域更新使双开门同步打开）
+        bot.level().setBlock(pos, s.setValue(BlockStateProperties.OPEN, Boolean.TRUE), 3);
     }
 
     /**
@@ -467,23 +392,24 @@ public class BotPathfinder {
      */
     private void moveToWaypoint(BlockPos waypoint) {
         BotActionController c = bot.getActionController();
-    
+        
         Vec3 look = new Vec3(waypoint.getX() + 0.5, bot.getEyePosition().y, waypoint.getZ() + 0.5);
         c.lookAt(look);
         c.moveForward();
-    
+        
         double dx = (waypoint.getX() + 0.5) - bot.getX();
         double dz = (waypoint.getZ() + 0.5) - bot.getZ();
         double horiz = Math.sqrt(dx * dx + dz * dz);
         int dyStep = waypoint.getY() - bot.blockPosition().getY();
-    
-        // 在水中：向前游动；上升/上岸或头部没入时上浮，避免下沉/溣水（下潜时不上浮）
+        
+        // 在水中：向前游动；目标不低于当前位置就持续划水保持浮力（上浮/平游），
+        // 仅目标在下方时松开下潜。不能依赖 isEyeInFluid：水面漂浮时眼睛出水会停止划水导致下沉
         if (bot.isInWater()) {
             c.setSprint(false);
-            c.setJump(dyStep > 0 || (dyStep == 0 && bot.isEyeInFluid(FluidTags.WATER)));
+            c.setJump(dyStep >= 0);
             return;
         }
-        
+            
         // 攻爬梯子/藤蔓/脚手架：贴住并按需上/下
         if (bot.onClimbable()) {
             c.setSprint(false);
@@ -495,7 +421,7 @@ public class BotPathfinder {
             c.setJump(dyStep > 0); // 向上爬按跳；同层/向下不按（缓降）
             return;
         }
-            
+                
         boolean gapJump = horiz > 1.6 && gapAhead(dx, dz);
         if (gapJump) {
             // 跨越裂谷：助跑起跳（滞空时物理引擎保持水平移动）
@@ -511,7 +437,7 @@ public class BotPathfinder {
             c.setJump(false);
         }
     }
-
+    
     /** 判断前方 1 格是否为裂谷边缘（脚下悬空且可通行） */
     private boolean gapAhead(double dx, double dz) {
         double len = Math.sqrt(dx * dx + dz * dz);
@@ -523,7 +449,7 @@ public class BotPathfinder {
         return !bot.level().getBlockState(ahead).blocksMotion()
             && !bot.level().getBlockState(ahead.below()).blocksMotion();
     }
-
+    
     private boolean hasReachedWaypoint(BlockPos waypoint) {
         double dx = bot.getX() - (waypoint.getX() + 0.5);
         double dz = bot.getZ() - (waypoint.getZ() + 0.5);
@@ -570,55 +496,12 @@ public class BotPathfinder {
         return h < TARGET_REACH_DISTANCE && dyAbs <= TARGET_REACH_VERTICAL;
     }
 
-    // ==================== 路径平滑 ====================
-
-    /**
-     * String-pulling：合并平地直线段以减少路点抖动。
-     * 跳跃/下落/游泳过渡作为锚点，不会被跳过。
-     */
-    private List<BlockPos> smoothPath(List<BlockPos> path) {
-        if (path.size() <= 2) return path;
-
-        List<BlockPos> result = new ArrayList<>();
-        result.add(path.get(0));
-        int i = 0;
-        while (i < path.size() - 1) {
-            int farthest = i + 1;
-            for (int j = i + 2; j < path.size(); j++) {
-                if (canWalkStraight(path.get(i), path.get(j))) {
-                    farthest = j;
-                } else {
-                    break;
-                }
-            }
-            result.add(path.get(farthest));
-            i = farthest;
-        }
-        return result;
-    }
-
-    /** 两点是否可在同一高度沿直线走过（全程为可占据位置） */
-    private boolean canWalkStraight(BlockPos a, BlockPos b) {
-        if (a.getY() != b.getY()) return false;
-        int y = a.getY();
-        double x0 = a.getX() + 0.5, z0 = a.getZ() + 0.5;
-        double x1 = b.getX() + 0.5, z1 = b.getZ() + 0.5;
-        double dist = Math.hypot(x1 - x0, z1 - z0);
-        int steps = Math.max(1, (int) Math.ceil(dist * 2));
-        for (int s = 0; s <= steps; s++) {
-            double t = (double) s / steps;
-            int bx = Mth.floor(x0 + (x1 - x0) * t);
-            int bz = Mth.floor(z0 + (z1 - z0) * t);
-            if (!isOccupiable(new BlockPos(bx, y, bz))) return false;
-        }
-        return true;
-    }
-
     // ==================== 位置规范化 ====================
 
     private BlockPos findStandingPos(BlockPos pos) {
         if (isOccupiable(pos)) return pos;
-        for (int dy = -1; dy >= -3; dy--) {
+        // 向下扫描可站立位（覆盖飞行/高处起点，深度与最大下落扫描一致）
+        for (int dy = -1; dy >= -MAX_FALL; dy--) {
             BlockPos check = pos.above(dy);
             if (isOccupiable(check)) return check;
         }
@@ -762,7 +645,8 @@ public class BotPathfinder {
         for (int depth = 1; depth <= MAX_FALL; depth++) {
             BlockPos cell = adj.below(depth);
             if (isWaterSwim(cell)) {
-                return cell; // 落水，任意高度
+                // 落水：仅在允许游泳路线时才可作为落点，否则禁用游泳时路径会引入水中节点
+                return name.modid.config.ModConfig.getInstance().pathfindingAllowSwim ? cell : null;
             }
             if (isValidStandingPos(cell)) {
                 return depth <= FALL_SAFE_LAND ? cell : null; // 落地，限高
@@ -924,6 +808,79 @@ public class BotPathfinder {
         }
         Collections.reverse(path);
         return path;
+    }
+
+    // ==================== 路径平滑（宽度感知视线法） ====================
+
+    /**
+     * 智能路径平滑：贪心地从当前锚点向最远可直达的路标点合并，减少迁回抖动的中间路点。
+     * 与早期 String-pulling 的区别（更智能、不偏航/不卡角）：
+     * 1. 只在同一高度间合并，跳跃/下落/游泳等高度变化点作为锚点保留；
+     * 2. 复用 A* 的同一套 isValidStandingPos 判定，保证与搜索时一致；
+     * 3. 采样间隔加密到 0.25 格，并在中间采样点额外校验 ±0.3 侧向净空（约实体半宽），
+     *    避免直行线贴墙角太近导致碰撞卡住。
+     */
+    private List<BlockPos> smoothPath(List<BlockPos> path) {
+        if (path.size() <= 2) {
+            return path;
+        }
+        List<BlockPos> result = new ArrayList<>();
+        result.add(path.get(0));
+        int anchor = 0;
+        while (anchor < path.size() - 1) {
+            int farthest = anchor + 1;
+            // 从最远向近处找第一个可直达的点（比逐个向前探更少的判定次数）
+            for (int j = path.size() - 1; j > anchor + 1; j--) {
+                if (canShortcut(path.get(anchor), path.get(j))) {
+                    farthest = j;
+                    break;
+                }
+            }
+            result.add(path.get(farthest));
+            anchor = farthest;
+        }
+        return result;
+    }
+
+    /** 两点间能否安全直行（同高度 + 全程中心线与侧向净空均可站立） */
+    private boolean canShortcut(BlockPos a, BlockPos b) {
+        if (a.getY() != b.getY()) {
+            return false; // 高度变化点（跳/落/游）不平滑
+        }
+        int y = a.getY();
+        double x0 = a.getX() + 0.5, z0 = a.getZ() + 0.5;
+        double x1 = b.getX() + 0.5, z1 = b.getZ() + 0.5;
+        double dx = x1 - x0, dz = z1 - z0;
+        double dist = Math.hypot(dx, dz);
+        if (dist < 1e-3) {
+            return true;
+        }
+        // 单位方向与垂直方向（用于侧向净空采样）
+        double nx = dx / dist, nz = dz / dist;
+        double px = -nz, pz = nx;
+        int steps = (int) Math.ceil(dist / 0.25);
+        for (int s = 0; s <= steps; s++) {
+            double t = (double) s / steps;
+            double cx = x0 + dx * t, cz = z0 + dz * t;
+            if (!walkableAt(cx, y, cz)) {
+                return false;
+            }
+            // 中间采样点额外校验两侧净空，防止贴角；端点本身在路径上不查侧向
+            if (s > 0 && s < steps) {
+                if (!walkableAt(cx + px * 0.3, y, cz + pz * 0.3)) {
+                    return false;
+                }
+                if (!walkableAt(cx - px * 0.3, y, cz - pz * 0.3)) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** 某连续水平坐标在指定高度是否为可站立位置（脚下固体可站、无危险、头部可容身） */
+    private boolean walkableAt(double x, int y, double z) {
+        return isValidStandingPos(new BlockPos(Mth.floor(x), y, Mth.floor(z)));
     }
 
     // ==================== 方块状态缓存 ====================

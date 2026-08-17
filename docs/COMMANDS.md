@@ -13,9 +13,9 @@ My Bot Mod 提供 `/bot`（控制假人）与 `/botmod`（配置/信息）两组
 ### 生命周期
 | 命令 | 说明 |
 |------|------|
-| `/bot <name> spawn` | 在你的位置创建假人 |
-| `/bot <name> spawn at <x> <y> <z> [gamemode]` | 在指定位置（可选游戏模式）创建 |
-| `/bot <name> kill` | 删除假人（需 **15 秒内再次执行**确认） |
+| `/bot <name> spawn` | 在你的位置创建假人（你若处于创造飞行，假人也会飞行悬停） |
+| `/bot <name> spawn at <x> <y> <z>` | 在指定位置创建 |
+| `/bot <name> kill` | 删除假人（需 **15 秒内再次执行**确认；GUI 面板确认后自动走 `kill confirm` 直接执行） |
 | `/bot list` | 列出所有假人 |
 | `/bot <name> stop` | 停止所有动作 |
 
@@ -39,7 +39,7 @@ My Bot Mod 提供 `/bot`（控制假人）与 `/botmod`（配置/信息）两组
 | `/bot <name> look up\|down\|left\|right\|north\|south\|east\|west` | 看向方向 |
 | `/bot <name> turn <yaw> <pitch>` | 相对旋转视角 |
 
-**寻路特性**：非阻塞分帧计算、多假人共享每 tick 预算（不卡服）；支持跳 1 格、下落、跨越裂谷（可配置）、游泳（可配置）；自动绕开岩浆/火/仙人掌等；卡住自动绕行，多次卡住或不可达自动放弃；**仅限同维度**（跨维度目标会被拒绝）；最大距离由 `maxPathfindingDistance` 限制（默认 256 格）。
+**寻路特性**：优化 A*（发起时一次性同步搜索，受迭代/节点硬上限约束，免装箱哈希结构 + 方块状态缓存）；支持跳 1 格、下落、跨越裂谷（可配置）、游泳（可配置）；宽度感知智能路径平滑（可配置，合并可直行路点，不切角不跨谷）；自动绕开岩浆/火/仙人掌等；卡住自动绕行，多次卡住或不可达自动放弃；**仅限同维度**（跨维度目标会被拒绝）；最大距离由 `maxPathfindingDistance` 限制（默认 256 格）。
 
 ### 骑乘
 | 命令 | 说明 |
@@ -61,7 +61,7 @@ My Bot Mod 提供 `/bot`（控制假人）与 `/botmod`（配置/信息）两组
 |------|------|
 | `/bot <name> panel` | 打开设置面板（等同右键假人） |
 | `/bot <name> inventory` | 打开可编辑背包（主物品栏+盔甲+副手，左侧模型，3x3 手持槽位选择） |
-| `/bot <name> enderchest` | 打开可编辑末影箱 |
+| `/bot <name> enderchest` | 打开可编辑末影箱（直接绑定假人末影箱实时编辑） |
 | `/bot <name> slot <0-8>` | 设置手持快捷栏格 |
 | `/bot <name> gamemode <survival\|creative\|adventure\|spectator>` | 设置游戏模式 |
 | `/bot <name> tphere` | 把假人传送到你身边（支持跨维度） |
@@ -78,7 +78,7 @@ My Bot Mod 提供 `/bot`（控制假人）与 `/botmod`（配置/信息）两组
 | `Alt + 滚轮` / `Alt + 右键看向假人` | 选择假人 |
 | `右键看向某处` | 让选中假人**寻路**前往 / **传送**至该处 |
 
-传送模式默认仅手持玩家为创造模式时可用（配置 `allowBatonTeleportNonCreative` 放开）；`batonRequiresOp` 可要求 OP 权限。传送支持跨维度；**寻路仅限同维度**（跨维度指令会被拒绝）。
+传送模式任意游戏模式均可使用；`batonRequiresOp` 可要求 OP 权限。传送支持跨维度；**寻路仅限同维度**（跨维度指令会被拒绝）。
 
 ---
 
@@ -93,7 +93,7 @@ My Bot Mod 提供 `/bot`（控制假人）与 `/botmod`（配置/信息）两组
 | `/botmod whitelist list\|add <id>\|remove <id>\|clear` | 管理骑乘白名单 |
 | `/botmod info` | 显示模组信息 |
 
-**布尔配置项**：`enableBotFeature`、`enableKillAura`、`allowMountOtherBots`、`allowNonOpControlBot`、`batonRequiresOp`、`autoRespawnOnDeath`、`botTakeDamage`、`botHunger`、`botGlowing`、`botFireImmune`、`botPersistence`、`preserveBotState`、`carpetModCompatibility`、`allowBotAutoJump`、`allowBatonTeleportNonCreative`、`pathfindingAllowParkour`、`pathfindingAllowSwim`
+**布尔配置项**：`enableBotFeature`、`enableKillAura`、`allowMountOtherBots`、`allowNonOpControlBot`、`batonRequiresOp`、`autoRespawnOnDeath`、`botTakeDamage`、`botHunger`、`botGlowing`、`botFireImmune`、`botPersistence`、`preserveBotState`、`allowBotAutoJump`、`pathfindingAllowParkour`、`pathfindingAllowSwim`
 
 **数值配置项**：`attackReachDistance`、`creativeAttackReachDistance`、`killAuraRange`、`maxBotCount`、`maxBotsPerPlayer`、`maxPathfindingDistance`
 
@@ -113,10 +113,10 @@ My Bot Mod 提供 `/bot`（控制假人）与 `/botmod`（配置/信息）两组
 /bot Fisher spawn
 /bot Fisher use continuous
 
-# 建筑助手（每 0.5 秒放置一次）
-/bot Builder spawn
-/bot Builder look down
-/bot Builder use interval 10
+# 放置助手（每 0.5 秒右键一次）
+/bot Placer spawn
+/bot Placer look down
+/bot Placer use interval 10
 ```
 
 ---

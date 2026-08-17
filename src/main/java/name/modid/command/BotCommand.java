@@ -19,7 +19,9 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.core.BlockPos;
+//? if <1.20.5 {
 import net.minecraft.network.FriendlyByteBuf;
+//?}
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleMenuProvider;
@@ -66,9 +68,12 @@ public class BotCommand {
                         )
                     )
                 )
-                // /bot <name> kill
+                // /bot <name> kill（confirm 子命令供 GUI 二次确认后直接执行，跳过命令行侧的确认窗口）
                 .then(Commands.literal("kill")
                     .executes(BotCommand::killBot)
+                    .then(Commands.literal("confirm")
+                        .executes(ctx -> killBotConfirmed(ctx))
+                    )
                 )
                 // /bot <name> attack
                 .then(Commands.literal("attack")
@@ -395,7 +400,21 @@ public class BotCommand {
             return 0;
         }
         pendingKill.remove(key);
+        return doKill(ctx, botName);
+    }
 
+    /** GUI 已在界面内二次确认，直接执行移除 */
+    private static int killBotConfirmed(CommandContext<CommandSourceStack> ctx) {
+        String botName = StringArgumentType.getString(ctx, "botName");
+        if (!BotManager.hasBot(botName)) {
+            ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
+            return 0;
+        }
+        pendingKill.remove(ctx.getSource().getTextName() + ":" + botName.toLowerCase());
+        return doKill(ctx, botName);
+    }
+
+    private static int doKill(CommandContext<CommandSourceStack> ctx, String botName) {
         if (BotManager.removeBot(botName)) {
             ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.kill.success", botName), true);
             return 1;
@@ -951,6 +970,24 @@ public class BotCommand {
             ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
+        //? if >=1.20.5 {
+        /*player.openMenu(new ExtendedScreenHandlerFactory<name.modid.menu.BotInventoryMenu.BotInventoryData>() {
+            @Override
+            public AbstractContainerMenu createMenu(int id, Inventory inv, Player p) {
+                return new BotInventoryMenu(id, inv, bot.getInventory(), bot);
+            }
+
+            @Override
+            public Component getDisplayName() {
+                return Component.translatable("gui.my-bot-mod.inventory.title", botName);
+            }
+
+            @Override
+            public name.modid.menu.BotInventoryMenu.BotInventoryData getScreenOpeningData(ServerPlayer p) {
+                return new name.modid.menu.BotInventoryMenu.BotInventoryData(bot.getUUID(), bot.getInventory().selected);
+            }
+        });
+        *///?} else {
         player.openMenu(new ExtendedScreenHandlerFactory() {
             @Override
             public AbstractContainerMenu createMenu(int id, Inventory inv, Player p) {
@@ -968,11 +1005,12 @@ public class BotCommand {
                 buf.writeVarInt(bot.getInventory().selected);
             }
         });
+        //?}
         return 1;
     }
 
     /**
-     * 打开假人末影箱（原版三行箱子界面，可编辑）
+     * 打开假人末影箱（命令入口）
      */
     private static int openEnderChest(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
@@ -982,9 +1020,16 @@ public class BotCommand {
             ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
-        player.openMenu(new SimpleMenuProvider(
+        openBotEnderChest(player, bot);
+        return 1;
+    }
+
+    /** 打开假人末影箱（原版三行箱子界面，直接绑定假人末影箱实时编辑） */
+    private static void openBotEnderChest(ServerPlayer viewer, BotPlayer bot) {
+        var enderChest = bot.getEnderChestInventory();
+        viewer.openMenu(new SimpleMenuProvider(
             (id, inv, p) -> new ChestMenu(net.minecraft.world.inventory.MenuType.GENERIC_9x3,
-                    id, inv, bot.getEnderChestInventory(), 3) {
+                    id, inv, enderChest, 3) {
                 @Override
                 public void removed(Player pl) {
                     super.removed(pl);
@@ -992,9 +1037,8 @@ public class BotCommand {
                     name.modid.bot.BotPersistenceManager.saveBot(bot);
                 }
             },
-            Component.translatable("gui.my-bot-mod.enderchest.title", botName)
+            Component.translatable("gui.my-bot-mod.enderchest.title", bot.getName().getString())
         ));
-        return 1;
     }
 
     /**
@@ -1054,7 +1098,7 @@ public class BotCommand {
             ctx.getSource().sendFailure(Component.translatable("msg.my-bot-mod.bot.not_exist", botName));
             return 0;
         }
-        bot.teleportTo(player.serverLevel(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
+        BotManager.teleportCrossLevel(bot, player.serverLevel(), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot());
         ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.tphere.success", botName), true);
         return 1;
     }

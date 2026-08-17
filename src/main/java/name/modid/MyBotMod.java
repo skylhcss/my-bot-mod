@@ -26,17 +26,11 @@ public class MyBotMod implements ModInitializer {
 
 	// 日志记录器，用于输出信息到控制台和日志文件
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-	
-	// Carpet Mod 是否已加载
-	private static boolean carpetModLoaded = false;
 
 	@Override
 	public void onInitialize() {
 		// 模组初始化
 		LOGGER.info("假人模组正在加载...");
-		
-		// 检测 Carpet Mod
-		checkCarpetMod();
 
 		// 初始化 run/skins 文件夹
 		BotSkinManager.initializeSkinFolder();
@@ -124,37 +118,5 @@ public class MyBotMod implements ModInitializer {
 		});
 
 		LOGGER.info("假人模组加载完成！");
-	}
-	
-	/**
-	 * 检测 Carpet Mod 是否已加载
-	 */
-	private void checkCarpetMod() {
-		// 使用 FabricLoader 标准 API 检测模组，比反射 Class.forName 更可靠
-		carpetModLoaded = net.fabricmc.loader.api.FabricLoader.getInstance().isModLoaded("carpet");
-		
-		if (carpetModLoaded) {
-			LOGGER.warn("检测到 Carpet Mod 已加载！");
-			
-			var config = name.modid.config.ModConfig.getInstance();
-			if (config.carpetModCompatibility) {
-				LOGGER.warn("Carpet Mod 兼容模式已启用，假人功能将被禁用以避免冲突");
-				LOGGER.warn("如果你想同时使用两个模组的假人功能，请在配置中禁用兼容模式");
-				config.enableBotFeature = false;
-				config.save();
-			} else {
-				LOGGER.warn("Carpet Mod 兼容模式已禁用，两个模组的假人功能可能会冲突");
-				LOGGER.warn("建议：只使用其中一个模组的假人功能");
-			}
-		} else {
-			LOGGER.info("未检测到 Carpet Mod");
-		}
-	}
-	
-	/**
-	 * 检查 Carpet Mod 是否已加载
-	 */
-	public static boolean isCarpetModLoaded() {
-		return carpetModLoaded;
 	}
 }

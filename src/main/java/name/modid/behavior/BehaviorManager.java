@@ -37,16 +37,17 @@ public final class BehaviorManager {
     /** 每假人的运行状态 */
     private static final Map<UUID, Active> RUNNING = new ConcurrentHashMap<>();
 
-    /** 运行状态：当前队列位置 + 解释器 */
+    /** 运行状态：执行队列快照 + 当前位置 + 解释器（快速执行为单行为临时队列，跑完即止） */
     private static final class Active {
         final BotPlayer bot;
+        /** 执行队列：启动时为播放列表快照，快速执行为单行为临时队列 */
+        final List<String> queue;
         int queueIndex;
         BehaviorRuntime runtime;
 
-        Active(BotPlayer bot, int queueIndex, BehaviorRuntime runtime) {
+        Active(BotPlayer bot, List<String> queue) {
             this.bot = bot;
-            this.queueIndex = queueIndex;
-            this.runtime = runtime;
+            this.queue = queue;
         }
     }
 
@@ -177,6 +178,38 @@ public final class BehaviorManager {
         }
     }
 
+    /** 播放列表内下移一位 @return 是否移动成功 */
+    public static boolean moveDown(BotPlayer bot, String fileName) {
+        List<String> list = ASSIGNED.get(bot.getUUID());
+        if (list == null) {
+            return false;
+        }
+        synchronized (list) {
+            int i = list.indexOf(fileName);
+            if (i < 0 || i >= list.size() - 1) {
+                return false;
+            }
+            list.set(i, list.get(i + 1));
+            list.set(i + 1, fileName);
+            return true;
+        }
+    }
+
+    /** 当前执行队列进度 @return [当前第几个(1-based), 队列长度]；未运行返回 null */
+    public static int[] progress(BotPlayer bot) {
+        Active active = RUNNING.get(bot.getUUID());
+        if (active == null || active.runtime == null) {
+            return null;
+        }
+        return new int[]{Math.max(1, active.queueIndex), active.queue.size()};
+    }
+
+    /** 清空假人的播放列表分配 @return 是否移除了任何条目 */
+    public static boolean clearAssigned(BotPlayer bot) {
+        List<String> removed = ASSIGNED.remove(bot.getUUID());
+        return removed != null && !removed.isEmpty();
+    }
+
     /** 恢复播放列表（驻留恢复用，静默忽略已不存在的行为文件） */
     public static void restoreAssigned(BotPlayer bot, List<String> behaviors) {
         List<String> valid = new ArrayList<>();
@@ -192,13 +225,33 @@ public final class BehaviorManager {
 
     // ==================== 启停 ====================
 
-    /** 从播放列表头开始执行 @return 是否成功启动 */
+    /** 从播放列表头开始执行 @return 是否成功启动（已在运行中视为失败，避免旧 runtime 泄漏） */
     public static boolean start(BotPlayer bot) {
+        if (RUNNING.containsKey(bot.getUUID())) {
+            return false;
+        }
         List<String> list = ASSIGNED.getOrDefault(bot.getUUID(), List.of());
         if (list.isEmpty()) {
             return false;
         }
-        Active active = new Active(bot, 0, null);
+        Active active = new Active(bot, new ArrayList<>(list));
+        if (!advance(active)) {
+            return false;
+        }
+        RUNNING.put(bot.getUUID(), active);
+        return true;
+    }
+
+    /**
+     * 快速执行单个行为：临时队列仅含该行为，跑完即止，不修改 ASSIGNED 播放列表。
+     * 会先打断当前运行（快捷执行接管控制权）。
+     */
+    public static boolean startSingle(BotPlayer bot, String fileName) {
+        if (getProgram(fileName) == null) {
+            return false;
+        }
+        stop(bot);
+        Active active = new Active(bot, List.of(fileName));
         if (!advance(active)) {
             return false;
         }
@@ -217,17 +270,19 @@ public final class BehaviorManager {
         }
     }
 
-    /** 假人删除/移除时清理全部状态 */
+    /** 假人删除/移除时清理全部状态（含其可能打开的容器） */
     public static void onBotRemoved(UUID botUuid) {
-        RUNNING.remove(botUuid);
+        Active removed = RUNNING.remove(botUuid);
+        if (removed != null && removed.runtime != null) {
+            removed.runtime.closeIfOpen();
+        }
         ASSIGNED.remove(botUuid);
     }
 
-    /** 队列推进到下一个可解析的行为 @return false = 队列耗尽 */
+    /** 队列推进到下一个可解析的行为（基于启动时的队列快照） @return false = 队列耗尽 */
     private static boolean advance(Active active) {
-        List<String> list = ASSIGNED.getOrDefault(active.bot.getUUID(), List.of());
-        while (active.queueIndex < list.size()) {
-            BehaviorProgram program = getProgram(list.get(active.queueIndex));
+        while (active.queueIndex < active.queue.size()) {
+            BehaviorProgram program = getProgram(active.queue.get(active.queueIndex));
             active.queueIndex++;
             if (program != null) {
                 active.runtime = new BehaviorRuntime(active.bot, program);
@@ -237,12 +292,18 @@ public final class BehaviorManager {
         return false;
     }
 
-    /** 玩家聊天时分发给所有运行中的行为（onChat 事件触发器） */
+    /** 玩家聊天时分发给所有运行中的行为（onChat 事件触发器）；顺带清理已失效条目 */
     public static void onPlayerChat(String sender, String message) {
         if (RUNNING.isEmpty()) {
             return;
         }
-        for (Active active : RUNNING.values()) {
+        Iterator<Map.Entry<UUID, Active>> it = RUNNING.entrySet().iterator();
+        while (it.hasNext()) {
+            Active active = it.next().getValue();
+            if (isStale(active)) {
+                it.remove();
+                continue;
+            }
             if (active.runtime != null && !active.runtime.isFinished()) {
                 active.runtime.onChatMessage(sender, message);
             }
@@ -254,11 +315,22 @@ public final class BehaviorManager {
         if (name == null || name.isEmpty() || RUNNING.isEmpty()) {
             return;
         }
-        for (Active active : RUNNING.values()) {
+        Iterator<Map.Entry<UUID, Active>> it = RUNNING.entrySet().iterator();
+        while (it.hasNext()) {
+            Active active = it.next().getValue();
+            if (isStale(active)) {
+                it.remove();
+                continue;
+            }
             if (active.runtime != null && !active.runtime.isFinished()) {
                 active.runtime.onBroadcastMessage(name);
             }
         }
+    }
+
+    /** 失效条目：假人已移除或已脱离任何服务器（切存档/关服后的残留） */
+    private static boolean isStale(Active active) {
+        return active.bot.isRemoved() || active.bot.getServer() == null;
     }
 
     // ==================== tick 驱动 ====================

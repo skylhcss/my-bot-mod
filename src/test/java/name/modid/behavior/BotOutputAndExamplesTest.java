@@ -96,6 +96,96 @@ class BotOutputAndExamplesTest {
         assertEquals(3, obj.getAsJsonObject("items").get("minecraft:diamond").getAsInt());
     }
 
+    // ==================== 自定义输出（原始行/模板/表格/覆盖模式） ====================
+
+    @Test
+    @DisplayName("原始行输出：无时间/假人前缀，多次写入追加")
+    void writeRawAppends() throws Exception {
+        BotOutput.writeRaw("raw", "line one", false);
+        BotOutput.writeRaw("raw", "line two", false);
+        BotOutput.flush();
+        List<String> lines = Files.readAllLines(tempDir.resolve("raw.txt"), StandardCharsets.UTF_8);
+        assertEquals(List.of("line one", "line two"), lines);
+    }
+
+    @Test
+    @DisplayName("模板占位符替换：{time}/{bot}/{var:名}，未知占位符原样保留")
+    void renderTemplatePlaceholders() {
+        Map<String, String> vars = Map.of("hp", "20");
+        String out = BotOutput.renderTemplate("[{time}] {bot} hp={var:hp} {unknown}", "T", "Steve", vars);
+        assertEquals("[T] Steve hp=20 {unknown}", out);
+        // 变量不存在时为空串
+        assertEquals("x=", BotOutput.renderTemplate("x={var:none}", "T", "B", Map.of()));
+    }
+
+    @Test
+    @DisplayName("模板输出落盘：模板完全决定行内容")
+    void writeTemplateToFile() throws Exception {
+        BotOutput.writeTemplate("tpl", "txt", "Alex", "{bot}: {var:msg}", Map.of("msg", "hi"), false);
+        BotOutput.flush();
+        List<String> lines = Files.readAllLines(tempDir.resolve("tpl.txt"), StandardCharsets.UTF_8);
+        assertEquals(List.of("Alex: hi"), lines);
+    }
+
+    @Test
+    @DisplayName("自定义表格：新文件写自定义表头，之后追加数据行不重复表头")
+    void writeTableRowHeaderOnce() throws Exception {
+        BotOutput.writeTableRow("tbl", List.of("名称", "数量"), List.of("圆石", "64"), false);
+        BotOutput.writeTableRow("tbl", List.of("名称", "数量"), List.of("含,逗号", "1"), false);
+        BotOutput.flush();
+        List<String> lines = Files.readAllLines(tempDir.resolve("tbl.csv"), StandardCharsets.UTF_8);
+        assertEquals(3, lines.size());
+        assertEquals("名称,数量", lines.get(0));
+        assertEquals("圆石,64", lines.get(1));
+        assertEquals("\"含,逗号\",1", lines.get(2));
+    }
+
+    @Test
+    @DisplayName("覆盖模式：overwrite 截断原内容，csv 覆盖时重写表头")
+    void overwriteMode() throws Exception {
+        BotOutput.writeText("ow", "txt", "Steve", "old line", false);
+        BotOutput.writeText("ow", "txt", "Steve", "new line", true);
+        BotOutput.flush();
+        List<String> lines = Files.readAllLines(tempDir.resolve("ow.txt"), StandardCharsets.UTF_8);
+        assertEquals(1, lines.size());
+        assertTrue(lines.get(0).contains("new line"));
+
+        BotOutput.writeTableRow("owc", List.of("a", "b"), List.of("1", "2"), false);
+        BotOutput.writeTableRow("owc", List.of("a", "b"), List.of("3", "4"), true);
+        BotOutput.flush();
+        List<String> csv = Files.readAllLines(tempDir.resolve("owc.csv"), StandardCharsets.UTF_8);
+        assertEquals(List.of("a,b", "3,4"), csv);
+    }
+
+    // ==================== 行为文件导出（游戏内编辑器保存路径） ====================
+
+    private static final String VALID_BEHAVIOR =
+        "{\"format\":1,\"name\":\"t\",\"program\":[{\"op\":\"wait\",\"ticks\":1}]}";
+
+    @Test
+    @DisplayName("导出到任意绝对目录：文件名清洗后写入")
+    void storageSaveToAbsoluteDir() throws Exception {
+        String err = BehaviorStorage.save("my bot/test.json", VALID_BEHAVIOR, tempDir.toString());
+        assertEquals(null, err);
+        // "my bot/test.json" 清洗为 my_bot_test.json（空格与路径分隔符均被替换）
+        assertTrue(Files.exists(tempDir.resolve("my_bot_test.json")));
+    }
+
+    @Test
+    @DisplayName("导出目录含 .. 路径段被拒绝")
+    void storageRejectTraversalDir() {
+        String err = BehaviorStorage.save("x", VALID_BEHAVIOR, tempDir.toString() + "/../evil");
+        assertTrue(err != null && err.contains(".."));
+    }
+
+    @Test
+    @DisplayName("非法行为 JSON 在保存前被拦截，不落盘")
+    void storageRejectInvalidBehavior() {
+        String err = BehaviorStorage.save("bad", "{\"format\":1}", tempDir.toString());
+        assertTrue(err != null);
+        assertFalse(Files.exists(tempDir.resolve("bad.json")));
+    }
+
     // ==================== 随包示例行为文件 ====================
 
     /** 从工作目录向上查找仓库根（Stonecutter 子项目的测试工作目录在 versions/<mc>/ 下） */

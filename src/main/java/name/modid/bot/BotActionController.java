@@ -148,8 +148,8 @@ public class BotActionController {
         // 执行射线追踪
         var hitResult = bot.pick(reachDistance, 0.0F, false);
         
-        // 检查是否击中实体
-        var entityHitResult = getEntityHitResult(bot, reachDistance);
+        // 检查是否击中实体（实体射线被方块命中点截断，不能隔墙攻击）
+        var entityHitResult = getEntityHitResult(bot, reachDistance, blockHitDistance(bot, hitResult, reachDistance));
         
         if (entityHitResult != null && entityHitResult.getEntity() instanceof net.minecraft.world.entity.LivingEntity) {
             // 攻击实体
@@ -179,7 +179,7 @@ public class BotActionController {
                         blockPos,
                         net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.START_DESTROY_BLOCK,
                         blockHitResult.getDirection(),
-                        bot.level().getMaxBuildHeight(),   // 按当前维度建筑高度，而非硬编码 320
+                        maxBuildHeight(),   // 按当前维度建筑高度，而非硬编码 320
                         0      // sequence
                     );
                     miningPos = blockPos.immutable();
@@ -199,11 +199,21 @@ public class BotActionController {
                 miningPos,
                 net.minecraft.network.protocol.game.ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK,
                 net.minecraft.core.Direction.DOWN,
-                bot.level().getMaxBuildHeight(),
+                maxBuildHeight(),
                 0
             );
             miningPos = null;
         }
+    }
+
+    /** 当前维度建筑高度上限（1.21.2+ Level#getMaxBuildHeight 移除，改用维度类型推导） */
+    private int maxBuildHeight() {
+        //? if >=1.21.2 {
+        /*var type = bot.level().dimensionType();
+        return type.minY() + type.height();
+        *///?} else {
+        return bot.level().getMaxBuildHeight();
+        //?}
     }
     
     /**
@@ -250,16 +260,20 @@ public class BotActionController {
      * 使用射线追踪检测假人视线前方的实体
      * @param player 玩家
      * @param reachDistance 攻击距离
+     * @param blockHitDistance 方块命中距离（实体射线终点不得超过此值，防止隔墙命中）
      * @return 实体命中结果，如果没有则返回 null
      */
-    private net.minecraft.world.phys.EntityHitResult getEntityHitResult(net.minecraft.server.level.ServerPlayer player, double reachDistance) {
+    private net.minecraft.world.phys.EntityHitResult getEntityHitResult(net.minecraft.server.level.ServerPlayer player,
+                                                                        double reachDistance, double blockHitDistance) {
+        // 有效探测距离取方块命中点与伸手距离的较小值（与原版 pick 行为一致）
+        double maxDistance = Math.min(reachDistance, blockHitDistance);
         // 获取玩家的视线方向
         var viewVector = player.getViewVector(1.0F);
         var eyePosition = player.getEyePosition(1.0F);
-        var reachVector = eyePosition.add(viewVector.x * reachDistance, viewVector.y * reachDistance, viewVector.z * reachDistance);
+        var reachVector = eyePosition.add(viewVector.x * maxDistance, viewVector.y * maxDistance, viewVector.z * maxDistance);
         
         // 创建边界框用于检测
-        var aabb = player.getBoundingBox().expandTowards(viewVector.scale(reachDistance)).inflate(1.0D);
+        var aabb = player.getBoundingBox().expandTowards(viewVector.scale(maxDistance)).inflate(1.0D);
         
         // 查找视线范围内的所有实体
         var entities = player.level().getEntities(player, aabb, entity -> 
@@ -267,7 +281,7 @@ public class BotActionController {
         );
         
         net.minecraft.world.phys.EntityHitResult closestHit = null;
-        double closestDistance = reachDistance;
+        double closestDistance = maxDistance;
         
         // 遍历所有实体，找到最近的被视线击中的实体
         for (var entity : entities) {
@@ -284,6 +298,15 @@ public class BotActionController {
         }
         
         return closestHit;
+    }
+
+    /** 方块命中距离（未命中方块时返回最大探测距离） */
+    private static double blockHitDistance(net.minecraft.server.level.ServerPlayer player,
+                                           net.minecraft.world.phys.HitResult hitResult, double fallback) {
+        if (hitResult.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
+            return hitResult.getLocation().distanceTo(player.getEyePosition(1.0F));
+        }
+        return fallback;
     }
     
     /**
@@ -303,18 +326,14 @@ public class BotActionController {
             ? config.creativeAttackReachDistance
             : config.attackReachDistance;
         
-        // 射线追踪：检测视线前方目标
+        // 射线追踪：检测视线前方目标（实体射线被方块命中点截断，不能隔墙交互）
         var blockHitResult = bot.pick(reachDistance, 0.0F, false);
-        var entityHitResult = getEntityHitResult(bot, reachDistance);
+        var entityHitResult = getEntityHitResult(bot, reachDistance, blockHitDistance(bot, blockHitResult, reachDistance));
         
         if (entityHitResult != null) {
-            // 优先与实体交互
+            // 与实体交互（右键）；交互未被消费时不做任何事（与真实玩家一致，不退化为攻击）
             var entity = entityHitResult.getEntity();
-            var hand = InteractionHand.MAIN_HAND;
-            var result = entity.interact(bot, hand);
-            if (!result.consumesAction()) {
-                bot.attack(entity);
-            }
+            entity.interact(bot, InteractionHand.MAIN_HAND);
         } else if (blockHitResult.getType() == net.minecraft.world.phys.HitResult.Type.BLOCK) {
             // 与方块交互（放置方块、打开箱子等）
             var hitResult = (net.minecraft.world.phys.BlockHitResult) blockHitResult;
@@ -521,7 +540,12 @@ public class BotActionController {
      */
     public void lookAt(Vec3 target) {
         Vec3 botPos = bot.getEyePosition();
-        Vec3 direction = target.subtract(botPos).normalize();
+        Vec3 delta = target.subtract(botPos);
+        // 目标与眼睛位置重合时，normalize 会产生 NaN 朝向，直接跳过
+        if (delta.lengthSqr() < 1.0E-8) {
+            return;
+        }
+        Vec3 direction = delta.normalize();
         
         double horizontalDistance = Math.sqrt(direction.x * direction.x + direction.z * direction.z);
         float yaw = (float) Math.toDegrees(Math.atan2(-direction.x, direction.z));
@@ -677,8 +701,9 @@ public class BotActionController {
         if (pathfinder == null) {
             pathfinder = new BotPathfinder(bot);
         }
-        // 先停止当前移动
-        stopMovement();
+        // 先彻底取消上一次寻路：重置移动/跳跃/疾跑输入与禁区/卡住计数，
+        // 避免新寻路失败时残留跳跃标志导致原地无限跳、或旧禁区误排除新路线
+        cancelPath();
         return pathfinder.pathTo(target);
     }
 

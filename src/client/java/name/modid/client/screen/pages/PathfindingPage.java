@@ -51,5 +51,12 @@ public class PathfindingPage extends ConfigPage {
         section.addItem(swim, new ResetButton(0, 0, () -> {
             config.pathfindingAllowSwim = true; config.save(); swim.setSelected(true);
         }));
+
+        ModernCheckbox smooth = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT,
+            Component.translatable("gui.my-bot-mod.pathfinding.smooth"), config.pathfindingSmooth);
+        smooth.setOnChanged(() -> { config.pathfindingSmooth = smooth.selected(); config.save(); });
+        section.addItem(smooth, new ResetButton(0, 0, () -> {
+            config.pathfindingSmooth = true; config.save(); smooth.setSelected(true);
+        }));
     }
 }

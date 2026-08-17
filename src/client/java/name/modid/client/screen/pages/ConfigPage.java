@@ -89,6 +89,15 @@ public abstract class ConfigPage {
         layoutSections();
     }
 
+    /** 重建内容卡片但保留当前滚动位置（网络更新刷新用，避免把用户拉回顶部/打断拖动） */
+    public void rebuild() {
+        double keep = this.scrollOffset;
+        this.sections.clear();
+        buildPage();
+        layoutSections();
+        this.scrollOffset = clampScroll(keep);
+    }
+
     /**
      * 子类实现：构建 Section 卡片和配置项
      */
@@ -232,8 +241,11 @@ public abstract class ConfigPage {
             return true;
         }
 
-        // 2) 内容区控件
-        if (mouseX < scrollAreaX || mouseX > scrollbarX()) return false;
+        // 2) 内容区控件（同时校验 Y 边界，避免点中被滚动裁剪隐藏的控件误触发指令）
+        if (mouseX < scrollAreaX || mouseX > scrollbarX()
+                || mouseY < scrollAreaY || mouseY >= scrollAreaY + scrollAreaHeight) {
+            return false;
+        }
 
         double adjustedMouseY = mouseY + scrollOffset;
 

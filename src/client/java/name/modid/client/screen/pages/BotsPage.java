@@ -7,7 +7,7 @@ import name.modid.client.screen.widget.ModernButton;
 import name.modid.client.screen.widget.SectionCard;
 import name.modid.config.ModConfig;
 import name.modid.net.BotNetworking;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import name.modid.client.BotClientNetworking;
 import net.minecraft.network.chat.Component;
 
 import java.util.List;
@@ -64,7 +64,7 @@ public class BotsPage extends ConfigPage {
 
     private void requestList() {
         if (minecraft != null && minecraft.getConnection() != null) {
-            ClientPlayNetworking.send(BotNetworking.REQUEST_BOT_LIST, BotNetworking.c2s());
+            BotClientNetworking.sendRequestBotList(BotNetworking.c2s());
         }
     }
 

@@ -6,7 +6,6 @@ import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
-import name.modid.MyBotMod;
 import name.modid.config.ModConfig;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -87,41 +86,71 @@ public class BotModCommand {
                             .executes(ctx -> setBoolConfig(ctx, "preserveBotState"))
                         )
                     )
-                    .then(Commands.literal("carpetModCompatibility")
-                        .then(Commands.argument("value", BoolArgumentType.bool())
-                            .executes(ctx -> setBoolConfig(ctx, "carpetModCompatibility"))
-                        )
-                    )
                     .then(Commands.literal("allowBotAutoJump")
                         .then(Commands.argument("value", BoolArgumentType.bool())
                             .executes(ctx -> setBoolConfig(ctx, "allowBotAutoJump"))
                         )
                     )
-                    .then(Commands.literal("allowBatonTeleportNonCreative")
+                    .then(Commands.literal("batonRequiresOp")
                         .then(Commands.argument("value", BoolArgumentType.bool())
-                            .executes(ctx -> setBoolConfig(ctx, "allowBatonTeleportNonCreative"))
+                            .executes(ctx -> setBoolConfig(ctx, "batonRequiresOp"))
+                        )
+                    )
+                    .then(Commands.literal("botGlowing")
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                            .executes(ctx -> setBoolConfig(ctx, "botGlowing"))
+                        )
+                    )
+                    .then(Commands.literal("botFireImmune")
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                            .executes(ctx -> setBoolConfig(ctx, "botFireImmune"))
+                        )
+                    )
+                    .then(Commands.literal("pathfindingAllowParkour")
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                            .executes(ctx -> setBoolConfig(ctx, "pathfindingAllowParkour"))
+                        )
+                    )
+                    .then(Commands.literal("pathfindingAllowSwim")
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                            .executes(ctx -> setBoolConfig(ctx, "pathfindingAllowSwim"))
+                        )
+                    )
+                    .then(Commands.literal("pathfindingSmooth")
+                        .then(Commands.argument("value", BoolArgumentType.bool())
+                            .executes(ctx -> setBoolConfig(ctx, "pathfindingSmooth"))
                         )
                     )
                     
-                    // 数值配置
+                    // 数值配置（范围与 ModConfig.validate() 对齐）
                     .then(Commands.literal("attackReachDistance")
-                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0, 10.0))
+                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0, 64.0))
                             .executes(ctx -> setDoubleConfig(ctx, "attackReachDistance"))
                         )
                     )
                     .then(Commands.literal("creativeAttackReachDistance")
-                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0, 10.0))
+                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0, 128.0))
                             .executes(ctx -> setDoubleConfig(ctx, "creativeAttackReachDistance"))
                         )
                     )
                     .then(Commands.literal("killAuraRange")
-                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0, 10.0))
+                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0, 64.0))
                             .executes(ctx -> setDoubleConfig(ctx, "killAuraRange"))
                         )
                     )
                     .then(Commands.literal("maxBotCount")
                         .then(Commands.argument("value", IntegerArgumentType.integer(0))
                             .executes(ctx -> setIntConfig(ctx, "maxBotCount"))
+                        )
+                    )
+                    .then(Commands.literal("maxBotsPerPlayer")
+                        .then(Commands.argument("value", IntegerArgumentType.integer(0))
+                            .executes(ctx -> setIntConfig(ctx, "maxBotsPerPlayer"))
+                        )
+                    )
+                    .then(Commands.literal("maxPathfindingDistance")
+                        .then(Commands.argument("value", IntegerArgumentType.integer(32, 1024))
+                            .executes(ctx -> setIntConfig(ctx, "maxPathfindingDistance"))
                         )
                     )
                 )
@@ -143,9 +172,15 @@ public class BotModCommand {
                             builder.suggest("botHunger");
                             builder.suggest("botPersistence");
                             builder.suggest("preserveBotState");
-                            builder.suggest("carpetModCompatibility");
                             builder.suggest("allowBotAutoJump");
-                            builder.suggest("allowBatonTeleportNonCreative");
+                            builder.suggest("batonRequiresOp");
+                            builder.suggest("botGlowing");
+                            builder.suggest("botFireImmune");
+                            builder.suggest("maxBotsPerPlayer");
+                            builder.suggest("maxPathfindingDistance");
+                            builder.suggest("pathfindingAllowParkour");
+                            builder.suggest("pathfindingAllowSwim");
+                            builder.suggest("pathfindingSmooth");
                             return builder.buildFuture();
                         })
                         .executes(BotModCommand::getConfig)
@@ -211,6 +246,7 @@ public class BotModCommand {
         // 生存设置
         ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.survival"), false);
         ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.max_bot_count", config.maxBotCount), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  maxBotsPerPlayer: " + config.maxBotsPerPlayer + " (0=无限)"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  allowNonOpControlBot: " + formatBool(config.allowNonOpControlBot)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  autoRespawnOnDeath: " + formatBool(config.autoRespawnOnDeath)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  botTakeDamage: " + formatBool(config.botTakeDamage)), false);
@@ -224,7 +260,21 @@ public class BotModCommand {
         
         // 指挥棒设置
         ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.baton"), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  allowBatonTeleportNonCreative: " + formatBool(config.allowBatonTeleportNonCreative)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  batonRequiresOp: " + formatBool(config.batonRequiresOp)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
+        
+        // 外观与防护
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.look"), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  botGlowing: " + formatBool(config.botGlowing)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  botFireImmune: " + formatBool(config.botFireImmune)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(""), false);
+        
+        // 寻路设置
+        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.pathfinding"), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  maxPathfindingDistance: " + config.maxPathfindingDistance), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  pathfindingAllowParkour: " + formatBool(config.pathfindingAllowParkour)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  pathfindingAllowSwim: " + formatBool(config.pathfindingAllowSwim)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  pathfindingSmooth: " + formatBool(config.pathfindingSmooth)), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         
         // 驻留设置
@@ -232,13 +282,6 @@ public class BotModCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("  botPersistence: " + formatBool(config.botPersistence)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  preserveBotState: " + formatBool(config.preserveBotState)), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        // 兼容性设置
-        ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.section.compat"), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  carpetModCompatibility: " + formatBool(config.carpetModCompatibility)), false);
-        if (MyBotMod.isCarpetModLoaded()) {
-            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.carpet_detected"), false);
-        }
         
         return 1;
     }
@@ -316,23 +359,26 @@ public class BotModCommand {
             case "preserveBotState":
                 config.preserveBotState = value;
                 break;
-            case "carpetModCompatibility":
-                config.carpetModCompatibility = value;
-                // 立即应用兼容模式设置
-                if (value && MyBotMod.isCarpetModLoaded()) {
-                    // 启用兼容模式且检测到 Carpet Mod，禁用假人功能
-                    config.enableBotFeature = false;
-                    ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.carpet_disabled_bot"), false);
-                } else if (!value && MyBotMod.isCarpetModLoaded()) {
-                    // 禁用兼容模式，提示用户可以手动启用假人功能
-                    ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.config.compat_disabled_hint"), false);
-                }
-                break;
             case "allowBotAutoJump":
                 config.allowBotAutoJump = value;
                 break;
-            case "allowBatonTeleportNonCreative":
-                config.allowBatonTeleportNonCreative = value;
+            case "batonRequiresOp":
+                config.batonRequiresOp = value;
+                break;
+            case "botGlowing":
+                config.botGlowing = value;
+                break;
+            case "botFireImmune":
+                config.botFireImmune = value;
+                break;
+            case "pathfindingAllowParkour":
+                config.pathfindingAllowParkour = value;
+                break;
+            case "pathfindingAllowSwim":
+                config.pathfindingAllowSwim = value;
+                break;
+            case "pathfindingSmooth":
+                config.pathfindingSmooth = value;
                 break;
         }
         
@@ -374,6 +420,10 @@ public class BotModCommand {
         
         if (key.equals("maxBotCount")) {
             config.maxBotCount = value;
+        } else if (key.equals("maxBotsPerPlayer")) {
+            config.maxBotsPerPlayer = value;
+        } else if (key.equals("maxPathfindingDistance")) {
+            config.maxPathfindingDistance = value;
         }
         
         config.save();
@@ -402,9 +452,15 @@ public class BotModCommand {
             case "botHunger" -> formatBool(config.botHunger);
             case "botPersistence" -> formatBool(config.botPersistence);
             case "preserveBotState" -> formatBool(config.preserveBotState);
-            case "carpetModCompatibility" -> formatBool(config.carpetModCompatibility);
             case "allowBotAutoJump" -> formatBool(config.allowBotAutoJump);
-            case "allowBatonTeleportNonCreative" -> formatBool(config.allowBatonTeleportNonCreative);
+            case "batonRequiresOp" -> formatBool(config.batonRequiresOp);
+            case "botGlowing" -> formatBool(config.botGlowing);
+            case "botFireImmune" -> formatBool(config.botFireImmune);
+            case "maxBotsPerPlayer" -> String.valueOf(config.maxBotsPerPlayer);
+            case "maxPathfindingDistance" -> String.valueOf(config.maxPathfindingDistance);
+            case "pathfindingAllowParkour" -> formatBool(config.pathfindingAllowParkour);
+            case "pathfindingAllowSwim" -> formatBool(config.pathfindingAllowSwim);
+            case "pathfindingSmooth" -> formatBool(config.pathfindingSmooth);
             default -> Component.translatable("msg.my-bot-mod.config.unknown").getString();
         };
         
@@ -495,15 +551,6 @@ public class BotModCommand {
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
         ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.description", config.description), false);
         ctx.getSource().sendSuccess(() -> Component.literal(""), false);
-        
-        if (MyBotMod.isCarpetModLoaded()) {
-            ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.carpet_loaded"), false);
-            if (config.carpetModCompatibility) {
-                ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.compat_enabled"), false);
-            } else {
-                ctx.getSource().sendSuccess(() -> Component.translatable("msg.my-bot-mod.info.compat_disabled"), false);
-            }
-        }
         
         return 1;
     }

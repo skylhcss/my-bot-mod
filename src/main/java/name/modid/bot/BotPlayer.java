@@ -49,7 +49,11 @@ public class BotPlayer extends ServerPlayer {
         //? if >=1.20.2 {
         /*super(server, level, profile, net.minecraft.server.level.ClientInformation.createDefault());
         this.connection = new FakeServerGamePacketListenerImpl(server, connection, this,
+            //? if >=1.20.5 {
+            net.minecraft.server.network.CommonListenerCookie.createInitial(profile, false));
+            //?} else {
             net.minecraft.server.network.CommonListenerCookie.createInitial(profile));
+            //?}
         *///?} else {
         super(server, level, profile);
         this.connection = new FakeServerGamePacketListenerImpl(server, connection, this);
@@ -57,11 +61,13 @@ public class BotPlayer extends ServerPlayer {
         this.creatorUUID = creatorUUID;
         this.creatorName = creatorName;
         this.actionController = new BotActionController(this);
-        
+
         // 设置假人的物理属性，使其能够跳跃、被击退和碰撞
         // 参考 Carpet Mod 的 EntityPlayerMPFake
-        // 设置步高为 0.6（允许自动上台阶）
+        // 设置步高为 0.6（允许自动上台阶）；1.20.5+ 改用步进高度属性且玩家默认即 0.6，无需手动设置
+        //? if <1.20.5 {
         this.setMaxUpStep(0.6F);
+        //?}
         
         // 确保假人不是旁观者模式（旁观者无法被碰撞）
         // 这在 BotManager.createBot() 中设置游戏模式时会被覆盖
@@ -145,6 +151,38 @@ public class BotPlayer extends ServerPlayer {
     }
     
     /**
+     * 移动物理：支持创造模式飞行
+     * abilities.flying 时（召唤时继承自创造飞行玩家）跳过重力悬停：
+     * 水平按输入移动，跳跃/潜行 上升/下降，落地自动结束飞行（与原版创造飞行一致）。
+     */
+    @Override
+    public void travel(Vec3 travelVector) {
+        if (this.getAbilities().flying && !this.isPassenger()) {
+            if (this.onGround()) {
+                // 落地结束飞行（与原版行为一致）
+                this.getAbilities().flying = false;
+            } else {
+                float speed = Math.max(0.01F, this.getAbilities().getFlyingSpeed());
+                double mx = travelVector.x * speed * 4.0;
+                double mz = travelVector.z * speed * 4.0;
+                double my = 0.0;
+                if (this.jumping) {
+                    my += speed * 2.0;
+                }
+                if (this.isShiftKeyDown()) {
+                    my -= speed * 2.0;
+                }
+                this.setDeltaMovement(mx, my, mz);
+                this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
+                this.setDeltaMovement(Vec3.ZERO);
+                this.calculateEntityAnimation(false);
+                return;
+            }
+        }
+        super.travel(travelVector);
+    }
+
+    /**
      * 假人死亡时的处理
      * 根据配置决定是否自动重生或移除假人
      */
@@ -157,57 +195,107 @@ public class BotPlayer extends ServerPlayer {
         if (BotSettings.resolve(settings.autoRespawn, config.autoRespawnOnDeath)) {
             // 自动重生：延迟 10 tick 后复活
             // 注意：必须在 deathTime 达到 20（LivingEntity 自动移除阀值）之前复活
-            this.level().getServer().tell(new net.minecraft.server.TickTask(
-                this.level().getServer().getTickCount() + 10,
-                () -> {
-                    // 安全检查：确保假人尚未被移除且仍在管理器中
-                    if (this.isRemoved() || BotManager.getBot(this.getName().getString()) == null) {
-                        return;
-                    }
-                    // 复活：重置死亡标志、死亡计时、血量、饱食度、效果与着火
-                    // 仅重置血量不够：若不清除 dead 标志，isDeadOrDying() 仍为 true 导致被移除
-                    this.dead = false;
-                    this.deathTime = 0;
-                    this.setHealth(this.getMaxHealth());
-                    this.getFoodData().setFoodLevel(20);
-                    this.getFoodData().setSaturation(5.0F);
-                    this.removeAllEffects();
-                    this.clearFire();
-                    
-                    // 传送回重生点（含维度）；若未设置则回退到创建者位置，否则留在原地
-                    var respawnPos = this.getRespawnPosition();
-                    if (respawnPos != null) {
-                        net.minecraft.server.level.ServerLevel respawnLevel =
-                            this.level().getServer().getLevel(this.getRespawnDimension());
-                        double rx = respawnPos.getX() + 0.5, ry = respawnPos.getY(), rz = respawnPos.getZ() + 0.5;
-                        if (respawnLevel != null && respawnLevel != this.serverLevel()) {
-                            // 重生点在其他维度：跨维度传送
-                            this.teleportTo(respawnLevel, rx, ry, rz, this.getYRot(), this.getXRot());
-                        } else {
-                            this.teleportTo(rx, ry, rz);
-                        }
-                    } else {
-                        ServerPlayer creator = this.level().getServer().getPlayerList().getPlayer(this.creatorUUID);
-                        if (creator != null) {
-                            if (creator.level() != this.level()) {
-                                this.teleportTo(creator.serverLevel(), creator.getX(), creator.getY(), creator.getZ(), creator.getYRot(), creator.getXRot());
-                            } else {
-                                this.teleportTo(creator.getX(), creator.getY(), creator.getZ());
-                            }
-                        }
-                    }
-                }
-            ));
+            scheduleDelayed(10, this::respawnAfterDeath);
         } else {
             // 延迟到下一 tick 移除假人，避免在实体 tick 处理期间同步移除导致 ConcurrentModificationException
             String botName = this.getName().getString();
-            this.level().getServer().tell(new net.minecraft.server.TickTask(
-                this.level().getServer().getTickCount() + 1,
-                () -> BotManager.removeBot(botName)
-            ));
+            scheduleDelayed(1, () -> BotManager.removeBot(botName));
         }
     }
-    
+
+    /** 延迟任务调度（1.21.2+ tell 更名为 schedule） */
+    private void scheduleDelayed(int ticks, Runnable task) {
+        var server = this.level().getServer();
+        //? if >=1.21.2 {
+        /*server.schedule(new net.minecraft.server.TickTask(server.getTickCount() + ticks, task));
+        *///?} else {
+        server.tell(new net.minecraft.server.TickTask(server.getTickCount() + ticks, task));
+        //?}
+    }
+
+    /** 死亡后延迟重生逻辑 */
+    private void respawnAfterDeath() {
+        // 安全检查：确保假人尚未被移除且仍在管理器中
+        if (this.isRemoved() || BotManager.getBot(this.getName().getString()) == null) {
+            return;
+        }
+        // 复活：重置死亡标志、死亡计时、血量、饱食度、效果与着火
+        // 仅重置血量不够：若不清除 dead 标志，isDeadOrDying() 仍为 true 导致被移除
+        this.dead = false;
+        this.deathTime = 0;
+        this.setHealth(this.getMaxHealth());
+        this.getFoodData().setFoodLevel(20);
+        this.getFoodData().setSaturation(5.0F);
+        this.removeAllEffects();
+        this.clearFire();
+
+        // 客户端重建：死亡时客户端收到实体事件 byte 3 置 dead=true，
+        // 没有任何包能清除；不移除并重新添加实体会永久躺尸并自移除
+        this.refreshEntityOnClients();
+
+        // 传送回重生点（含维度）；若未设置则回退到创建者位置，否则留在原地
+        var respawnPos = this.getRespawnPosition();
+        if (respawnPos != null) {
+            net.minecraft.server.level.ServerLevel respawnLevel =
+                this.level().getServer().getLevel(this.getRespawnDimension());
+            double rx = respawnPos.getX() + 0.5, ry = respawnPos.getY(), rz = respawnPos.getZ() + 0.5;
+            if (respawnLevel != null && respawnLevel != this.serverLevel()) {
+                // 重生点在其他维度：跨维度传送
+                BotManager.teleportCrossLevel(this, respawnLevel, rx, ry, rz, this.getYRot(), this.getXRot());
+            } else {
+                this.teleportTo(rx, ry, rz);
+            }
+        } else {
+            ServerPlayer creator = this.level().getServer().getPlayerList().getPlayer(this.creatorUUID);
+            if (creator != null) {
+                if (creator.level() != this.level()) {
+                    BotManager.teleportCrossLevel(this, creator.serverLevel(), creator.getX(), creator.getY(), creator.getZ(), creator.getYRot(), creator.getXRot());
+                } else {
+                    this.teleportTo(creator.getX(), creator.getY(), creator.getZ());
+                }
+            }
+        }
+    }
+
+    /**
+     * 在所有客户端重建本实体（移除 + 重新添加），清除客户端的死亡状态
+     */
+    private void refreshEntityOnClients() {
+        var playerList = this.level().getServer().getPlayerList();
+        playerList.broadcastAll(new net.minecraft.network.protocol.game.ClientboundRemoveEntitiesPacket(this.getId()));
+        //? if >=1.21 {
+        /*// 1.21+ ClientboundAddEntityPacket(Entity) 便捷构造移除，改用完整构造
+        playerList.broadcastAll(new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(
+            this.getId(), this.getUUID(), this.getX(), this.getY(), this.getZ(),
+            this.getXRot(), this.getYRot(), this.getType(), 0, this.getDeltaMovement(), (double) this.getYHeadRot()));
+        *///?} else if >=1.20.2 {
+        // 1.20.2–1.20.x 玩家实体也走通用的 AddEntity 包（AddPlayer 包已移除）
+        playerList.broadcastAll(new net.minecraft.network.protocol.game.ClientboundAddEntityPacket(this));
+        //?} else {
+        playerList.broadcastAll(new net.minecraft.network.protocol.game.ClientboundAddPlayerPacket(this));
+        //?}
+    }
+
+    //? if >=1.21.2 {
+    /*// 1.21.2+ Entity.hurt 变为 final（返回值改为 void），伤害入口改为 hurtServer（额外接收 ServerLevel）
+    @Override
+    public boolean hurtServer(net.minecraft.server.level.ServerLevel world, net.minecraft.world.damagesource.DamageSource source, float amount) {
+        var config = name.modid.config.ModConfig.getInstance();
+
+        // 如果配置为不受伤害，则忽略所有伤害（假人个人配置优先于全局配置）
+        if (!BotSettings.resolve(settings.takeDamage, config.botTakeDamage)) {
+            return false;
+        }
+
+        // 免疫火焰/岩浆伤害（含着火、岩浆、火球等；假人个人配置优先于全局配置）
+        if (BotSettings.resolve(settings.fireImmune, config.botFireImmune)
+                && source.is(net.minecraft.tags.DamageTypeTags.IS_FIRE)) {
+            return false;
+        }
+
+        return super.hurtServer(world, source, amount);
+    }
+    *///?} else {
     /**
      * 假人是否受到伤害
      * 根据配置决定是否可以受到伤害
@@ -215,20 +303,21 @@ public class BotPlayer extends ServerPlayer {
     @Override
     public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
         var config = name.modid.config.ModConfig.getInstance();
-        
+
         // 如果配置为不受伤害，则忽略所有伤害（假人个人配置优先于全局配置）
         if (!BotSettings.resolve(settings.takeDamage, config.botTakeDamage)) {
             return false;
         }
-        
+
         // 免疫火焰/岩浆伤害（含着火、岩浆、火球等；假人个人配置优先于全局配置）
         if (BotSettings.resolve(settings.fireImmune, config.botFireImmune)
                 && source.is(net.minecraft.tags.DamageTypeTags.IS_FIRE)) {
             return false;
         }
-        
+
         return super.hurt(source, amount);
     }
+    //?}
 
     /**
      * 判断是否为假人

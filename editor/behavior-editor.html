@@ -90,6 +90,50 @@
   .blocklyZoom>image:hover, .blocklyTrash>image:hover { opacity:1; }
   .blocklyWidgetDiv .goog-menu, .blocklyDropDownDiv { font-family:var(--font) !important; }
   input[type=file] { display:none; }
+
+  /* ===== 物品/实体选择器弹窗 ===== */
+  #mcpMask { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:1000;
+    display:none; align-items:center; justify-content:center; backdrop-filter:blur(2px); }
+  #mcpMask.show { display:flex; }
+  .mcp { width:min(680px,92vw); height:min(560px,88vh); background:var(--panel);
+    border:1px solid var(--border); border-radius:14px; box-shadow:0 12px 48px rgba(0,0,0,.5);
+    display:flex; flex-direction:column; overflow:hidden; }
+  .mcp-hd { display:flex; align-items:center; gap:10px; padding:12px 14px;
+    border-bottom:1px solid var(--border); background:linear-gradient(180deg,#1a2230,#161d28); }
+  .mcp-hd .ttl { font-weight:700; font-size:14px; color:var(--accent); }
+  .mcp-hd .x { margin-left:auto; cursor:pointer; color:var(--muted); font-size:20px;
+    width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:7px; }
+  .mcp-hd .x:hover { background:var(--panel2); color:var(--text); }
+  .mcp-search { display:flex; gap:8px; padding:10px 14px; border-bottom:1px solid var(--border); }
+  .mcp-search input { flex:1; background:var(--bg); border:1px solid var(--border); color:var(--text);
+    border-radius:8px; padding:7px 12px; font-size:13px; outline:none; font-family:var(--font); }
+  .mcp-search input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(34,211,238,.15); }
+  .mcp-body { flex:1; display:flex; min-height:0; }
+  .mcp-cats { width:132px; border-right:1px solid var(--border); overflow-y:auto; padding:6px; flex-shrink:0; }
+  .mcp-cat { display:flex; align-items:center; gap:7px; padding:7px 9px; border-radius:8px;
+    cursor:pointer; font-size:12.5px; color:var(--muted); white-space:nowrap; }
+  .mcp-cat:hover { background:var(--panel2); color:var(--text); }
+  .mcp-cat.on { background:var(--panel2); color:var(--text); box-shadow:inset 3px 0 0 var(--accent); }
+  .mcp-grid { flex:1; overflow-y:auto; padding:10px; display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); grid-auto-rows:min-content; gap:8px; align-content:start; }
+  .mcp-cell { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:9px;
+    border:1px solid var(--border); background:var(--panel2); cursor:pointer; transition:all .1s; overflow:hidden; }
+  .mcp-cell:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .mcp-cell.on { border-color:var(--accent); box-shadow:0 0 0 2px rgba(34,211,238,.25); }
+  .mcp-ico { width:30px; height:30px; border-radius:6px; background:var(--bg); flex-shrink:0;
+    display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1;
+    border:1px solid var(--border); image-rendering:pixelated; }
+  .mcp-ico img { width:26px; height:26px; image-rendering:pixelated; }
+  .mcp-nm { display:flex; flex-direction:column; min-width:0; }
+  .mcp-nm b { font-size:12.5px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mcp-nm span { font-size:10px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .mcp-ft { display:flex; align-items:center; gap:10px; padding:9px 14px; border-top:1px solid var(--border); font-size:12px; color:var(--muted); }
+  .mcp-pg { display:flex; align-items:center; gap:6px; margin-left:auto; }
+  .mcp-pg button { background:var(--panel2); border:1px solid var(--border); color:var(--text);
+    border-radius:7px; width:30px; height:26px; cursor:pointer; font-size:14px; }
+  .mcp-pg button:disabled { opacity:.35; cursor:default; }
+  .mcp-use { background:linear-gradient(135deg,#22d3ee,#34e3b0); color:#04252b; border:none;
+    border-radius:7px; padding:5px 12px; font-weight:600; cursor:pointer; font-family:var(--font); font-size:12px; }
 </style>
 </head>
 <body>
@@ -109,14 +153,36 @@
   <button class="ibtn" id="btnNew" data-tip="新建"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/></svg></button>
   <button class="ibtn" id="btnOpen" data-tip="打开 .json"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h15a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1h-8L9 6H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1z"/></svg></button>
   <button class="btn-save" id="btnSave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span id="lbSave">保存</span></button>
+    <button class="ibtn" id="btnSaveDir" data-tip="保存到文件夹（任选目录直接写入）"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg></button>
   <button class="ibtn" id="btnLang" data-tip="Language">EN</button>
   <input type="file" id="fileInput" accept=".json">
 </div>
 <div id="blocklyDiv"></div>
 <div id="statusbar"><span id="statusMsg"></span><span id="blockCount"></span></div>
 
+<!-- 物品/实体选择器弹窗 -->
+<div id="mcpMask">
+  <div class="mcp">
+    <div class="mcp-hd"><span class="ttl" id="mcpTitle">选择</span><span class="x" id="mcpClose">×</span></div>
+    <div class="mcp-search">
+      <input type="text" id="mcpSearch" placeholder="搜索名称或 ID（可直接输入自定义 ID）" list="mcpDatalist" autocomplete="off">
+      <datalist id="mcpDatalist"></datalist>
+    </div>
+    <div class="mcp-body">
+      <div class="mcp-cats" id="mcpCats"></div>
+      <div class="mcp-grid" id="mcpGrid"></div>
+    </div>
+    <div class="mcp-ft">
+      <span id="mcpInfo"></span>
+      <button class="mcp-use" id="mcpUse">使用输入的 ID</button>
+      <span class="mcp-pg"><button id="mcpPrev">‹</button><span id="mcpPage">1/1</span><button id="mcpNext">›</button></span>
+    </div>
+  </div>
+</div>
+
 <script src="vendor/blockly/blockly_compressed.js"></script>
 <script src="vendor/blockly/blocks_compressed.js"></script>
+<script src="vendor/mc/mcdata.js"></script>
 <script>
 // ==================== 语言 ====================
 var LANG = localStorage.getItem('bh_lang') || 'zh';
@@ -124,9 +190,8 @@ document.write('<scr' + 'ipt src="vendor/blockly/msg/' + (LANG === 'zh' ? 'zh-ha
 function T(zh, en) { return LANG === 'zh' ? zh : en; }
 </script>
 <script>
-// ==================== MC 物品 / 实体清单（选择器数据） ====================
-function opts(list) { return list.map(function (p) { return [T(p[1], p[2] || p[1]), 'minecraft:' + p[0]]; }); }
-var MC_ITEMS = opts([
+// ==================== MC 物品 / 实体清单（选择器数据：[id, 中文名, 英文名]） ====================
+var ITEMS_RAW = [
   ['stone','石头','Stone'],['cobblestone','圆石','Cobblestone'],['dirt','泥土','Dirt'],['grass_block','草方块','Grass Block'],
   ['sand','沙子','Sand'],['gravel','沙砾','Gravel'],['oak_log','橡木原木','Oak Log'],['oak_planks','橡木木板','Oak Planks'],
   ['spruce_log','云杉原木','Spruce Log'],['birch_log','白桦原木','Birch Log'],['glass','玻璃','Glass'],['obsidian','黑曜石','Obsidian'],
@@ -150,9 +215,63 @@ var MC_ITEMS = opts([
   ['shield','盾牌','Shield'],['fishing_rod','钓鱼竿','Fishing Rod'],['shears','剪刀','Shears'],
   ['torch','火把','Torch'],['chest','箱子','Chest'],['barrel','木桶','Barrel'],['crafting_table','工作台','Crafting Table'],
   ['furnace','熔炉','Furnace'],['bucket','桶','Bucket'],['water_bucket','水桶','Water Bucket'],['lava_bucket','熔岩桶','Lava Bucket'],
-  ['oak_sapling','橡树树苗','Oak Sapling'],['ladder','梯子','Ladder'],['rail','铁轨','Rail'],['tnt','TNT','TNT']
-]);
-var MC_ENTITIES = opts([
+  ['oak_sapling','橡树树苗','Oak Sapling'],['ladder','梯子','Ladder'],['rail','铁轨','Rail'],['tnt','TNT','TNT'],
+  ['bricks','红砖块','Bricks'],['stone_bricks','石砖','Stone Bricks'],['mossy_cobblestone','苔石','Mossy Cobblestone'],
+  ['granite','花岗岩','Granite'],['diorite','闪长岩','Diorite'],['andesite','安山岩','Andesite'],
+  ['basalt','玄武岩','Basalt'],['blackstone','黑石','Blackstone'],['sandstone','砂岩','Sandstone'],
+  ['terracotta','陶瓦','Terracotta'],['white_wool','白色羊毛','White Wool'],['glass_pane','玻璃板','Glass Pane'],
+  ['ice','冰','Ice'],['snow_block','雪块','Snow Block'],['pumpkin','南瓜','Pumpkin'],['melon','西瓜','Melon'],
+  ['cactus','仙人掌','Cactus'],['bamboo','竹子','Bamboo'],['oak_leaves','橡树树叶','Oak Leaves'],
+  ['hay_block','干草块','Hay Bale'],['bookshelf','书架','Bookshelf'],['smooth_stone','平滑石头','Smooth Stone'],
+  ['coal_block','煤炭块','Coal Block'],['iron_block','铁块','Iron Block'],['gold_block','金块','Gold Block'],
+  ['diamond_block','钻石块','Diamond Block'],['emerald_block','绿宝石块','Emerald Block'],
+  ['ancient_debris','远古残骸','Ancient Debris'],['netherite_scrap','下界合金碎片','Netherite Scrap'],
+  ['glowstone_dust','荧石粉','Glowstone Dust'],['clay_ball','粘土球','Clay Ball'],['brick','红砖','Brick'],
+  ['nether_brick','下界砖','Nether Brick'],['phantom_membrane','幻翼膜','Phantom Membrane'],
+  ['ghast_tear','恶魂之泪','Ghast Tear'],['magma_cream','岩浆膏','Magma Cream'],
+  ['nether_star','下界之星','Nether Star'],['experience_bottle','附魔之瓶','Bottle o\' Enchanting'],
+  ['honeycomb','蜜脾','Honeycomb'],
+  ['golden_carrot','金胡萝卜','Golden Carrot'],['baked_potato','烤马铃薯','Baked Potato'],
+  ['beetroot','甜菜根','Beetroot'],['mushroom_stew','蘑菇煲','Mushroom Stew'],['pumpkin_pie','南瓜派','Pumpkin Pie'],
+  ['cake','蛋糕','Cake'],['cookie','曲奇','Cookie'],['melon_slice','西瓜片','Melon Slice'],
+  ['sweet_berries','甜浆果','Sweet Berries'],['glow_berries','发光浆果','Glow Berries'],
+  ['honey_bottle','蜂蜜瓶','Honey Bottle'],['dried_kelp','干海带','Dried Kelp'],
+  ['mutton','生羊肉','Raw Mutton'],['cooked_mutton','熟羊肉','Cooked Mutton'],
+  ['rabbit','生兔肉','Raw Rabbit'],['cooked_rabbit','熟兔肉','Cooked Rabbit'],
+  ['cooked_salmon','熟鲑鱼','Cooked Salmon'],['tropical_fish','热带鱼','Tropical Fish'],
+  ['pufferfish','河豚','Pufferfish'],['enchanted_golden_apple','附魔金苹果','Enchanted Golden Apple'],
+  ['golden_pickaxe','金镐','Golden Pickaxe'],['netherite_pickaxe','下界合金镐','Netherite Pickaxe'],
+  ['diamond_axe','钻石斧','Diamond Axe'],['diamond_shovel','钻石锹','Diamond Shovel'],
+  ['diamond_hoe','钻石锄','Diamond Hoe'],['flint_and_steel','打火石','Flint and Steel'],
+  ['compass','指南针','Compass'],['clock','时钟','Clock'],['spyglass','望远镜','Spyglass'],
+  ['lead','拴绳','Lead'],['name_tag','命名牌','Name Tag'],['saddle','鞍','Saddle'],
+  ['elytra','鞘翅','Elytra'],['firework_rocket','烟花火箭','Firework Rocket'],
+  ['ender_eye','末影之眼','Eye of Ender'],['totem_of_undying','不死图腾','Totem of Undying'],
+  ['wooden_sword','木剑','Wooden Sword'],['stone_sword','石剑','Stone Sword'],
+  ['golden_sword','金剑','Golden Sword'],['netherite_sword','下界合金剑','Netherite Sword'],
+  ['trident','三叉戟','Trident'],['crossbow','弩','Crossbow'],['snowball','雪球','Snowball'],
+  ['iron_helmet','铁头盔','Iron Helmet'],['iron_chestplate','铁胸甲','Iron Chestplate'],
+  ['iron_leggings','铁护腿','Iron Leggings'],['iron_boots','铁靴子','Iron Boots'],
+  ['diamond_chestplate','钻石胸甲','Diamond Chestplate'],['netherite_chestplate','下界合金胸甲','Netherite Chestplate'],
+  ['turtle_helmet','海龟壳','Turtle Shell'],
+  ['redstone_torch','红石火把','Redstone Torch'],['repeater','中继器','Repeater'],['comparator','比较器','Comparator'],
+  ['piston','活塞','Piston'],['sticky_piston','粘性活塞','Sticky Piston'],['observer','侦测器','Observer'],
+  ['hopper','漏斗','Hopper'],['dropper','投掷器','Dropper'],['dispenser','发射器','Dispenser'],
+  ['lever','拉杆','Lever'],['stone_button','石按钮','Stone Button'],
+  ['oak_pressure_plate','橡木压力板','Oak Pressure Plate'],['tripwire_hook','绊线钩','Tripwire Hook'],
+  ['daylight_detector','阳光探测器','Daylight Detector'],['target','标靶','Target'],
+  ['slime_block','粘液块','Slime Block'],['honey_block','蜂蜜块','Honey Block'],
+  ['note_block','音符盒','Note Block'],['redstone_lamp','红石灯','Redstone Lamp'],
+  ['powered_rail','动力铁轨','Powered Rail'],['detector_rail','探测铁轨','Detector Rail'],
+  ['minecart','矿车','Minecart'],['oak_boat','橡木船','Oak Boat'],
+  ['lantern','灯笼','Lantern'],['campfire','营火','Campfire'],['red_bed','红色床','Red Bed'],
+  ['shulker_box','潜影盒','Shulker Box'],['ender_chest','末影箱','Ender Chest'],
+  ['enchanting_table','附魔台','Enchanting Table'],['anvil','铁砧','Anvil'],['grindstone','砂轮','Grindstone'],
+  ['smithing_table','锻造台','Smithing Table'],['brewing_stand','酿造台','Brewing Stand'],
+  ['beacon','信标','Beacon'],['item_frame','物品展示框','Item Frame'],['armor_stand','盔甲架','Armor Stand'],
+  ['map','空地图','Empty Map'],['writable_book','书与笔','Book and Quill']
+];
+var ENTS_RAW = [
   ['zombie','僵尸','Zombie'],['skeleton','骷髅','Skeleton'],['creeper','苦力怕','Creeper'],['spider','蜘蛛','Spider'],
   ['enderman','末影人','Enderman'],['witch','女巫','Witch'],['slime','史莱姆','Slime'],['drowned','溺尸','Drowned'],
   ['husk','尸壳','Husk'],['stray','流浪者','Stray'],['phantom','幻翼','Phantom'],['pillager','掠夺者','Pillager'],
@@ -163,8 +282,178 @@ var MC_ENTITIES = opts([
   ['horse','马','Horse'],['donkey','驴','Donkey'],['wolf','狼','Wolf'],['cat','猫','Cat'],
   ['rabbit','兔子','Rabbit'],['fox','狐狸','Fox'],['bee','蜜蜂','Bee'],['squid','鱿鱼','Squid'],
   ['villager','村民','Villager'],['iron_golem','铁傀儡','Iron Golem'],['snow_golem','雪傀儡','Snow Golem'],
-  ['allay','悦灵','Allay'],['axolotl','美西螈','Axolotl'],['player','玩家','Player']
-]);
+  ['allay','悦灵','Allay'],['axolotl','美西螈','Axolotl'],['player','玩家','Player'],
+  ['boat','船','Boat'],['chest_boat','运输船','Chest Boat'],['minecart','矿车','Minecart'],
+  ['chest_minecart','运输矿车','Chest Minecart'],['hopper_minecart','漏斗矿车','Hopper Minecart'],
+  ['furnace_minecart','动力矿车','Furnace Minecart'],['tnt_minecart','TNT矿车','TNT Minecart'],
+  ['item','掉落物','Dropped Item'],['experience_orb','经验球','XP Orb'],['arrow','箭(实体)','Arrow'],
+  ['armor_stand','盔甲架','Armor Stand'],['item_frame','物品展示框','Item Frame'],
+  ['ender_dragon','末影龙','Ender Dragon'],['wither','凋灵','Wither'],
+  ['guardian','守卫者','Guardian'],['elder_guardian','远古守卫者','Elder Guardian'],
+  ['dolphin','海豚','Dolphin'],['turtle','海龟','Turtle'],['panda','熊猫','Panda'],
+  ['polar_bear','北极熊','Polar Bear'],['llama','羊驼','Llama'],['camel','骆驼','Camel'],
+  ['sniffer','嗅探兽','Sniffer'],['frog','青蛙','Frog'],['goat','山羊','Goat'],
+  ['mooshroom','哞菇','Mooshroom'],['ocelot','豹猫','Ocelot'],['parrot','鹦鹉','Parrot'],
+  ['bat','蝙蝠','Bat'],['glow_squid','发光鱿鱼','Glow Squid'],['strider','炽足兽','Strider'],
+  ['hoglin','疣猪兽','Hoglin'],['zoglin','僵尸疣猪兽','Zoglin'],['silverfish','蠹虫','Silverfish'],
+  ['endermite','末影螨','Endermite'],['vex','恼鬼','Vex'],['evoker','唤魔者','Evoker'],
+  ['cave_spider','洞穴蜘蛛','Cave Spider'],['zombie_villager','僵尸村民','Zombie Villager'],
+  ['skeleton_horse','骷髅马','Skeleton Horse'],['wandering_trader','流浪商人','Wandering Trader'],
+  ['tnt','激活的TNT','Primed TNT'],['ender_pearl','末影珍珠','Ender Pearl'],['snowball','雪球','Snowball'],
+  ['egg','投掷的鸡蛋','Thrown Egg'],['potion','喷溅药水','Thrown Potion'],['experience_bottle','附魔之瓶','Thrown Bottle o\' Enchanting'],
+  ['fireball','火球','Fireball'],['small_fireball','小火球','Small Fireball'],['dragon_fireball','末影龙火球','Dragon Fireball'],
+  ['wither_skull','凋灵之首','Wither Skull'],['shulker_bullet','潜影弹','Shulker Bullet'],['llama_spit','羊驼口水','Llama Spit'],
+  ['firework_rocket','烟花火箭','Firework Rocket'],['eye_of_ender','末影之眼','Eye of Ender'],['fishing_bobber','钓鱼浮标','Fishing Bobber'],
+  ['spectral_arrow','光灵箭','Spectral Arrow'],['trident','三叉戟','Trident'],['falling_block','下落的方块','Falling Block'],
+  ['end_crystal','末影水晶','End Crystal'],['lightning_bolt','闪电','Lightning Bolt'],['area_effect_cloud','区域效果云','Area Effect Cloud'],
+  ['evoker_fangs','唤魔者尖牙','Evoker Fangs'],['painting','画','Painting'],['leash_knot','拴绳结','Leash Knot'],['tnt_minecart','TNT矿车','TNT Minecart']
+];
+
+// ---- 分类（[key, 中文, 英文, 图标]；all 为虚拟全部分类） ----
+var ITEM_CATS = [
+  ['all','全部','All','📦'],
+  ['block','方块建材','Blocks','🧱'],
+  ['ore','矿物材料','Materials','💎'],
+  ['food','食物','Food','🍖'],
+  ['tool','工具','Tools','⛏️'],
+  ['combat','武器盔甲','Combat','⚔️'],
+  ['redstone','红石机关','Redstone','🔴'],
+  ['misc','杂项','Misc','🎒']
+];
+var ENT_CATS = [
+  ['all','全部','All','📦'],
+  ['hostile','敌对生物','Hostile','👿'],
+  ['passive','友好生物','Passive','🐮'],
+  ['neutral','中立/Boss','Neutral & Boss','🐺'],
+  ['vehicle','载具/其他','Vehicles & Objects','🛶']
+];
+// 分类归属（未列出的自动归入 misc / vehicle 外的最后一类）
+var ITEM_CAT_IDS = {
+  block: ['stone','cobblestone','dirt','grass_block','sand','gravel','oak_log','oak_planks','spruce_log','birch_log','glass','obsidian','netherrack','end_stone','deepslate','torch','chest','barrel','crafting_table','furnace','oak_sapling','ladder','rail','bricks','stone_bricks','mossy_cobblestone','granite','diorite','andesite','basalt','blackstone','sandstone','terracotta','white_wool','glass_pane','ice','snow_block','pumpkin','melon','cactus','bamboo','oak_leaves','hay_block','bookshelf','smooth_stone'],
+  ore: ['coal','charcoal','raw_iron','iron_ingot','raw_gold','gold_ingot','raw_copper','copper_ingot','diamond','emerald','redstone','lapis_lazuli','quartz','netherite_ingot','amethyst_shard','stick','string','flint','feather','leather','paper','book','ender_pearl','blaze_rod','gunpowder','bone','bone_meal','slime_ball','spider_eye','rotten_flesh','coal_block','iron_block','gold_block','diamond_block','emerald_block','ancient_debris','netherite_scrap','glowstone_dust','clay_ball','brick','nether_brick','phantom_membrane','ghast_tear','magma_cream','nether_star','experience_bottle','honeycomb'],
+  food: ['wheat','wheat_seeds','carrot','potato','bread','apple','golden_apple','beef','cooked_beef','porkchop','cooked_porkchop','chicken','cooked_chicken','cod','cooked_cod','salmon','sugar','egg','milk_bucket','golden_carrot','baked_potato','beetroot','mushroom_stew','pumpkin_pie','cake','cookie','melon_slice','sweet_berries','glow_berries','honey_bottle','dried_kelp','mutton','cooked_mutton','rabbit','cooked_rabbit','cooked_salmon','tropical_fish','pufferfish','enchanted_golden_apple'],
+  tool: ['wooden_pickaxe','stone_pickaxe','iron_pickaxe','diamond_pickaxe','iron_axe','iron_shovel','iron_hoe','fishing_rod','shears','bucket','water_bucket','lava_bucket','golden_pickaxe','netherite_pickaxe','diamond_axe','diamond_shovel','diamond_hoe','flint_and_steel','compass','clock','spyglass','lead','name_tag','saddle','elytra','firework_rocket','ender_eye','totem_of_undying'],
+  combat: ['iron_sword','diamond_sword','bow','arrow','shield','wooden_sword','stone_sword','golden_sword','netherite_sword','trident','crossbow','snowball','iron_helmet','iron_chestplate','iron_leggings','iron_boots','diamond_chestplate','netherite_chestplate','turtle_helmet','tnt'],
+  redstone: ['redstone_torch','repeater','comparator','piston','sticky_piston','observer','hopper','dropper','dispenser','lever','stone_button','oak_pressure_plate','tripwire_hook','daylight_detector','target','slime_block','honey_block','note_block','redstone_lamp','powered_rail','detector_rail','minecart','oak_boat']
+};
+var ENT_CAT_IDS = {
+  hostile: ['zombie','skeleton','creeper','spider','witch','drowned','husk','stray','phantom','pillager','vindicator','ravager','blaze','ghast','magma_cube','wither_skeleton','shulker','warden','slime','guardian','elder_guardian','hoglin','zoglin','silverfish','endermite','vex','evoker','cave_spider','zombie_villager'],
+  passive: ['cow','pig','sheep','chicken','horse','donkey','cat','rabbit','squid','villager','allay','axolotl','snow_golem','dolphin','turtle','camel','sniffer','frog','mooshroom','ocelot','parrot','bat','glow_squid','strider','skeleton_horse','wandering_trader'],
+  neutral: ['enderman','piglin','zombified_piglin','iron_golem','wolf','bee','fox','panda','polar_bear','llama','goat','ender_dragon','wither','player'],
+  vehicle: ['boat','chest_boat','minecart','chest_minecart','hopper_minecart','furnace_minecart','tnt_minecart','item','experience_orb','arrow','armor_stand','item_frame','tnt','ender_pearl','snowball','egg','potion','experience_bottle','fireball','small_fireball','dragon_fireball','wither_skull','shulker_bullet','llama_spit','firework_rocket','eye_of_ender','fishing_bobber','spectral_arrow','trident','falling_block','end_crystal','lightning_bolt','area_effect_cloud','evoker_fangs','painting','leash_knot']
+};
+// 个性图标（未列出的用所属分类图标）
+var MC_EMOJI = {
+  diamond:'💎',emerald:'💚',gold_ingot:'🪙',coal:'⚫',redstone:'🔴',lapis_lazuli:'🔵',
+  netherite_ingot:'🖤',apple:'🍎',golden_apple:'🍏',enchanted_golden_apple:'🍏',bread:'🍞',
+  beef:'🥩',cooked_beef:'🥩',porkchop:'🥓',cooked_porkchop:'🥓',chicken:'🍗',cooked_chicken:'🍗',
+  carrot:'🥕',golden_carrot:'🥕',potato:'🥔',baked_potato:'🥔',wheat:'🌾',egg:'🥚',
+  milk_bucket:'🥛',sugar:'🍬',cake:'🎂',cookie:'🍪',melon_slice:'🍉',melon:'🍉',pumpkin:'🎃',
+  cactus:'🌵',bamboo:'🎍',cod:'🐟',cooked_cod:'🐟',salmon:'🐟',cooked_salmon:'🐟',
+  tropical_fish:'🐠',pufferfish:'🐡',sweet_berries:'🍓',honey_bottle:'🍯',honeycomb:'🍯',
+  bow:'🏹',crossbow:'🏹',shield:'🛡️',tnt:'🧨',fishing_rod:'🎣',compass:'🧭',clock:'🕐',
+  map:'🗺️',book:'📖',writable_book:'📝',paper:'📄',feather:'🪶',bone:'🦴',string:'🧵',
+  water_bucket:'🪣',bucket:'🪣',lava_bucket:'🌋',elytra:'🪂',trident:'🔱',snowball:'❄️',
+  ice:'🧊',snow_block:'⛄',oak_log:'🪵',spruce_log:'🪵',birch_log:'🪵',obsidian:'🟪',
+  glass:'🪟',glass_pane:'🪟',ender_pearl:'🟣',ender_eye:'👁️',totem_of_undying:'🗿',
+  firework_rocket:'🎆',saddle:'🐎',lead:'🪢',name_tag:'🏷️',beacon:'💠',lantern:'🏮',
+  campfire:'🏕️',red_bed:'🛏️',torch:'🕯️',redstone_torch:'🕯️',minecart:'🛒',oak_boat:'🛶',
+  rail:'🛤️',powered_rail:'🛤️',detector_rail:'🛤️',anvil:'🔨',spyglass:'🔭',
+  zombie:'🧟',drowned:'🧟',husk:'🧟',zombie_villager:'🧟',skeleton:'💀',stray:'💀',
+  wither_skeleton:'💀',wither:'💀',creeper:'💥',spider:'🕷️',cave_spider:'🕷️',
+  enderman:'🌌',witch:'🧙',evoker:'🧙',slime:'🟢',magma_cube:'🔶',blaze:'🔥',
+  ghast:'👻',phantom:'🌙',pillager:'🏹',vindicator:'🪓',ravager:'🐗',hoglin:'🐗',
+  zoglin:'🐗',warden:'👹',shulker:'🐚',vex:'🧛',cow:'🐮',mooshroom:'🍄',pig:'🐷',
+  sheep:'🐑',horse:'🐴',donkey:'🫏',wolf:'🐺',cat:'🐱',ocelot:'🐆',rabbit:'🐰',
+  fox:'🦊',bee:'🐝',squid:'🦑',glow_squid:'🦑',villager:'🧑‍🌾',wandering_trader:'🧳',
+  iron_golem:'🤖',snow_golem:'⛄',allay:'🧚',axolotl:'🦎',dolphin:'🐬',turtle:'🐢',
+  panda:'🐼',polar_bear:'🐻‍❄️',llama:'🦙',camel:'🐫',frog:'🐸',goat:'🐐',
+  parrot:'🦜',bat:'🦇',player:'🧑',ender_dragon:'🐉',boat:'🛶',chest_boat:'🛶',
+  chest_minecart:'🛒',hopper_minecart:'🛒',furnace_minecart:'🛒',tnt_minecart:'🧨',
+  item:'🎁',experience_orb:'✨',arrow:'🎯',armor_stand:'🕴️',item_frame:'🖼️',chicken_e:'🐔',
+  ender_pearl:'🟣',snowball:'❄️',egg:'🥚',potion:'⚗️',experience_bottle:'🧪',fireball:'☄️',
+  small_fireball:'🔥',dragon_fireball:'☄️',wither_skull:'💀',shulker_bullet:'🐚',llama_spit:'💦',
+  eye_of_ender:'👁️',fishing_bobber:'🎣',spectral_arrow:'🏹',falling_block:'🧱',end_crystal:'🔮',
+  lightning_bolt:'⚡',area_effect_cloud:'☁️',evoker_fangs:'🦷',painting:'🖼️',leash_knot:'🪢'
+};
+function buildCatMap(catIds) {
+  var m = {};
+  Object.keys(catIds).forEach(function (k) { catIds[k].forEach(function (id) { m[id] = k; }); });
+  return m;
+}
+var ITEM_CAT_OF = buildCatMap(ITEM_CAT_IDS), ENT_CAT_OF = buildCatMap(ENT_CAT_IDS);
+var MC_NAME = {};
+ENTS_RAW.forEach(function (e) { MC_NAME['minecraft:' + e[0]] = T(e[1], e[2]); });
+ITEMS_RAW.forEach(function (e) { MC_NAME['minecraft:' + e[0]] = T(e[1], e[2]); });
+function mcDisplayName(id) { return MC_NAME[id] || id; }
+// 启发式分类（供全量清单中未手工归类的物品使用）
+function heuristicCat(id) {
+  if (/(sword|_bow$|^bow$|crossbow|trident|shield|_helmet$|_chestplate$|_leggings$|_boots$|arrow|^tnt$|horse_armor|totem)/.test(id)) return 'combat';
+  if (/(pickaxe|_axe$|shovel|_hoe$|shears|flint_and_steel|fishing_rod|bucket|compass|^clock$|spyglass|^lead$|name_tag|^brush$|on_a_stick|elytra|saddle|smithing_template|goat_horn)/.test(id)) return 'tool';
+  if (/(apple|bread|beef|porkchop|chicken|mutton|rabbit$|cooked_|_cod$|^cod$|salmon|carrot|potato|beetroot|melon_slice|berries|cookie|^cake$|_pie$|stew$|soup$|honey_bottle|dried_kelp|chorus_fruit|spider_eye|rotten_flesh|pufferfish$|tropical_fish$|mushroom_stew|^egg$)/.test(id)) return 'food';
+  if (/(redstone|repeater|comparator|piston|observer|hopper|dropper|dispenser|_button$|pressure_plate|_rail$|^rail$|^target$|lightning_rod|daylight_detector|sculk_sensor|tripwire|note_block|redstone_lamp|^lever$)/.test(id)) return 'redstone';
+  if (/(ingot|nugget|^raw_|scrap|^coal$|^charcoal$|^diamond$|^emerald$|lapis_lazuli|^quartz$|amethyst_shard|^redstone$|gunpowder|blaze_rod|blaze_powder|glowstone_dust|^string$|^leather$|feather|^flint$|^stick$|^bone$|bone_meal|slime_ball|ender_pearl|ender_eye|nether_star|prismarine_shard|prismarine_crystals|clay_ball|^brick$|^paper$|^book$|^sugar$|echo_shard|shulker_shell|nautilus_shell|phantom_membrane|ghast_tear|magma_cream|honeycomb$|scute|_dye$)/.test(id)) return 'ore';
+  if (/(_log$|_wood$|_planks$|_stairs$|_slab$|_wall$|_fence$|_fence_gate$|_leaves$|_sapling$|stripped_|cobblestone|deepslate|_bricks$|^bricks$|glass$|glass_pane$|_wool$|terracotta|concrete|sandstone|_ore$|^dirt|^sand$|^gravel$|^stone$|granite|diorite|andesite|basalt|blackstone|^tuff$|calcite|_carpet$|^ice$|packed_ice|blue_ice|snow|obsidian|netherrack|end_stone|purpur|prismarine|_door$|_trapdoor$|scaffolding|^ladder$|^clay$|magma_block|shroomlight|glowstone$|sea_lantern|froglight|amethyst_block|copper|coral|_block$|_pillar$)/.test(id)) return 'building';
+  return 'misc';
+}
+function mcCatOf(kind, bareId) {
+  if (kind === 'entity') return ENT_CAT_OF[bareId] || 'vehicle';
+  return ITEM_CAT_OF[bareId] || heuristicCat(bareId);
+}
+// 按 ID 模式匹配的 emoji（覆盖全量清单中的系统性物品：工具/盔甲/木制品/床/唱片/刷怪蛋等）
+var EMOJI_PATTERNS = [
+  [/spawn_egg$/, '🥚'], [/music_disc/, '💿'], [/pottery_sherd$/, '🏺'],
+  [/banner_pattern$/, '🧵'], [/smithing_template$/, '📜'],
+  [/_pickaxe$/, '⛏️'], [/_sword$/, '🗡️'], [/_axe$/, '🪓'],
+  [/_helmet$/, '⛑️'], [/_chestplate$/, '🦺'], [/_leggings$/, '👖'], [/_boots$/, '🥾'],
+  [/horse_armor$/, '🐎'], [/_bucket$/, '🪣'],
+  [/(_log|_wood|_stem|_hyphae|_planks)$/, '🪵'], [/(_sapling|_propagule|_seeds)$/, '🌱'],
+  [/_leaves$/, '🍃'], [/(_boat|_raft)$/, '🛶'], [/sign$/, '🪧'],
+  [/_door$/, '🚪'], [/_trapdoor$/, '🚪'], [/_bed$/, '🛏️'], [/_banner$/, '🚩'],
+  [/_candle$/, '🕯️'], [/_dye$/, '🎨'], [/_wool$/, '🧶'], [/_carpet$/, '🧶'],
+  [/shulker_box$/, '📦'], [/(_skull|_head)$/, '💀'], [/potion$/, '⚗️'],
+  [/coral/, '🪸'], [/stained_glass/, '🪟'], [/_ore$/, '🪨']
+];
+function emojiByPattern(id) {
+  for (var i = 0; i < EMOJI_PATTERNS.length; i++) {
+    if (EMOJI_PATTERNS[i][0].test(id)) { return EMOJI_PATTERNS[i][1]; }
+  }
+  return null;
+}
+function mcEmoji(kind, bareId) {
+  if (kind === 'entity' && bareId === 'chicken') return '🐔';
+  if (MC_EMOJI[bareId]) return MC_EMOJI[bareId];
+  var p = emojiByPattern(bareId);
+  if (p) return p;
+  var cats = kind === 'entity' ? ENT_CATS : ITEM_CATS;
+  var key = mcCatOf(kind, bareId);
+  for (var i = 0; i < cats.length; i++) { if (cats[i][0] === key) return cats[i][3]; }
+  return '📦';
+}
+// 合并 minecraft-data 全量清单（版本精确）：保留已有中文条目，其余用英文名补全；离线未加载则仅用精选清单
+(function mergeAllMcData() {
+  // 数据条目格式：[注册ID, 英文名, 中文名]（中文缺失为空串）→ ITEMS_RAW 格式 [ID, 中文名, 英文名]
+  if (typeof MC_ALL_ITEMS !== 'undefined') {
+    var have = {};
+    ITEMS_RAW.forEach(function (e) { have[e[0]] = 1; });
+    MC_ALL_ITEMS.forEach(function (p) {
+      if (p[0] === 'air' || have[p[0]]) return;
+      var zh = p[2] || p[1];
+      ITEMS_RAW.push([p[0], zh, p[1]]);
+      MC_NAME['minecraft:' + p[0]] = T(zh, p[1]);
+    });
+  }
+  if (typeof MC_ALL_ENTITIES !== 'undefined') {
+    var haveE = {};
+    ENTS_RAW.forEach(function (e) { haveE[e[0]] = 1; });
+    MC_ALL_ENTITIES.forEach(function (p) {
+      if (haveE[p[0]]) return;
+      var zhe = p[2] || p[1];
+      ENTS_RAW.push([p[0], zhe, p[1]]);
+      MC_NAME['minecraft:' + p[0]] = T(zhe, p[1]);
+    });
+  }
+})();
 </script>
 <script>
 // ==================== 自定义块定义 ====================
@@ -180,6 +469,150 @@ function stmt(json, colour) {
 function out(json, colour, type) {
   json.output = type || null; json.colour = colour; return json;
 }
+
+// ==================== 物品/实体选择器（分页分类弹窗 + 图标 + 自动补全） ====================
+var MCP_PAGE_SIZE = 54;
+var mcpState = { kind: 'item', cat: 'all', q: '', page: 0, current: '', cb: null };
+
+/** 自定义字段：存储物品/实体 ID（字符串），显示本地化名称，点击弹出选择器 */
+var FieldMcPicker = null;
+if (typeof Blockly !== 'undefined' && Blockly.FieldTextInput) {
+  FieldMcPicker = class extends Blockly.FieldTextInput {
+    constructor(value, kind) {
+      super(value == null ? '' : value);
+      this.mcpKind_ = kind || 'item';
+      this.SERIALIZABLE = true;
+    }
+    static fromJson(options) {
+      return new FieldMcPicker(options['id'] || options['text'] || '', options['kind']);
+    }
+    // 点击不进入默认文本编辑，而是弹出选择器
+    showEditor_() {
+      var self = this;
+      openPickerModal(this.mcpKind_, this.getValue(), function (id) { self.setValue(id); });
+    }
+    // 块上显示中文/英文名（值仍为 ID）
+    getDisplayText_() {
+      var v = this.getValue();
+      return v ? mcDisplayName(v) : T('(未选)', '(none)');
+    }
+  };
+  Blockly.fieldRegistry.register('field_mc_picker', FieldMcPicker);
+}
+
+function mcpFiltered() {
+  var data = mcpState.kind === 'entity' ? ENTS_RAW : ITEMS_RAW;
+  var q = mcpState.q.trim().toLowerCase();
+  return data.filter(function (e) {
+    if (mcpState.cat !== 'all' && mcCatOf(mcpState.kind, e[0]) !== mcpState.cat) return false;
+    if (!q) return true;
+    return e[0].indexOf(q) >= 0 || e[1].toLowerCase().indexOf(q) >= 0
+      || (e[2] || '').toLowerCase().indexOf(q) >= 0 || ('minecraft:' + e[0]).indexOf(q) >= 0;
+  });
+}
+
+// 图标：全部使用 emoji（个性 → 模式匹配 → 分类图标三级回退），不加载网络贴图，完全离线
+function mcpIconInto(el, kind, bareId) {
+  el.textContent = mcEmoji(kind, bareId);
+}
+
+function mcpRender() {
+  var cats = mcpState.kind === 'entity' ? ENT_CATS : ITEM_CATS;
+  // 分类栏
+  var catBox = document.getElementById('mcpCats');
+  catBox.innerHTML = '';
+  cats.forEach(function (c) {
+    var el = document.createElement('div');
+    el.className = 'mcp-cat' + (c[0] === mcpState.cat ? ' on' : '');
+    el.innerHTML = '<span>' + c[3] + '</span><span>' + T(c[1], c[2]) + '</span>';
+    el.onclick = function () { mcpState.cat = c[0]; mcpState.page = 0; mcpRender(); };
+    catBox.appendChild(el);
+  });
+  // 网格 + 分页
+  var list = mcpFiltered();
+  var pages = Math.max(1, Math.ceil(list.length / MCP_PAGE_SIZE));
+  if (mcpState.page >= pages) mcpState.page = pages - 1;
+  var slice = list.slice(mcpState.page * MCP_PAGE_SIZE, (mcpState.page + 1) * MCP_PAGE_SIZE);
+  var grid = document.getElementById('mcpGrid');
+  grid.innerHTML = '';
+  slice.forEach(function (e) {
+    var id = 'minecraft:' + e[0];
+    var cell = document.createElement('div');
+    cell.className = 'mcp-cell' + (id === mcpState.current ? ' on' : '');
+    var ico = document.createElement('div');
+    ico.className = 'mcp-ico';
+    mcpIconInto(ico, mcpState.kind, e[0]);
+    var nm = document.createElement('div');
+    nm.className = 'mcp-nm';
+    nm.innerHTML = '<b></b><span></span>';
+    nm.querySelector('b').textContent = T(e[1], e[2]);
+    nm.querySelector('span').textContent = id;
+    cell.appendChild(ico); cell.appendChild(nm);
+    cell.onclick = function () { mcpChoose(id); };
+    grid.appendChild(cell);
+  });
+  if (!slice.length) {
+    grid.innerHTML = '<div style="color:var(--muted);padding:20px;font-size:13px">'
+      + T('没有匹配项，可在上方直接输入自定义 ID', 'No match — type a custom ID above') + '</div>';
+  }
+  document.getElementById('mcpPage').textContent = (mcpState.page + 1) + '/' + pages;
+  document.getElementById('mcpPrev').disabled = mcpState.page <= 0;
+  document.getElementById('mcpNext').disabled = mcpState.page >= pages - 1;
+  document.getElementById('mcpInfo').textContent = T('共 ', 'total ') + list.length;
+}
+
+function mcpChoose(id) {
+  if (mcpState.cb) mcpState.cb(id);
+  mcpClosePicker();
+}
+function mcpClosePicker() { document.getElementById('mcpMask').classList.remove('show'); }
+
+function openPickerModal(kind, current, cb) {
+  mcpState = { kind: kind || 'item', cat: 'all', q: '', page: 0, current: current || '', cb: cb };
+  document.getElementById('mcpTitle').textContent =
+    kind === 'entity' ? T('选择实体', 'Select Entity') : T('选择物品', 'Select Item');
+  // 自动补全清单
+  var dl = document.getElementById('mcpDatalist');
+  dl.innerHTML = '';
+  (kind === 'entity' ? ENTS_RAW : ITEMS_RAW).forEach(function (e) {
+    var o = document.createElement('option');
+    o.value = 'minecraft:' + e[0];
+    o.label = T(e[1], e[2]);
+    dl.appendChild(o);
+  });
+  var search = document.getElementById('mcpSearch');
+  search.value = '';
+  mcpRender();
+  document.getElementById('mcpMask').classList.add('show');
+  setTimeout(function () { search.focus(); }, 30);
+}
+
+// 选择器事件绑定（元素静态存在于 body 中）
+(function bindPicker() {
+  var search = document.getElementById('mcpSearch');
+  search.addEventListener('input', function () {
+    mcpState.q = search.value; mcpState.page = 0; mcpRender();
+  });
+  search.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter') {
+      var v = search.value.trim();
+      if (v) { mcpChoose(v.indexOf(':') >= 0 ? v : 'minecraft:' + v); }
+    }
+  });
+  document.getElementById('mcpUse').onclick = function () {
+    var v = search.value.trim();
+    if (v) mcpChoose(v.indexOf(':') >= 0 ? v : 'minecraft:' + v);
+  };
+  document.getElementById('mcpPrev').onclick = function () { if (mcpState.page > 0) { mcpState.page--; mcpRender(); } };
+  document.getElementById('mcpNext').onclick = function () { mcpState.page++; mcpRender(); };
+  document.getElementById('mcpClose').onclick = mcpClosePicker;
+  document.getElementById('mcpMask').addEventListener('click', function (ev) {
+    if (ev.target.id === 'mcpMask') mcpClosePicker();
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') mcpClosePicker();
+  });
+})();
 
 // ---- 事件（金，Scratch 式帽子块：只能作为脚本开头） ----
 defBlock('event_start', { message0: T('▶ 当行为启动时', '▶ when behavior starts'),
@@ -219,10 +652,18 @@ defBlock('bot_drop_of', stmt({ message0: T('丢弃背包里的 %1 数量 %2', 'd
   inputsInline: true }, C_ACT));
 defBlock('bot_look_entity', stmt({ message0: T('看向最近的 %1 (%2 格内)', 'look at nearest %1 within %2'),
   args0: [{ type: 'input_value', name: 'TYPE' }, { type: 'input_value', name: 'RANGE', check: 'Number' }],
-  inputsInline: true }, C_ACT));
+  inputsInline: true, tooltip: T('立即转头看一次最近的该实体', 'turn once toward the nearest such entity') }, C_ACT));
+defBlock('bot_look_follow', stmt({ message0: T('持续看向最近的 %1 (%2 格内)', 'keep looking at nearest %1 within %2'),
+  args0: [{ type: 'input_value', name: 'TYPE' }, { type: 'input_value', name: 'RANGE', check: 'Number' }],
+  inputsInline: true, tooltip: T('每 tick 自动转头盯着最近的该实体，直到“停止持续看向”或其他看向/转向指令',
+    'auto-faces the nearest such entity every tick until \u201cstop keep-looking\u201d or another look/turn command') }, C_ACT));
+defBlock('bot_stop_look', stmt({ message0: T('停止持续看向', 'stop keep-looking') }, C_ACT));
 
 // ---- 感知扩展（青） ----
-function sensor0(name, zh, en, type) { defBlock(name, out({ message0: T(zh, en) }, C_SENSE, type)); }
+function sensor0(name, zh, en, sensorName, type) {
+  if (type === undefined) { defBlock(name, out({ message0: T(zh, en) }, C_SENSE, sensorName)); }
+  else { defBlock(name, out({ message0: T(zh, en) }, C_SENSE, type)); }
+}
 sensor0('sensor_max_health', '血量上限', 'max health', 'Number');
 sensor0('sensor_xp', '经验等级', 'XP level', 'Number');
 sensor0('sensor_armor', '护甲值', 'armor', 'Number');
@@ -242,6 +683,33 @@ defBlock('sensor_block_at', out({ message0: T('方块 x %1 y %2 z %3', 'block at
 defBlock('sensor_distance_to', out({ message0: T('到 x %1 y %2 z %3 的距离', 'distance to x %1 y %2 z %3'),
   args0: [{ type: 'input_value', name: 'X', check: 'Number' }, { type: 'input_value', name: 'Y', check: 'Number' }, { type: 'input_value', name: 'Z', check: 'Number' }],
   inputsInline: true }, C_SENSE, 'Number'));
+// 新增实用传感器
+defBlock('sensor_holding', out({ message0: T('手持 %1 ?', 'holding %1 ?'),
+  args0: [{ type: 'input_value', name: 'ITEM' }],
+  tooltip: T('主手是否正拿着该物品', 'is the main hand holding this item') }, C_SENSE, 'Boolean'));
+defBlock('sensor_has_item', out({ message0: T('背包里有 %1 ?', 'inventory has %1 ?'),
+  args0: [{ type: 'input_value', name: 'ITEM' }],
+  tooltip: T('背包中是否至少有一个该物品', 'does the inventory contain the item') }, C_SENSE, 'Boolean'));
+defBlock('sensor_fish_hooked', out({ message0: T('🎣 检测到鱼上钩?', '🎣 fish hooked?'),
+  tooltip: T('钓鱼时鱼咬钩、此刻收竿可钓起（配合“等待直到”与钓鱼竿使用）',
+    'a fish is biting — reel in now (pair with wait-until + fishing rod)') }, C_SENSE, 'Boolean'));
+defBlock('sensor_using_item', out({ message0: T('正在使用物品(长按右键)?', 'currently using item?') }, C_SENSE, 'Boolean'));
+defBlock('sensor_block_below', out({ message0: T('脚下的方块', 'block below feet') }, C_SENSE, 'String'));
+defBlock('sensor_facing', out({ message0: T('朝向 %1', 'facing %1'),
+  args0: [{ type: 'field_dropdown', name: 'AXIS', options: [[T('偏航角(左右)', 'yaw'), 'yaw'], [T('俯仰角(上下)', 'pitch'), 'pitch']] }],
+  tooltip: T('当前朝向角度；偏航角 -180~180，俯仰角 -90(上)~90(下)',
+    'facing angle; yaw -180..180, pitch -90(up)..90(down)') }, C_SENSE, 'Number'));
+// 最近实体定位（支持非生物实体：末影珠/激活TNT/投掷物等）
+defBlock('sensor_nearest_entity_pos', out({ message0: T('最近 %1 (%2 格内) 的 %3 坐标', 'nearest %1 (within %2) : %3'),
+  args0: [{ type: 'input_value', name: 'TYPE' }, { type: 'input_value', name: 'RANGE', check: 'Number' },
+          { type: 'field_dropdown', name: 'AXIS', options: [['X', 'x'], ['Y', 'y'], ['Z', 'z']] }],
+  inputsInline: true, tooltip: T('范围内最近该实体的坐标（找不到返回 0）', 'coordinate of the nearest such entity (0 if none)') }, C_SENSE, 'Number'));
+defBlock('sensor_nearest_entity_dist', out({ message0: T('到最近 %1 (%2 格内) 的距离', 'distance to nearest %1 (within %2)'),
+  args0: [{ type: 'input_value', name: 'TYPE' }, { type: 'input_value', name: 'RANGE', check: 'Number' }],
+  inputsInline: true, tooltip: T('找不到返回 -1', '-1 if none found') }, C_SENSE, 'Number'));
+defBlock('sensor_nearest_entity_exists', out({ message0: T('%2 格内存在 %1 ?', 'any %1 within %2 ?'),
+  args0: [{ type: 'input_value', name: 'TYPE' }, { type: 'input_value', name: 'RANGE', check: 'Number' }],
+  inputsInline: true }, C_SENSE, 'Boolean'));
 
 // ---- 文本处理（绿，输出块） ----
 defBlock('str_len', out({ message0: T('%1 的长度', 'length of %1'),
@@ -309,23 +777,52 @@ defBlock('list_last', out({ message0: T('列表 %1 的最后一项', 'last item 
 
 // ---- 选择器（绿） ----
 defBlock('mc_item', out({ message0: T('物品 %1', 'item %1'),
-  args0: [{ type: 'field_dropdown', name: 'ID', options: MC_ITEMS }] }, C_PICK, 'String'));
+  args0: [{ type: 'field_mc_picker', name: 'ID', id: 'minecraft:stone', kind: 'item' }],
+  tooltip: T('点击从分类列表选择物品，或搜索/输入自定义 ID',
+    'click to pick an item by category, or search/type a custom ID') }, C_PICK, 'String'));
 defBlock('mc_item_custom', out({ message0: T('物品ID %1', 'item id %1'),
-  args0: [{ type: 'field_input', name: 'ID', text: 'minecraft:stone' }] }, C_PICK, 'String'));
+  args0: [{ type: 'field_input', name: 'ID', text: 'minecraft:stone' }],
+  tooltip: T('直接填写物品 ID（高级，一般用“物品”积木即可）',
+    'raw item id (advanced; the item block is usually enough)') }, C_PICK, 'String'));
 defBlock('mc_entity', out({ message0: T('实体 %1', 'entity %1'),
-  args0: [{ type: 'field_dropdown', name: 'ID', options: MC_ENTITIES }] }, C_PICK, 'String'));
+  args0: [{ type: 'field_mc_picker', name: 'ID', id: 'minecraft:zombie', kind: 'entity' }],
+  tooltip: T('点击从分类列表选择实体（含船/矿车等载具），或搜索/输入自定义 ID',
+    'click to pick an entity (incl. boats/minecarts), or search/type a custom ID') }, C_PICK, 'String'));
 
 // ---- 动作（黄） ----
 defBlock('bot_say', stmt({ message0: T('说 %1', 'say %1'),
   args0: [{ type: 'input_value', name: 'TEXT' }] }, C_ACT));
-defBlock('bot_attack', stmt({ message0: T('攻击 %1 间隔 %2', 'attack %1 interval %2'),
-  args0: [{ type: 'field_dropdown', name: 'MODE', options: [[T('单次','once'),'once'],[T('持续','continuous'),'continuous'],[T('间隔','interval'),'interval']] },
-          { type: 'input_value', name: 'INTERVAL', check: 'Number' }] }, C_ACT));
-defBlock('bot_use', stmt({ message0: T('使用/右键 %1 间隔 %2', 'use %1 interval %2'),
-  args0: [{ type: 'field_dropdown', name: 'MODE', options: [[T('单次','once'),'once'],[T('持续','continuous'),'continuous'],[T('间隔','interval'),'interval']] },
-          { type: 'input_value', name: 'INTERVAL', check: 'Number' }] }, C_ACT));
 defBlock('bot_stop_attack', stmt({ message0: T('停止攻击', 'stop attacking') }, C_ACT));
 defBlock('bot_stop_use', stmt({ message0: T('停止使用', 'stop using') }, C_ACT));
+// 攻击/使用：仅“间隔”模式显示间隔字段（单次/持续时隐藏，避免“持续…间隔”歧义）
+function defIntervalAction(name, zhVerb, enVerb) {
+  Blockly.Blocks[name] = {
+    init: function () {
+      var self = this;
+      this.appendDummyInput('HEAD')
+        .appendField(T(zhVerb, enVerb))
+        .appendField(new Blockly.FieldDropdown([
+          [T('单次', 'once'), 'once'],
+          [T('持续', 'continuous'), 'continuous'],
+          [T('间隔', 'interval'), 'interval']
+        ], function (mode) { self.updateShape_(mode); return mode; }), 'MODE');
+      this.appendValueInput('INTERVAL').setCheck('Number').appendField(T('每隔', 'every'));
+      this.setInputsInline(true);
+      this.setPreviousStatement(true); this.setNextStatement(true);
+      this.setColour(C_ACT);
+      this.setTooltip(T('单次=点一下；持续=一直按住；间隔=每 N 个 tick 触发一次（仅间隔模式需要填时间）',
+        'once=single click; continuous=hold; interval=every N ticks (only interval needs the number)'));
+      this.updateShape_(this.getFieldValue('MODE'));
+    },
+    updateShape_: function (mode) {
+      var inp = this.getInput('INTERVAL');
+      if (inp) { inp.setVisible(mode === 'interval'); }
+      if (this.rendered) this.render();
+    }
+  };
+}
+defIntervalAction('bot_attack', '攻击', 'attack');
+defIntervalAction('bot_use', '使用/右键', 'use/right-click');
 defBlock('bot_slot', stmt({ message0: T('切换手持槽位到 %1', 'select hotbar slot %1'),
   args0: [{ type: 'input_value', name: 'N', check: 'Number' }] }, C_ACT));
 defBlock('bot_swap_hands', stmt({ message0: T('交换主副手', 'swap hands') }, C_ACT));
@@ -431,18 +928,39 @@ defBlock('bot_minmax', out({ message0: '%1 %2 %3',
   inputsInline: true }, '%{BKY_MATH_HUE}', 'Number'));
 
 // ---- 输出（紫） ----
-defBlock('bot_output', stmt({ message0: T('输出到文件 %1 格式 %2 内容 %3', 'output to file %1 format %2 content %3'),
+var OUTPUT_MODES = [[T('追加', 'append'), 'append'], [T('覆盖', 'overwrite'), 'overwrite']];
+defBlock('bot_output', stmt({ message0: T('输出到文件 %1 格式 %2 内容 %3 模式 %4', 'output to file %1 format %2 content %3 mode %4'),
   args0: [{ type: 'field_input', name: 'FILE', text: 'output' },
           { type: 'field_dropdown', name: 'FORMAT', options: [['txt','txt'],['json','json'],['csv','csv']] },
-          { type: 'input_value', name: 'CONTENT' }] }, C_OUT));
-defBlock('bot_dump_inventory', stmt({ message0: T('导出背包清单到 %1 格式 %2', 'dump inventory to %1 format %2'),
+          { type: 'input_value', name: 'CONTENT' },
+          { type: 'field_dropdown', name: 'MODE', options: OUTPUT_MODES }] }, C_OUT));
+defBlock('bot_dump_inventory', stmt({ message0: T('导出背包清单到 %1 格式 %2 模式 %3', 'dump inventory to %1 format %2 mode %3'),
   args0: [{ type: 'field_input', name: 'FILE', text: 'inventory' },
-          { type: 'field_dropdown', name: 'FORMAT', options: [['txt','txt'],['json','json'],['csv','csv']] }] }, C_OUT));
+          { type: 'field_dropdown', name: 'FORMAT', options: [['txt','txt'],['json','json'],['csv','csv']] },
+          { type: 'field_dropdown', name: 'MODE', options: OUTPUT_MODES }] }, C_OUT));
+defBlock('bot_output_raw', stmt({ message0: T('原始行输出 到 %1 内容 %2 模式 %3', 'raw line output to %1 content %2 mode %3'),
+  args0: [{ type: 'field_input', name: 'FILE', text: 'output' },
+          { type: 'input_value', name: 'CONTENT' },
+          { type: 'field_dropdown', name: 'MODE', options: OUTPUT_MODES }],
+  tooltip: T('直接写入内容本身，不添加时间/假人前缀', 'writes content as-is, without time/bot prefix') }, C_OUT));
+defBlock('bot_output_template', stmt({ message0: T('模板输出 到 %1 格式 %2 模板 %3 模式 %4', 'template output to %1 format %2 template %3 mode %4'),
+  args0: [{ type: 'field_input', name: 'FILE', text: 'output' },
+          { type: 'field_dropdown', name: 'FORMAT', options: [['txt','txt'],['json','json'],['csv','csv']] },
+          { type: 'field_input', name: 'TEMPLATE', text: '{time} {bot} {var:变量名}' },
+          { type: 'field_dropdown', name: 'MODE', options: OUTPUT_MODES }],
+  tooltip: T('模板完全决定行内容；占位符 {time} {bot} {var:变量名}；格式仅决定扩展名', 'template fully defines the line; placeholders {time} {bot} {var:name}') }, C_OUT));
+defBlock('bot_output_table', stmt({ message0: T('表格输出 到 %1 表头 %2 本行 %3 模式 %4', 'table output to %1 header %2 row %3 mode %4'),
+  args0: [{ type: 'field_input', name: 'FILE', text: 'table' },
+          { type: 'input_value', name: 'HEADER' },
+          { type: 'input_value', name: 'ROW' },
+          { type: 'field_dropdown', name: 'MODE', options: OUTPUT_MODES }],
+  tooltip: T('自定义 CSV 表格：表头与新文件一起写入，之后逐行追加；表头/本行接列表积木', 'custom CSV table: header written once, rows appended') }, C_OUT));
 </script>
 <script>
 // ==================== 工具箱 ====================
 function numShadow(v) { return { shadow: { type: 'math_number', fields: { NUM: v } } }; }
 function itemShadow() { return { shadow: { type: 'mc_item', fields: { ID: 'minecraft:cobblestone' } } }; }
+function entShadow(id) { return { shadow: { type: 'mc_entity', fields: { ID: id || 'minecraft:zombie' } } }; }
 function xyz(x, y, z) { return { X: numShadow(x), Y: numShadow(y), Z: numShadow(z) }; }
 
 var TOOLBOX = { kind: 'categoryToolbox', contents: [
@@ -461,6 +979,8 @@ var TOOLBOX = { kind: 'categoryToolbox', contents: [
     { kind: 'block', type: 'bot_equip', inputs: { ITEM: itemShadow() } },
     { kind: 'block', type: 'bot_drop_of', inputs: { ITEM: itemShadow(), COUNT: numShadow(64) } },
     { kind: 'block', type: 'bot_look_entity', inputs: { TYPE: { shadow: { type: 'mc_entity', fields: { ID: 'minecraft:zombie' } } }, RANGE: numShadow(16) } },
+    { kind: 'block', type: 'bot_look_follow', inputs: { TYPE: entShadow('minecraft:zombie'), RANGE: numShadow(16) } },
+    { kind: 'block', type: 'bot_stop_look' },
     { kind: 'block', type: 'bot_swap_hands' }, { kind: 'block', type: 'bot_drop' },
     { kind: 'block', type: 'bot_mount' }, { kind: 'block', type: 'bot_dismount' } ] },
   { kind: 'category', name: T('移动', 'Motion'), colour: C_MOVE, contents: [
@@ -499,6 +1019,13 @@ var TOOLBOX = { kind: 'categoryToolbox', contents: [
     { kind: 'block', type: 'sensor_block_at', inputs: xyz(0, 64, 0) },
     { kind: 'block', type: 'sensor_distance_to', inputs: xyz(0, 64, 0) },
     { kind: 'block', type: 'sensor_nearest_player' }, { kind: 'block', type: 'sensor_nearest_player_dist' },
+    { kind: 'block', type: 'sensor_holding', inputs: { ITEM: itemShadow() } },
+    { kind: 'block', type: 'sensor_has_item', inputs: { ITEM: itemShadow() } },
+    { kind: 'block', type: 'sensor_fish_hooked' }, { kind: 'block', type: 'sensor_using_item' },
+    { kind: 'block', type: 'sensor_block_below' }, { kind: 'block', type: 'sensor_facing' },
+    { kind: 'block', type: 'sensor_nearest_entity_pos', inputs: { TYPE: entShadow('minecraft:zombie'), RANGE: numShadow(16) } },
+    { kind: 'block', type: 'sensor_nearest_entity_dist', inputs: { TYPE: entShadow('minecraft:zombie'), RANGE: numShadow(16) } },
+    { kind: 'block', type: 'sensor_nearest_entity_exists', inputs: { TYPE: entShadow('minecraft:ender_pearl'), RANGE: numShadow(16) } },
     { kind: 'block', type: 'sensor_inv_count', inputs: { ITEM: itemShadow() } },
     { kind: 'block', type: 'sensor_nearby', inputs: { RANGE: numShadow(8), TYPE: { shadow: { type: 'text', fields: { TEXT: '' } } } } },
     { kind: 'block', type: 'sensor_is_pathfinding' }, { kind: 'block', type: 'sensor_time_of_day' } ] },
@@ -558,6 +1085,9 @@ var TOOLBOX = { kind: 'categoryToolbox', contents: [
   { kind: 'category', name: T('函数', 'Functions'), custom: 'PROCEDURE', colour: '%{BKY_PROCEDURES_HUE}' },
   { kind: 'category', name: T('输出', 'Output'), colour: C_OUT, contents: [
     { kind: 'block', type: 'bot_output', inputs: { CONTENT: { shadow: { type: 'text', fields: { TEXT: '' } } } } },
+    { kind: 'block', type: 'bot_output_raw', inputs: { CONTENT: { shadow: { type: 'text', fields: { TEXT: '' } } } } },
+    { kind: 'block', type: 'bot_output_template' },
+    { kind: 'block', type: 'bot_output_table', inputs: { HEADER: { shadow: { type: 'list_create', fields: {} } }, ROW: { shadow: { type: 'list_create', fields: {} } } } },
     { kind: 'block', type: 'bot_dump_inventory' } ] }
 ] };
 
@@ -677,6 +1207,18 @@ function expr(block) {
       return { e: 'sensor', n: 'blockAt', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z')] };
     case 'sensor_distance_to':
       return { e: 'sensor', n: 'distanceTo', args: [vin(block, 'X'), vin(block, 'Y'), vin(block, 'Z')] };
+    case 'sensor_holding': return { e: 'sensor', n: 'holding', args: [vin(block, 'ITEM')] };
+    case 'sensor_has_item': return { e: 'sensor', n: 'hasItem', args: [vin(block, 'ITEM')] };
+    case 'sensor_fish_hooked': return { e: 'sensor', n: 'fishHooked' };
+    case 'sensor_using_item': return { e: 'sensor', n: 'usingItem' };
+    case 'sensor_block_below': return { e: 'sensor', n: 'blockBelow' };
+    case 'sensor_facing': return { e: 'sensor', n: 'facing', args: [{ e: 'str', v: block.getFieldValue('AXIS') }] };
+    case 'sensor_nearest_entity_pos':
+      return { e: 'sensor', n: 'nearestEntityCoord', args: [vin(block, 'RANGE'), vin(block, 'TYPE'), { e: 'str', v: block.getFieldValue('AXIS') }] };
+    case 'sensor_nearest_entity_dist':
+      return { e: 'sensor', n: 'nearestEntityDistance', args: [vin(block, 'RANGE'), vin(block, 'TYPE')] };
+    case 'sensor_nearest_entity_exists':
+      return { e: 'sensor', n: 'nearestEntityExists', args: [vin(block, 'RANGE'), vin(block, 'TYPE')] };
     // 文本函数
     case 'str_len': return { e: 'sensor', n: 'strLen', args: [vin(block, 'S')] };
     case 'str_contains': return { e: 'sensor', n: 'strContains', args: [vin(block, 'S'), vin(block, 'SUB')] };
@@ -757,6 +1299,8 @@ function stmt1(b) {
     case 'bot_equip': return { op: 'equipItem', item: vreq(b, 'ITEM', 'item') };
     case 'bot_drop_of': return { op: 'dropOf', item: vreq(b, 'ITEM', 'item'), count: vreq(b, 'COUNT', 'count') };
     case 'bot_look_entity': return { op: 'lookAtEntity', type: vreq(b, 'TYPE', 'type'), range: vreq(b, 'RANGE', 'range') };
+    case 'bot_look_follow': return { op: 'followEntity', type: vreq(b, 'TYPE', 'type'), range: vreq(b, 'RANGE', 'range') };
+    case 'bot_stop_look': return { op: 'stopFollow' };
     case 'list_add': return { op: 'listAdd', 'var': b.getField('VAR').getText(), value: vreq(b, 'VALUE', 'value') };
     case 'list_insert': return { op: 'listInsert', 'var': b.getField('VAR').getText(),
       index: vreq(b, 'INDEX', 'index'), value: vreq(b, 'VALUE', 'value') };
@@ -826,8 +1370,17 @@ function stmt1(b) {
       return s;
     }
     case 'bot_output': return { op: 'output', file: b.getFieldValue('FILE'), format: b.getFieldValue('FORMAT'),
-      content: vreq(b, 'CONTENT', 'content') };
-    case 'bot_dump_inventory': return { op: 'dumpInventory', file: b.getFieldValue('FILE'), format: b.getFieldValue('FORMAT') };
+      content: vreq(b, 'CONTENT', 'content'), mode: { e: 'str', v: b.getFieldValue('MODE') } };
+    case 'bot_dump_inventory': return { op: 'dumpInventory', file: b.getFieldValue('FILE'),
+      format: b.getFieldValue('FORMAT'), mode: { e: 'str', v: b.getFieldValue('MODE') } };
+    case 'bot_output_raw': return { op: 'outputRaw', file: b.getFieldValue('FILE'),
+      content: vreq(b, 'CONTENT', 'content'), mode: { e: 'str', v: b.getFieldValue('MODE') } };
+    case 'bot_output_template': return { op: 'outputTemplate', file: b.getFieldValue('FILE'),
+      format: b.getFieldValue('FORMAT'), template: b.getFieldValue('TEMPLATE') || '',
+      mode: { e: 'str', v: b.getFieldValue('MODE') } };
+    case 'bot_output_table': return { op: 'outputTable', file: b.getFieldValue('FILE'),
+      header: vreq(b, 'HEADER', 'header'), row: vreq(b, 'ROW', 'row'),
+      mode: { e: 'str', v: b.getFieldValue('MODE') } };
     case 'variables_set': return { op: 'set', 'var': b.getField('VAR').getText(), value: vreq(b, 'VALUE', 'value') };
     case 'math_change': return { op: 'change', 'var': b.getField('VAR').getText(), value: vreq(b, 'DELTA', 'delta') };
     case 'controls_repeat_ext': return { op: 'repeat', times: vreq(b, 'TIMES', 'times'), body: stmts(b.getInputTargetBlock('DO')) };
@@ -913,17 +1466,18 @@ function currentFileName() {
   return n.replace(/[\\/:*?"<>|]/g, '_') + '.json';
 }
 
-$('btnSave').onclick = function () {
+/** 校验并构建导出数据 @return 数据对象；校验失败返回 null（已提示） */
+function buildExportData() {
   var result = serialize();
   if (result.errors.length > 0) {
     status(T('无法保存，存在 ' + result.errors.length + ' 个问题：', 'cannot save: ') + result.errors[0], 'err');
-    return;
+    return null;
   }
   if (result.program.length === 0) {
     status(T('无法保存：工作区为空', 'cannot save: workspace is empty'), 'err');
-    return;
+    return null;
   }
-  var data = {
+  return {
     format: 1,
     name: $('bhName').value || 'behavior',
     description: $('bhDesc').value || '',
@@ -931,6 +1485,11 @@ $('btnSave').onclick = function () {
     program: result.program,
     blockly: Blockly.serialization.workspaces.save(workspace)
   };
+}
+
+$('btnSave').onclick = function () {
+  var data = buildExportData();
+  if (!data) return;
   var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -939,6 +1498,34 @@ $('btnSave').onclick = function () {
   URL.revokeObjectURL(a.href);
   status(T('已保存 ' + a.download + ' — 放入 config/my-bot-mod/behaviors/ 后在游戏内重扫即可',
     'saved ' + a.download + ' - drop into config/my-bot-mod/behaviors/ and rescan in game'), 'ok');
+};
+
+// 保存到任意文件夹（File System Access API，会话内记忆所选目录；不支持的浏览器回退提示）
+var exportDirHandle = null;
+$('btnSaveDir').onclick = async function () {
+  var data = buildExportData();
+  if (!data) return;
+  if (!window.showDirectoryPicker) {
+    status(T('当前浏览器不支持选择文件夹，请用下载保存后手动放入目标文件夹',
+      'folder picker unsupported; use download save and move the file manually'), 'err');
+    return;
+  }
+  try {
+    if (!exportDirHandle) {
+      exportDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    }
+    var fileName = currentFileName();
+    var fileHandle = await exportDirHandle.getFileHandle(fileName, { create: true });
+    var writable = await fileHandle.createWritable();
+    await writable.write(JSON.stringify(data, null, 2));
+    await writable.close();
+    status(T('已直接写入 ' + exportDirHandle.name + '/' + fileName,
+      'written to ' + exportDirHandle.name + '/' + fileName), 'ok');
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    exportDirHandle = null;
+    status(T('保存失败：', 'save failed: ') + (e && e.message ? e.message : e), 'err');
+  }
 };
 
 $('btnOpen').onclick = function () { $('fileInput').click(); };

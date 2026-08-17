@@ -13,12 +13,13 @@ public class BehaviorClientData {
     public record BehaviorEntry(String file, String displayName, String description, int blocks, boolean loop) {
     }
 
-    /** 完整快照：可用行为 + 查询假人的播放列表/运行态 + 解析错误 */
+    /** 完整快照：可用行为 + 查询假人的播放列表/运行态/运行进度 + 解析错误 */
     public record State(List<BehaviorEntry> behaviors, String botName, List<String> assigned,
-                        boolean running, Map<String, String> errors) {
+                        boolean running, String current, int queueIndex, int queueTotal,
+                        Map<String, String> errors) {
     }
 
-    private static volatile State state = new State(List.of(), "", List.of(), false, Map.of());
+    private static volatile State state = new State(List.of(), "", List.of(), false, "", 0, 0, Map.of());
 
     /** 更新快照（在客户端主线程调用） */
     public static void set(State s) {

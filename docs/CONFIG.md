@@ -7,7 +7,6 @@
 ```json
 {
   "enableBotFeature": true,
-  "configMenuKey": "key.keyboard.b",
   "attackReachDistance": 3.0,
   "creativeAttackReachDistance": 5.0,
   "enableKillAura": false,
@@ -24,13 +23,12 @@
   "botGlowing": false,
   "botFireImmune": false,
   "allowBotAutoJump": true,
-  "allowBatonTeleportNonCreative": false,
   "maxPathfindingDistance": 256,
   "pathfindingAllowParkour": true,
   "pathfindingAllowSwim": true,
+  "pathfindingSmooth": true,
   "botPersistence": false,
-  "preserveBotState": false,
-  "carpetModCompatibility": true
+  "preserveBotState": false
 }
 ```
 
@@ -60,15 +58,14 @@
 | `botGlowing` | bool | false | 假人是否发光（便于远处定位，v1.3.2 新增） |
 | `botFireImmune` | bool | false | 假人是否免疫火焰/岩浆伤害（v1.3.2 新增） |
 | `allowBotAutoJump` | bool | true | 移动时自动跳过 1 格高障碍 |
-| `allowBatonTeleportNonCreative` | bool | false | 指挥棒传送模式是否允许非创造模式使用（v1.3.1 新增） |
 | `maxPathfindingDistance` | 整数 | 256 | 最大寻路距离（32-1024 格，超出直接拒绝，v1.3.2 新增） |
 | `pathfindingAllowParkour` | bool | true | 寻路允许跑酷跳跃（跨越裂谷，v1.3.2 新增） |
 | `pathfindingAllowSwim` | bool | true | 寻路允许游泳路线（v1.3.2 新增） |
+| `pathfindingSmooth` | bool | true | 路径平滑（宽度感知视线法，合并可直行路点；v1.3.3 新增） |
 | `botPersistence` | bool | false | 退出世界后假人是否保留 |
-| `preserveBotState` | bool | false | 驻留时是否保留退出前的动作/状态 |
-| `carpetModCompatibility` | bool | true | 检测到 Carpet Mod 时自动禁用本模组假人功能以避免冲突 |
+| `preserveBotState` | bool | false | 驻留时是否保留退出前的动作/状态（含创造飞行状态） |
 
-配置修改后**立即生效**。数值范围：距离 0-10，`maxBotCount`/`maxBotsPerPlayer` ≥ 0，`maxPathfindingDistance` 32-1024。
+配置修改后**立即生效**。数值范围：`attackReachDistance` 0-64，`creativeAttackReachDistance` 0-128，`killAuraRange` 0-64，`maxBotCount`/`maxBotsPerPlayer` ≥ 0，`maxPathfindingDistance` 32-1024。
 
 ## 假人个人配置（三态）
 

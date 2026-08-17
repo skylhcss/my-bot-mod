@@ -31,12 +31,6 @@ public class ModConfig {
      */
     public boolean enableBotFeature = true;
     
-    // ========== 快捷键配置 ==========
-    /**
-     * 打开配置菜单的快捷键（默认：B）
-     */
-    public String configMenuKey = "key.keyboard.b";
-    
     // ========== 假人功能配置 ==========
     /**
      * 攻击/破坏距离（格）
@@ -107,12 +101,6 @@ public class ModConfig {
      */
     public boolean preserveBotState = false;
     
-    /**
-     * Carpet Mod 兼容模式
-     * 启用后，如果检测到 Carpet Mod，将自动禁用本模组的假人功能以避免冲突
-     */
-    public boolean carpetModCompatibility = true;
-    
     // ========== 动作设置 ==========
     /**
      * 假人自动跳跃
@@ -120,14 +108,6 @@ public class ModConfig {
      */
     public boolean allowBotAutoJump = true;
 
-    // ========== 指挥棒设置 ==========
-    /**
-     * 传送模式是否允许非创造模式使用
-     * 默认 false：仅当手持指挥棒的玩家处于创造模式时才能使用传送模式；
-     * 启用后，任意游戏模式的玩家都可使用传送模式。
-     */
-    public boolean allowBatonTeleportNonCreative = false;
-    
     // ========== 外观与防护 ==========
     /**
      * 假人是否发光（创建时生效，便于在远处定位假人）
@@ -165,6 +145,12 @@ public class ModConfig {
      * 寻路允许游泳路线
      */
     public boolean pathfindingAllowSwim = true;
+
+    /**
+     * 寻路路径平滑（宽度感知视线法）：合并可直行的路标点，走位更顺；
+     * 仅合并同高度且中心线与侧向净空均可站立的线段，不会切角/跨越裂谷
+     */
+    public boolean pathfindingSmooth = true;
     
     // ========== 关于信息 ==========
     /**
@@ -226,7 +212,6 @@ public class ModConfig {
         if (maxBotCount < 0) maxBotCount = 0;
         if (maxBotsPerPlayer < 0) maxBotsPerPlayer = 0;
         maxPathfindingDistance = (int) clamp(maxPathfindingDistance, 32, 1024);
-        if (configMenuKey == null || configMenuKey.isEmpty()) configMenuKey = "key.keyboard.b";
     }
 
     private static double clamp(double v, double min, double max) {
@@ -327,7 +312,6 @@ public class ModConfig {
      */
     public void reset() {
         enableBotFeature = true;
-        configMenuKey = "key.keyboard.b";
         attackReachDistance = 3.0;
         creativeAttackReachDistance = 5.0;
         enableKillAura = false;
@@ -339,9 +323,7 @@ public class ModConfig {
         botHunger = true;
         botPersistence = false;
         preserveBotState = false;
-        carpetModCompatibility = true;
         allowBotAutoJump = true;
-        allowBatonTeleportNonCreative = false;
         botGlowing = false;
         botFireImmune = false;
         maxBotsPerPlayer = 0;
@@ -349,6 +331,7 @@ public class ModConfig {
         maxPathfindingDistance = 256;
         pathfindingAllowParkour = true;
         pathfindingAllowSwim = true;
+        pathfindingSmooth = true;
         allowNonOpControlBot = false;
         
         mountWhitelist.clear();

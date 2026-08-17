@@ -36,10 +36,22 @@ public class ServerPlayerMixin {
         
         // 只对假人处理
         if (player instanceof BotPlayer bot) {
-            // 先更新动作状态（潜行、疾跑、跳跃等）
-            bot.getActionController().tick();
-            // 然后应用移动输入
-            bot.getActionController().applyMovement();
+            // 异常兑底：此处位于 BotPlayer.tick 的保护之外，
+            // 若不拦截，动作/寻路异常会沿 ServerLevel.tickNonPlayerEntity 上抛崩掉整个服务器 tick
+            try {
+                // 先更新动作状态（潜行、疾跑、跳跃等）
+                bot.getActionController().tick();
+                // 然后应用移动输入
+                bot.getActionController().applyMovement();
+            } catch (Exception e) {
+                name.modid.MyBotMod.LOGGER.error("假人 {} 动作更新异常，已停止其全部动作: {}",
+                    bot.getName().getString(), e.getMessage());
+                try {
+                    bot.getActionController().stopAll();
+                } catch (Exception ignored) {
+                    // 停止动作自身再异常时不再处理，等待下一 tick 重试
+                }
+            }
         }
     }
 }

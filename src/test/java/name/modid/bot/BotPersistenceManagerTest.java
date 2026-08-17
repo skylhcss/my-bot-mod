@@ -18,6 +18,15 @@ class BotPersistenceManagerTest {
 
     // ==================== 辅助方法 ====================
 
+    /** 版本兼容的 save 包装：1.20.5+ SavedData.save 额外接收 HolderLookup.Provider；测试仅涉及纯 NBT 写入，传 null 即可 */
+    private static CompoundTag saveAll(BotPersistenceManager manager, CompoundTag tag) {
+        //? if >=1.20.5 {
+        /*return manager.save(tag, null);
+        *///?} else {
+        return manager.save(tag);
+        //?}
+    }
+
     /**
      * 构造一个完整的假人 CompoundTag（模拟 saveBot 产出的数据结构）
      */
@@ -88,7 +97,7 @@ class BotPersistenceManagerTest {
      * 执行完整的 save → load 循环
      */
     private BotPersistenceManager saveAndLoad(BotPersistenceManager original) {
-        CompoundTag saved = original.save(new CompoundTag());
+        CompoundTag saved = saveAll(original, new CompoundTag());
         return BotPersistenceManager.load(saved);
     }
 
@@ -102,7 +111,7 @@ class BotPersistenceManagerTest {
         BotPersistenceManager loaded = saveAndLoad(manager);
 
         // save 产出的 tag 应包含空 Bots 列表
-        CompoundTag tag = manager.save(new CompoundTag());
+        CompoundTag tag = saveAll(manager, new CompoundTag());
         assertTrue(tag.contains("Bots"));
         ListTag bots = tag.getList("Bots", 10);
         assertEquals(0, bots.size());
@@ -129,7 +138,7 @@ class BotPersistenceManagerTest {
         BotPersistenceManager loaded = BotPersistenceManager.load(saveTag);
 
         // 再次 save 验证一致性
-        CompoundTag reSaved = loaded.save(new CompoundTag());
+        CompoundTag reSaved = saveAll(loaded, new CompoundTag());
         ListTag reList = reSaved.getList("Bots", 10);
 
         assertEquals(1, reList.size());
@@ -167,7 +176,7 @@ class BotPersistenceManagerTest {
 
         // load → save 循环
         BotPersistenceManager loaded = BotPersistenceManager.load(saveTag);
-        CompoundTag reSaved = loaded.save(new CompoundTag());
+        CompoundTag reSaved = saveAll(loaded, new CompoundTag());
         ListTag reList = reSaved.getList("Bots", 10);
 
         assertEquals(3, reList.size());
@@ -197,7 +206,7 @@ class BotPersistenceManagerTest {
         BotPersistenceManager loaded = BotPersistenceManager.load(saveTag);
 
         // save 后数据仍应完整（Name 字段保持原始大小写）
-        CompoundTag reSaved = loaded.save(new CompoundTag());
+        CompoundTag reSaved = saveAll(loaded, new CompoundTag());
         ListTag reList = reSaved.getList("Bots", 10);
         assertEquals(1, reList.size());
         assertEquals("MixedCaseBot", reList.getCompound(0).getString("Name"));
@@ -214,7 +223,7 @@ class BotPersistenceManagerTest {
         saveTag.put("Bots", botsList);
 
         BotPersistenceManager loaded = BotPersistenceManager.load(saveTag);
-        CompoundTag reSaved = loaded.save(new CompoundTag());
+        CompoundTag reSaved = saveAll(loaded, new CompoundTag());
         ListTag reList = reSaved.getList("Bots", 10);
 
         assertEquals(1, reList.size());
@@ -259,7 +268,7 @@ class BotPersistenceManagerTest {
         saveTag.put("Bots", botsList);
 
         BotPersistenceManager loaded = BotPersistenceManager.load(saveTag);
-        CompoundTag reSaved = loaded.save(new CompoundTag());
+        CompoundTag reSaved = saveAll(loaded, new CompoundTag());
         ListTag reList = reSaved.getList("Bots", 10);
 
         // 只有有效假人被保留
@@ -273,7 +282,7 @@ class BotPersistenceManagerTest {
         CompoundTag emptyTag = new CompoundTag();
 
         BotPersistenceManager loaded = BotPersistenceManager.load(emptyTag);
-        CompoundTag reSaved = loaded.save(new CompoundTag());
+        CompoundTag reSaved = saveAll(loaded, new CompoundTag());
         ListTag reList = reSaved.getList("Bots", 10);
 
         assertEquals(0, reList.size());
@@ -310,7 +319,7 @@ class BotPersistenceManagerTest {
         saveTag.put("Bots", botsList);
 
         BotPersistenceManager loaded = BotPersistenceManager.load(saveTag);
-        CompoundTag reSaved = loaded.save(new CompoundTag());
+        CompoundTag reSaved = saveAll(loaded, new CompoundTag());
         CompoundTag restored = reSaved.getList("Bots", 10).getCompound(0);
 
         // 物品栏
@@ -345,7 +354,7 @@ class BotPersistenceManagerTest {
         saveTag.put("Bots", botsList);
 
         BotPersistenceManager loaded = BotPersistenceManager.load(saveTag);
-        CompoundTag reSaved = loaded.save(new CompoundTag());
+        CompoundTag reSaved = saveAll(loaded, new CompoundTag());
         ListTag reList = reSaved.getList("Bots", 10);
 
         // 后者覆盖前者（Map key 为小写），只保留 1 条

@@ -44,16 +44,7 @@ public class AdvancedPage extends ConfigPage {
             config.preserveBotState = false; config.save(); preserveState.setSelected(false);
         }));
         
-        // Section 2: 指挥棒
-        SectionCard batonSection = addSection(Component.translatable("gui.my-bot-mod.advanced.section.baton").getString());
-        
-        ModernCheckbox batonTeleport = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.advanced.baton_teleport"), config.allowBatonTeleportNonCreative);
-        batonTeleport.setOnChanged(() -> { config.allowBatonTeleportNonCreative = batonTeleport.selected(); config.save(); });
-        batonSection.addItem(batonTeleport, new ResetButton(0, 0, () -> {
-            config.allowBatonTeleportNonCreative = false; config.save(); batonTeleport.setSelected(false);
-        }));
-        
-        // Section 3: 外观与防护
+        // Section 2: 外观与防护
         SectionCard lookSection = addSection(Component.translatable("gui.my-bot-mod.advanced.section.look").getString());
         
         ModernCheckbox glowing = new ModernCheckbox(0, 0, 0, DesignTokens.ROW_HEIGHT, Component.translatable("gui.my-bot-mod.advanced.glowing"), config.botGlowing);

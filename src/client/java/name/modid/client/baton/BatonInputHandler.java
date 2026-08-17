@@ -2,17 +2,18 @@ package name.modid.client.baton;
 
 import name.modid.item.ModItems;
 import name.modid.net.BotNetworking;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import name.modid.client.BotClientNetworking;
 import net.fabricmc.fabric.api.event.player.UseBlockCallback;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.fabricmc.fabric.api.networking.v1.PacketByteBufs;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+//? if <1.21.2 {
 import net.minecraft.world.InteractionResultHolder;
+//?}
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
@@ -28,7 +29,7 @@ import java.util.Optional;
 /**
  * 指挥棒客户端交互（全部基于"准星指向"的远距离射线，而非近战交互距离）：
  * - Alt + 右键（看向假人）→ 选中该假人
- * - 右键（无修饰键，看向任意位置）→ 对选中假人下令（寻路/传送）到准星指向处
+ * - 右键（无修饰键，看向任意位置）→ 对选中假人下令（寻路/传送）
  *
  * 通过 UseBlock/UseItem 两个回调覆盖"看向近处方块"与"看向远处/空气"两种情况，
  * 统一走 {@link #handleUse}，用自定义射线获取目标，从而实现"看向哪里就到哪里"。
@@ -48,11 +49,11 @@ public class BatonInputHandler {
             if (!(entity instanceof Player target) || !BatonClientState.isBot(target.getName().getString())) {
                 return InteractionResult.PASS;
             }
-            if (Screen.hasControlDown() || Screen.hasShiftDown()) return InteractionResult.PASS;
 
             if (Screen.hasAltDown()) {
+                // Alt+右键假人 → 选中
                 BatonClientState.setSelectedBotName(target.getName().getString());
-            } else {
+            } else if (!Screen.hasShiftDown() && !Screen.hasControlDown()) {
                 commandTo(entity.position());
             }
             return InteractionResult.FAIL; // 手持指挥棒时不打开原版面板/交互
@@ -61,17 +62,24 @@ public class BatonInputHandler {
         // 看向近处方块
         UseBlockCallback.EVENT.register((player, level, hand, hitResult) -> handleUse(player, level, hand));
 
-        // 看向远处/空气
+        // 看向远处/空气（1.21.2+ UseItemCallback 返回值改为 InteractionResult）
+        //? if >=1.21.2 {
+        /*UseItemCallback.EVENT.register((player, level, hand) -> handleUse(player, level, hand));
+        *///?} else {
         UseItemCallback.EVENT.register((player, level, hand) ->
             new InteractionResultHolder<>(handleUse(player, level, hand), player.getItemInHand(hand)));
+        //?}
     }
 
     private static InteractionResult handleUse(Player player, Level level, InteractionHand hand) {
         if (!level.isClientSide()) return InteractionResult.PASS;
         if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
         if (!player.getItemInHand(hand).is(ModItems.COMMAND_BATON)) return InteractionResult.PASS;
-        // Ctrl/Shift 保留给切换模式等，不在此触发
-        if (Screen.hasControlDown() || Screen.hasShiftDown()) return InteractionResult.PASS;
+        // Ctrl 保留给切换模式等
+        if (Screen.hasControlDown()) return InteractionResult.PASS;
+
+        // Shift 保留给其他用途
+        if (Screen.hasShiftDown()) return InteractionResult.PASS;
 
         HitResult hit = raycast(player, REACH);
 
@@ -86,7 +94,7 @@ public class BatonInputHandler {
             return InteractionResult.FAIL;
         }
 
-        // 下令：看向哪里就到哪里
+        // 寻路/传送模式：看向哪里就到哪里
         if (hit.getType() == HitResult.Type.MISS) return InteractionResult.FAIL;
         Vec3 target = BatonClientState.getMode() == BatonClientState.Mode.TELEPORT
             ? teleportTarget(player, hit)
@@ -180,6 +188,6 @@ public class BatonInputHandler {
         buf.writeDouble(pos.x);
         buf.writeDouble(pos.y);
         buf.writeDouble(pos.z);
-        ClientPlayNetworking.send(BotNetworking.BATON_ACTION, buf);
+        BotClientNetworking.sendBatonAction(buf);
     }
 }

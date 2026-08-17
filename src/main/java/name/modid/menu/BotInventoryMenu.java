@@ -1,8 +1,12 @@
 package name.modid.menu;
 
+//? if <1.21.2 {
 import com.mojang.datafixers.util.Pair;
+//?}
 import name.modid.bot.BotPlayer;
+//? if <1.20.5 {
 import net.minecraft.network.FriendlyByteBuf;
+//?}
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -34,6 +38,17 @@ public class BotInventoryMenu extends AbstractContainerMenu {
     /** 假人物品栏容器大小（36 主 + 4 盔甲 + 1 副手） */
     public static final int BOT_INV_SIZE = 41;
 
+    //? if >=1.20.5 {
+    /*// 1.20.5+ 扩展菜单改用数据对象 + StreamCodec（取代原始 FriendlyByteBuf 工厂）
+    public record BotInventoryData(UUID uuid, int selected) {
+        public static final net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, BotInventoryData> CODEC =
+            net.minecraft.network.codec.StreamCodec.of(
+                (buf, data) -> { buf.writeUUID(data.uuid()); buf.writeVarInt(data.selected()); },
+                buf -> new BotInventoryData(buf.readUUID(), buf.readVarInt())
+            );
+    }
+    *///?}
+
     private final Container botInventory;
     /** 服务端为真实假人实体，客户端为 null */
     private final BotPlayer bot;
@@ -42,6 +57,13 @@ public class BotInventoryMenu extends AbstractContainerMenu {
     /** 假人 UUID（供客户端渲染假人模型） */
     private final UUID botUuid;
 
+    //? if >=1.20.5 {
+    /*// 1.20.5+ 客户端构造：由 ExtendedScreenHandlerType 以数据对象调用
+    public BotInventoryMenu(int containerId, Inventory playerInventory, BotInventoryData data) {
+        this(containerId, playerInventory, new SimpleContainer(BOT_INV_SIZE), null,
+            data.uuid(), data.selected());
+    }
+    *///?} else {
     /**
      * 客户端构造：由 ExtendedScreenHandlerType 调用，从缓冲区读取假人 UUID 与手持槽位
      */
@@ -49,6 +71,7 @@ public class BotInventoryMenu extends AbstractContainerMenu {
         this(containerId, playerInventory, new SimpleContainer(BOT_INV_SIZE), null,
             buf.readUUID(), buf.readVarInt());
     }
+    //?}
 
     /**
      * 服务端构造：以假人真实物品栏为后端
@@ -122,10 +145,12 @@ public class BotInventoryMenu extends AbstractContainerMenu {
      */
     private static Slot armorSlot(Container container, int index, int x, int y, ResourceLocation emptyIcon) {
         return new Slot(container, index, x, y) {
+            //? if <1.21.2 {
             @Override
             public Pair<ResourceLocation, ResourceLocation> getNoItemIcon() {
                 return Pair.of(InventoryMenu.BLOCK_ATLAS, emptyIcon);
             }
+            //?}
         };
     }
 
@@ -191,8 +216,15 @@ public class BotInventoryMenu extends AbstractContainerMenu {
 
     @Override
     public boolean stillValid(Player player) {
-        // 服务端校验假人仍存在；客户端始终有效
-        return bot == null || !bot.isRemoved();
+        // 客户端（bot 为 null）恒有效；服务端校验：假人存在 + 同维度 + 距离限制，
+        // 防止跨维度/无限距离操作假人背包
+        if (bot == null) {
+            return true;
+        }
+        if (bot.isRemoved() || player.level() != bot.level()) {
+            return false;
+        }
+        return player.distanceToSqr(bot) <= 64.0D * 64.0D;
     }
 
     @Override

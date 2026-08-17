@@ -157,10 +157,21 @@ public class BotPersistenceManager extends SavedData {
     }
     
     /**
-     * 保存数据到 NBT
+     * 保存数据到 NBT（1.20.5+ SavedData 抽象方法额外接收 HolderLookup.Provider）
      */
+    //? if >=1.20.5 {
+    /*@Override
+    public CompoundTag save(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
+        return writeBots(tag);
+    }
+    *///?} else {
     @Override
     public CompoundTag save(CompoundTag tag) {
+        return writeBots(tag);
+    }
+    //?}
+
+    private CompoundTag writeBots(CompoundTag tag) {
         ListTag botsList = new ListTag();
         
         for (Map.Entry<String, CompoundTag> entry : botsData.entrySet()) {
@@ -182,10 +193,15 @@ public class BotPersistenceManager extends SavedData {
         
         //? if >=1.20.2 {
         /*// 1.20.2+ 改用 SavedData.Factory（DataFixTypes 传 null：模组数据无需升级链）
+        // 1.20.5+ Factory 的反序列化器额外接收 HolderLookup.Provider
         return overworld.getDataStorage().computeIfAbsent(
             new net.minecraft.world.level.saveddata.SavedData.Factory<>(
                 BotPersistenceManager::new,
+                //? if >=1.20.5 {
+                (savedTag, registries) -> load(savedTag),
+                //?} else {
                 BotPersistenceManager::load,
+                //?}
                 null),
             DATA_NAME
         );
@@ -207,6 +223,11 @@ public class BotPersistenceManager extends SavedData {
         
         // 如果未启用驻留功能，不保存
         if (!config.botPersistence) {
+            return;
+        }
+
+        // 死亡中的假人不保存：避免持久化 0 血量导致恢复后"活着但 0 血"的异常状态
+        if (bot.getHealth() <= 0.0F) {
             return;
         }
         
@@ -269,10 +290,19 @@ public class BotPersistenceManager extends SavedData {
             for (int i = 0; i < enderChest.getContainerSize(); i++) {
                 var stack = enderChest.getItem(i);
                 if (!stack.isEmpty()) {
+                    //? if >=1.20.5 {
+                    /*// 1.20.5+ ItemStack 序列化改经注册表（组件化），返回的 Tag 附加 Slot 字节
+                    var savedTag = stack.save(bot.registryAccess());
+                    if (savedTag instanceof CompoundTag itemTag) {
+                        itemTag.putByte("Slot", (byte) i);
+                        enderList.add(itemTag);
+                    }
+                    *///?} else {
                     CompoundTag itemTag = new CompoundTag();
                     itemTag.putByte("Slot", (byte) i);
                     stack.save(itemTag);
                     enderList.add(itemTag);
+                    //?}
                 }
             }
             data.put("EnderItems", enderList);
@@ -291,19 +321,27 @@ public class BotPersistenceManager extends SavedData {
                 st.putBoolean("Sprinting", !pathing && controller.isSprinting());
                 st.putFloat("Forward", pathing ? 0.0F : controller.getForward());
                 st.putFloat("Strafing", pathing ? 0.0F : controller.getStrafing());
+                st.putBoolean("Flying", bot.getAbilities().flying);
                 st.putInt("AttackInterval", controller.getAttackInterval());
                 st.putInt("UseInterval", controller.getUseInterval());
                 st.putFloat("Health", bot.getHealth());
                 st.putInt("FoodLevel", bot.getFoodData().getFoodLevel());
                 st.putFloat("Saturation", bot.getFoodData().getSaturationLevel());
+                //? if <1.21.2 {
                 st.putFloat("Exhaustion", bot.getFoodData().getExhaustionLevel());
+                //?}
                 st.putInt("XpLevel", bot.experienceLevel);
                 st.putFloat("XpProgress", bot.experienceProgress);
                 ListTag effects = new ListTag();
                 bot.getActiveEffects().forEach(effect -> {
+                    //? if >=1.20.5 {
+                    /*// 1.20.5+ 效果序列化改为无参 save()（注册表引用内置）
+                    effects.add(effect.save());
+                    *///?} else {
                     CompoundTag et = new CompoundTag();
                     effect.save(et);
                     effects.add(et);
+                    //?}
                 });
                 st.put("Effects", effects);
                 data.put("State", st);
@@ -449,10 +487,17 @@ public class BotPersistenceManager extends SavedData {
         
         // 延迟加载，确保玩家完全加入世界
         // 参考 GCA：延迟 40 tick（2秒）
+        //? if >=1.21.2 {
+        /*server.schedule(new net.minecraft.server.TickTask(
+            server.getTickCount() + 40,
+            () -> loadAllBotsForPlayer(server, player)
+        ));
+        *///?} else {
         server.tell(new net.minecraft.server.TickTask(
             server.getTickCount() + 40,
             () -> loadAllBotsForPlayer(server, player)
         ));
+        //?}
     }
     
     /**
@@ -512,7 +557,11 @@ public class BotPersistenceManager extends SavedData {
                 ServerLevel level = server.getLevel(
                     net.minecraft.resources.ResourceKey.create(
                         net.minecraft.core.registries.Registries.DIMENSION,
+                        //? if >=1.21 {
+                        /*net.minecraft.resources.ResourceLocation.parse(dimStr)
+                        *///?} else {
                         new net.minecraft.resources.ResourceLocation(dimStr)
+                        //?}
                     )
                 );
                 if (level == null) {
@@ -577,7 +626,11 @@ public class BotPersistenceManager extends SavedData {
                                 CompoundTag itemTag = enderItems.getCompound(i);
                                 int slot = itemTag.getByte("Slot") & 255;
                                 if (slot < enderChest.getContainerSize()) {
+                                    //? if >=1.20.5 {
+                                    /*var stack = net.minecraft.world.item.ItemStack.parseOptional(bot.registryAccess(), itemTag);
+                                    *///?} else {
                                     var stack = net.minecraft.world.item.ItemStack.of(itemTag);
+                                    //?}
                                     if (!stack.isEmpty()) enderChest.setItem(slot, stack);
                                 }
                             }
@@ -590,10 +643,17 @@ public class BotPersistenceManager extends SavedData {
                     var config = name.modid.config.ModConfig.getInstance();
                     if (config.preserveBotState && data.contains("State")) {
                         CompoundTag stateTag = data.getCompound("State");
+                        //? if >=1.21.2 {
+                        /*server.schedule(new net.minecraft.server.TickTask(
+                            server.getTickCount() + 5,
+                            () -> restoreBotState(bot, stateTag)
+                        ));
+                        *///?} else {
                         server.tell(new net.minecraft.server.TickTask(
                             server.getTickCount() + 5,
                             () -> restoreBotState(bot, stateTag)
                         ));
+                        //?}
                     }
 
                     loadedCount++;
@@ -659,10 +719,19 @@ public class BotPersistenceManager extends SavedData {
             float strafing = state.getFloat("Strafing");
             if (strafing > 0) controller.moveLeft(); else if (strafing < 0) controller.moveRight();
 
-            bot.setHealth(Math.min(state.getFloat("Health"), bot.getMaxHealth()));
+            // 恢复创造飞行状态（仅保存时为飞行的假人）
+            if (state.contains("Flying") && state.getBoolean("Flying")) {
+                bot.getAbilities().mayfly = true;
+                bot.getAbilities().flying = true;
+            }
+
+            // 血量钳上下界：防极端时序下保存的 0 血量被恢复成"活着但 0 血"
+            bot.setHealth(Math.max(1.0F, Math.min(state.getFloat("Health"), bot.getMaxHealth())));
             bot.getFoodData().setFoodLevel(state.getInt("FoodLevel"));
             bot.getFoodData().setSaturation(state.getFloat("Saturation"));
+            //? if <1.21.2 {
             bot.getFoodData().setExhaustion(state.getFloat("Exhaustion"));
+            //?}
 
             bot.experienceLevel = state.getInt("XpLevel");
             bot.experienceProgress = state.getFloat("XpProgress");

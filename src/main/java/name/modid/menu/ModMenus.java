@@ -20,8 +20,16 @@ public class ModMenus {
     public static void register() {
         BOT_INVENTORY = Registry.register(
             BuiltInRegistries.MENU,
+            //? if >=1.21 {
+            /*ResourceLocation.fromNamespaceAndPath("my-bot-mod", "bot_inventory"),
+            *///?} else {
             new ResourceLocation("my-bot-mod", "bot_inventory"),
+            //?}
+            //? if >=1.20.5 {
+            /*new ExtendedScreenHandlerType<>(BotInventoryMenu::new, BotInventoryMenu.BotInventoryData.CODEC)
+            *///?} else {
             new ExtendedScreenHandlerType<>(BotInventoryMenu::new)
+            //?}
         );
     }
 }

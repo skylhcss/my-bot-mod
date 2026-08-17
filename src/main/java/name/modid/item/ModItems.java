@@ -22,7 +22,11 @@ public class ModItems {
     public static void register() {
         Registry.register(
             BuiltInRegistries.ITEM,
+            //? if >=1.21 {
+            /*ResourceLocation.fromNamespaceAndPath("my-bot-mod", "command_baton"),
+            *///?} else {
             new ResourceLocation("my-bot-mod", "command_baton"),
+            //?}
             COMMAND_BATON
         );
 

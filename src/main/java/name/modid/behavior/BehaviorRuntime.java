@@ -68,11 +68,16 @@ public class BehaviorRuntime {
     private final List<Stmt> pollTriggers = new ArrayList<>();
     /** 触发器 → 当前活跃事件线程（重触发时重启该线程，Scratch 语义） */
     private final Map<Stmt, ThreadState> eventThreads = new IdentityHashMap<>();
+    /** 本 tick 内 broadcast 语句待分发的事件名（tick 末尾统一分发，避免同 tick 二次执行自身事件体） */
+    private final List<String> pendingBroadcasts = new ArrayList<>();
     /** 轮询触发器的边沿状态（true=条件已满足过，需恢复 false 才能再次触发） */
     private final Map<Stmt, Boolean> pollArmed = new IdentityHashMap<>();
 
     /** 当前已打开的容器位置（物理上一个假人同时只开一个，runtime 级共享） */
     private BlockPos openContainerPos;
+    /** 持续看向跟随的目标规格（followEntity 激活时非 null，stopFollow 置 null） */
+    private double followRange;
+    private String followType;
     private boolean finished;
     private String lastError;
     private int tickCounter;
@@ -260,18 +265,34 @@ public class BehaviorRuntime {
         }
         tickCounter++;
         pollEdgeTriggers();
+        updateFollow();
 
         boolean anyAlive = false;
         for (ThreadState t : threads) {
             if (t.done) {
                 continue;
             }
-            tickThread(t);
+            try {
+                tickThread(t);
+            } catch (RuntimeException e) {
+                // 条件求值/循环帧等非 execute 路径的异常也在此兑底，避免冒泡崩掉服务器 tick
+                lastError = program.sourceFile + ": 运行出错 - " + e.getMessage();
+                MyBotMod.LOGGER.warn("[行为] {}", lastError);
+            }
             if (finished) {
                 return; // stopSelf/stopAll 立即终止整个行为
             }
             if (!t.done) {
                 anyAlive = true;
+            }
+        }
+        // 本 tick 的 broadcast 延迟到线程循环结束后分发：
+        // 避免同步 fire 导致发送者自身事件体在同 tick 被执行两次
+        if (!pendingBroadcasts.isEmpty()) {
+            List<String> names = new ArrayList<>(pendingBroadcasts);
+            pendingBroadcasts.clear();
+            for (String name : names) {
+                BehaviorManager.broadcastEvent(name);
             }
         }
         // 全部线程跑完：无触发器且不循环则结束；有触发器则驻留监听
@@ -414,6 +435,12 @@ public class BehaviorRuntime {
                     c.lookAt(target.getEyePosition());
                 }
             }
+            case "followEntity" -> {
+                // 持续看向跟随：每 tick 锁定最近的匹配实体（由 tick() 的 updateFollow 驱动）
+                followRange = s.arg("range") == null ? 16 : evalNum(s.arg("range"));
+                followType = s.arg("type") == null ? "" : evalStr(s.arg("type"));
+            }
+            case "stopFollow" -> stopFollow();
             case "turn" -> c.turn((float) evalNum(s.arg("yaw")), (float) evalNum(s.arg("pitch")));
             case "attack" -> {
                 String mode = s.arg("mode") == null ? "once" : evalStr(s.arg("mode"));
@@ -481,14 +508,26 @@ public class BehaviorRuntime {
                     Container container = rawContainer(pos);
                     if (container != null) {
                         BotOutput.writeItems(evalStr(s.arg("file")), evalStr(s.arg("format")),
-                            bot.getName().getString(), "container", collectItems(container));
+                            bot.getName().getString(), "container", collectItems(container), overwriteMode(s));
                     }
                 });
             }
             case "dumpInventory" -> BotOutput.writeItems(evalStr(s.arg("file")), evalStr(s.arg("format")),
-                bot.getName().getString(), "inventory", collectItems(bot.getInventory()));
+                bot.getName().getString(), "inventory", collectItems(bot.getInventory()), overwriteMode(s));
             case "output" -> BotOutput.writeText(evalStr(s.arg("file")), evalStr(s.arg("format")),
-                bot == null ? "test" : bot.getName().getString(), evalStr(s.arg("content")));
+                bot == null ? "test" : bot.getName().getString(), evalStr(s.arg("content")), overwriteMode(s));
+            case "outputRaw" -> BotOutput.writeRaw(evalStr(s.arg("file")),
+                evalStr(s.arg("content")), overwriteMode(s));
+            case "outputTemplate" -> {
+                // 变量快照：模板占位符 {var:名} 取当前变量值
+                Map<String, String> snapshot = new HashMap<>();
+                vars.forEach((k, v) -> snapshot.put(k, v.asString()));
+                BotOutput.writeTemplate(evalStr(s.arg("file")), evalStr(s.arg("format")),
+                    bot == null ? "test" : bot.getName().getString(),
+                    evalStr(s.arg("template")), snapshot, overwriteMode(s));
+            }
+            case "outputTable" -> BotOutput.writeTableRow(evalStr(s.arg("file")),
+                strListArg(s, "header"), strListArg(s, "row"), overwriteMode(s));
             case "set" -> vars.put(evalStr(s.arg("var")), eval(s.arg("value")));
             case "change" -> {
                 String var = evalStr(s.arg("var"));
@@ -514,7 +553,12 @@ public class BehaviorRuntime {
                 }
             });
             case "listClear" -> mutateList(s, (list, unused) -> list.clear());
-            case "broadcast" -> BehaviorManager.broadcastEvent(evalStr(s.arg("name")));
+            case "broadcast" -> {
+                String name = evalStr(s.arg("name"));
+                if (!name.isEmpty()) {
+                    pendingBroadcasts.add(name);
+                }
+            }
             case "repeat" -> {
                 int times = (int) evalNum(s.arg("times"));
                 List<Stmt> body = s.block("body");
@@ -607,6 +651,22 @@ public class BehaviorRuntime {
         }
     }
 
+    /** 输出类语句的写入模式：mode=overwrite 时覆盖，缺省追加 */
+    private boolean overwriteMode(Stmt s) {
+        return s.arg("mode") != null && "overwrite".equals(evalStr(s.arg("mode")));
+    }
+
+    /** 读取语句的列表型字符串参数（缺省为空列表） */
+    private List<String> strListArg(Stmt s, String key) {
+        List<String> out = new ArrayList<>();
+        if (s.arg(key) != null) {
+            for (BehaviorValue v : eval(s.arg(key)).asList()) {
+                out.add(v.asString());
+            }
+        }
+        return out;
+    }
+
     /** 朝向：相对方向复用控制器；绝对方位换算 yaw（south=0, west=90, north=180, east=-90） */
     private void look(BotActionController c, String dir) {
         switch (dir) {
@@ -684,6 +744,51 @@ public class BehaviorRuntime {
                 && (type.isEmpty() || BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString().equals(type))).size();
     }
 
+    /** 找最近的匹配实体（含非生物：末影珍珠/TNT/投掷物等；type 空=任意） */
+    private net.minecraft.world.entity.Entity nearestAnyEntity(double range, String type) {
+        double r = Math.max(1, Math.min(32, range));
+        List<net.minecraft.world.entity.Entity> found = bot.serverLevel().getEntities(bot,
+            bot.getBoundingBox().inflate(r), e -> e != null && e.isAlive()
+                && (type.isEmpty() || BuiltInRegistries.ENTITY_TYPE.getKey(e.getType()).toString().equals(type)));
+        net.minecraft.world.entity.Entity nearest = null;
+        double best = Double.MAX_VALUE;
+        for (net.minecraft.world.entity.Entity e : found) {
+            double d = e.distanceToSqr(bot);
+            if (d < best) {
+                best = d;
+                nearest = e;
+            }
+        }
+        return nearest;
+    }
+
+    /** 视线跟随：每 tick 锁定最近的匹配实体（followEntity 激活时由 tick() 调用） */
+    private void updateFollow() {
+        if (followType == null || bot == null) {
+            return;
+        }
+        LivingEntity target = nearestEntity(followRange, followType);
+        if (target != null) {
+            bot.getActionController().lookAt(target.getEyePosition());
+        }
+    }
+
+    /** 停止视线跟随 */
+    private void stopFollow() {
+        followType = null;
+    }
+
+    /** 偏航角 → 四方位字符串（south=0, west=90, north=180, east=-90） */
+    private static String facingAxis(float yaw) {
+        float y = yaw % 360.0F;
+        if (y < -180.0F) y += 360.0F;
+        if (y >= 180.0F) y -= 360.0F;
+        if (y >= -45.0F && y < 45.0F) return "south";
+        if (y >= 45.0F && y < 135.0F) return "west";
+        if (y >= -135.0F && y < -45.0F) return "east";
+        return "north";
+    }
+
     // ==================== 列表语句辅助 ====================
 
     /** 取/建变量中的列表并就地修改（索引参数 1-based，Scratch 风格） */
@@ -753,9 +858,12 @@ public class BehaviorRuntime {
         t.afterWait = () -> {
             var state = bot.serverLevel().getBlockState(pos);
             var provider = state.getMenuProvider(bot.serverLevel(), pos);
-            if (provider != null) {
-                bot.openMenu(provider);
+            if (provider == null) {
+                // 方块已变/无菜单：不标记为已打开，避免后续操作误走"已打开"快捷路径
+                lastError = program.sourceFile + ": 容器 " + pos.toShortString() + " 无法打开（无菜单）";
+                return;
             }
+            bot.openMenu(provider);
             openContainerPos = pos;
             action.accept(pos);
         };
@@ -854,7 +962,7 @@ public class BehaviorRuntime {
         int inserted = 0;
         for (int i = 0; i < container.getContainerSize() && !stack.isEmpty(); i++) {
             ItemStack slot = container.getItem(i);
-            if (!slot.isEmpty() && ItemStack.isSameItemSameTags(slot, stack)
+            if (!slot.isEmpty() && sameStack(slot, stack)
                     && slot.getCount() < slot.getMaxStackSize()) {
                 int room = slot.getMaxStackSize() - slot.getCount();
                 int add = Math.min(room, stack.getCount());
@@ -871,6 +979,15 @@ public class BehaviorRuntime {
             }
         }
         return inserted;
+    }
+
+    /** 物品堆同类判定（1.20.5+ 更名为 isSameItemSameComponents） */
+    private static boolean sameStack(ItemStack a, ItemStack b) {
+        //? if >=1.20.5 {
+        /*return ItemStack.isSameItemSameComponents(a, b);
+        *///?} else {
+        return ItemStack.isSameItemSameTags(a, b);
+        //?}
     }
 
     private static String itemId(ItemStack stack) {
@@ -998,7 +1115,11 @@ public class BehaviorRuntime {
             case "concat" -> BehaviorValue.str(l.asString() + r.asString());
             case "min" -> BehaviorValue.num(Math.min(l.asNumber(), r.asNumber()));
             case "max" -> BehaviorValue.num(Math.max(l.asNumber(), r.asNumber()));
-            case "pow" -> BehaviorValue.num(Math.pow(l.asNumber(), r.asNumber()));
+            case "pow" -> {
+                double p = Math.pow(l.asNumber(), r.asNumber());
+                // 非有限结果（NaN/Infinity，如 0^0、负数小数次幂）归零，防止 NaN 传播挂死条件循环
+                yield BehaviorValue.num(Double.isFinite(p) ? p : 0);
+            }
             default -> BehaviorValue.num(0);
         };
     }
@@ -1197,6 +1318,58 @@ public class BehaviorRuntime {
                     }
                 }
                 return BehaviorValue.num(total);
+            }
+            case "holding": {
+                String filter = argStr(a, 0);
+                return BehaviorValue.bool(itemId(bot.getMainHandItem()).equals(filter));
+            }
+            case "hasItem": {
+                String filter = argStr(a, 0);
+                boolean found = false;
+                for (int i = 0; i < bot.getInventory().getContainerSize() && !found; i++) {
+                    ItemStack stack = bot.getInventory().getItem(i);
+                    found = !stack.isEmpty() && itemId(stack).equals(filter);
+                }
+                return BehaviorValue.bool(found);
+            }
+            case "fishHooked": {
+                // 鱼咬钩判定：钓竿浮漂的 nibble > 0（经 FishingHookAccessor 读私有字段）
+                boolean hooked = bot.fishing != null && !bot.fishing.isRemoved()
+                    && ((name.modid.mixin.FishingHookAccessor) (Object) bot.fishing).myBotMod$getNibble() > 0;
+                return BehaviorValue.bool(hooked);
+            }
+            case "usingItem": return BehaviorValue.bool(bot.isUsingItem());
+            case "blockBelow": {
+                BlockPos pos = bot.blockPosition().below();
+                if (!bot.serverLevel().hasChunkAt(pos)) {
+                    return BehaviorValue.str("minecraft:air");
+                }
+                return BehaviorValue.str(BuiltInRegistries.BLOCK.getKey(
+                    bot.serverLevel().getBlockState(pos).getBlock()).toString());
+            }
+            case "facing": return BehaviorValue.str(facingAxis(bot.getYRot()));
+            case "nearestEntityCoord": {
+                double range = a.isEmpty() ? 16 : evalNum(a.get(0));
+                String type = a.size() > 1 ? evalStr(a.get(1)) : "";
+                String axis = a.size() > 2 ? evalStr(a.get(2)) : "x";
+                var e = nearestAnyEntity(range, type);
+                if (e == null) {
+                    return BehaviorValue.num(-1);
+                }
+                if ("y".equals(axis)) return BehaviorValue.num(e.getY());
+                if ("z".equals(axis)) return BehaviorValue.num(e.getZ());
+                return BehaviorValue.num(e.getX());
+            }
+            case "nearestEntityDistance": {
+                double range = a.isEmpty() ? 16 : evalNum(a.get(0));
+                String type = a.size() > 1 ? evalStr(a.get(1)) : "";
+                var e = nearestAnyEntity(range, type);
+                return BehaviorValue.num(e == null ? -1 : e.distanceTo(bot));
+            }
+            case "nearestEntityExists": {
+                double range = a.isEmpty() ? 16 : evalNum(a.get(0));
+                String type = a.size() > 1 ? evalStr(a.get(1)) : "";
+                return BehaviorValue.bool(nearestAnyEntity(range, type) != null);
             }
             default:
                 return BehaviorValue.num(0);

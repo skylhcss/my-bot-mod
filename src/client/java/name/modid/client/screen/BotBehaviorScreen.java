@@ -6,6 +6,7 @@ import name.modid.client.screen.widget.ModernButton;
 import name.modid.client.screen.widget.UI;
 import name.modid.config.ModConfig;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
@@ -13,12 +14,14 @@ import net.minecraft.network.chat.Component;
 /**
  * 单个假人的行为管理界面（右键假人面板 → 行为管理，每假人各具一个）
  *
- * - 内容复用 BehaviorPage（播放列表/启动停止/可用行为/错误）
+ * - 内容复用 BehaviorPage（运行控制/播放列表/可用行为/错误）
+ * - 顶部状态行：运行徽标 + 正在执行的行为与队列进度
+ * - 搜索框：按名称实时过滤可用行为（中英文均可）
  * - 打开即请求，之后每 40 tick 轮询一次；收到 BEHAVIOR_LIST 包立即重建（无需退出重进）
  */
 public class BotBehaviorScreen extends Screen {
 
-    /** 轮询间隔（tick）：行为运行状态、外部文件变化的兜底刷新 */
+    /** 轮询间隔（tick）：行为运行状态、外部文件变化的周期性刷新 */
     private static final int POLL_INTERVAL = 40;
 
     private final String botName;
@@ -32,27 +35,42 @@ public class BotBehaviorScreen extends Screen {
     private int contentY;
     private int contentHeight;
     private int tickCounter;
+    private EditBox searchBox;
 
     public BotBehaviorScreen(String botName, Screen parent) {
         super(Component.translatable("gui.my-bot-mod.behavior.screen_title", botName));
         this.botName = botName;
         this.parent = parent;
         this.page = new BehaviorPage(botName, ModConfig.getInstance());
+        this.page.setHost(this);
     }
 
     @Override
     protected void init() {
         super.init();
-        panelWidth = Math.min(360, this.width - 40);
-        panelHeight = Math.min(240, this.height - 40);
+        panelWidth = Math.min(420, this.width - 24);
+        panelHeight = Math.min(264, this.height - 24);
         panelX = (this.width - panelWidth) / 2;
         panelY = (this.height - panelHeight) / 2;
-        contentY = panelY + 30;
-        contentHeight = panelHeight - 30 - 26;
+        contentY = panelY + 34;
+        contentHeight = panelHeight - 34 - 26;
 
         int pad = DesignTokens.SCROLL_AREA_PADDING;
         page.init(panelX + pad, contentY, panelWidth - pad * 2, contentHeight, this.minecraft, this.font);
         page.sendRequest();
+
+        // 顶部右侧搜索框（实时过滤可用行为）
+        String keep = searchBox == null ? "" : searchBox.getValue();
+        searchBox = new EditBox(this.font, panelX + panelWidth - 106, panelY + 8, 100, 14,
+            Component.translatable("gui.my-bot-mod.search.hint"));
+        searchBox.setMaxLength(32);
+        searchBox.setValue(keep);
+        searchBox.setSuggestion(Component.translatable("gui.my-bot-mod.search.hint").getString());
+        searchBox.setResponder(page::setFilter);
+        this.addRenderableWidget(searchBox);
+        if (!keep.isEmpty()) {
+            page.setFilter(keep);
+        }
 
         // 底部：返回面板
         this.addRenderableWidget(new ModernButton(
@@ -62,10 +80,9 @@ public class BotBehaviorScreen extends Screen {
             CommonComponents.GUI_BACK, b -> onClose()));
     }
 
-    /** 收到 BEHAVIOR_LIST 包时由客户端接收器调用：就地重建内容 */
+    /** 收到 BEHAVIOR_LIST 包时由客户端接收器调用：就地重建内容（保留滚动位置） */
     public void refresh() {
-        int pad = DesignTokens.SCROLL_AREA_PADDING;
-        page.init(panelX + pad, contentY, panelWidth - pad * 2, contentHeight, this.minecraft, this.font);
+        page.rebuild();
     }
 
     @Override
@@ -88,13 +105,15 @@ public class BotBehaviorScreen extends Screen {
 
         float sc = DesignTokens.TEXT_SCALE;
         UI.drawScaledCentered(graphics, this.font, this.title,
-            panelX + panelWidth / 2, panelY + 8, sc * 1.15F, DesignTokens.HEADER_TEXT_COLOR);
-        // 运行状态徽标
+            panelX + panelWidth / 2, panelY + 6, sc * 1.15F, DesignTokens.HEADER_TEXT_COLOR);
+        // 运行状态徽标 + 正在执行的行为/进度
         boolean running = page.isRunning();
-        UI.drawScaledCentered(graphics, this.font,
-            Component.translatable(running
-                ? "gui.my-bot-mod.behavior.state.running" : "gui.my-bot-mod.behavior.state.idle"),
-            panelX + panelWidth / 2, panelY + 19, sc * 0.9F,
+        String statusLine = page.statusLine();
+        Component badge = Component.translatable(running
+            ? "gui.my-bot-mod.behavior.state.running" : "gui.my-bot-mod.behavior.state.idle");
+        Component line = statusLine.isEmpty() ? badge : badge.copy().append(Component.literal(" · " + statusLine));
+        UI.drawScaledCentered(graphics, this.font, line,
+            panelX + panelWidth / 2, panelY + 17, sc * 0.9F,
             running ? DesignTokens.ACCENT : 0xFF888888);
 
         page.render(graphics, mouseX, mouseY, partialTick);

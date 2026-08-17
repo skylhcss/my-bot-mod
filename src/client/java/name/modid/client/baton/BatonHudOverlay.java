@@ -1,7 +1,6 @@
 package name.modid.client.baton;
 
 import name.modid.client.BotClientData;
-import name.modid.config.ModConfig;
 import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -23,7 +22,6 @@ public class BatonHudOverlay {
     private static final int COLOR_DIM = 0xFFCCCCCC;
     private static final int COLOR_GREEN = 0xFF55FF55;
     private static final int COLOR_GOLD = 0xFFFFAA00;
-    private static final int COLOR_RED = 0xFFFF5555;
     private static final int COLOR_AQUA = 0xFF55FFFF;
 
     private static final int MARGIN = 4;
@@ -31,10 +29,15 @@ public class BatonHudOverlay {
     private static final int GAP = 5;
 
     public static void register() {
-        HudRenderCallback.EVENT.register(BatonHudOverlay::onHudRender);
+        // 1.21+ HudRenderCallback 第二参数从 float 改为 RenderTickCounter/DeltaTracker，用 lambda 屏蔽差异
+        //? if >=1.21 {
+        /*HudRenderCallback.EVENT.register((g, delta) -> onHudRender(g));
+        *///?} else {
+        HudRenderCallback.EVENT.register((g, tickDelta) -> onHudRender(g));
+        //?}
     }
 
-    private static void onHudRender(GuiGraphics g, float tickDelta) {
+    private static void onHudRender(GuiGraphics g) {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
         if (mc.screen != null || mc.options.hideGui) return;
@@ -63,17 +66,10 @@ public class BatonHudOverlay {
         y += GAP;
         y = line(g, font, x, y, Component.translatable("gui.my-bot-mod.baton.switch_hint"), COLOR_GRAY);
         y = line(g, font, x, y, Component.translatable("gui.my-bot-mod.baton.select_hint"), COLOR_GRAY);
+
         y = line(g, font, x, y, Component.translatable(teleport
             ? "gui.my-bot-mod.baton.action.teleport"
             : "gui.my-bot-mod.baton.action.pathfind"), COLOR_GRAY);
-
-        if (teleport) {
-            boolean allowed = mc.player.getAbilities().instabuild
-                || ModConfig.getInstance().allowBatonTeleportNonCreative;
-            if (!allowed) {
-                y = line(g, font, x, y, Component.translatable("gui.my-bot-mod.baton.tp_warn"), COLOR_RED);
-            }
-        }
 
         y += GAP;
         String selected = BatonClientState.getSelectedBotName();

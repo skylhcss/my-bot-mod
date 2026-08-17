@@ -20,6 +20,78 @@ import net.minecraft.server.level.ServerPlayer;
  */
 public class BotNetworking {
 
+    //? if >=1.20.5 {
+    /*// ===== 1.20.5+ ：Fabric 改用 CustomPacketPayload，不再支持 ResourceLocation 通道 =====
+
+    // 通用负载：携带已序列化的原始缓冲区（复用下方既有的 buf 读写逻辑）
+    // 记录自动生成的 type() 访问器（返回 Type<RawPayload>）即以协变满足接口要求
+    public record RawPayload(net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> type, FriendlyByteBuf data)
+            implements net.minecraft.network.protocol.common.custom.CustomPacketPayload {
+    }
+
+    private static ResourceLocation rl(String path) {
+        //? if >=1.21 {
+        return ResourceLocation.fromNamespaceAndPath("my-bot-mod", path);
+        //?} else {
+        return new ResourceLocation("my-bot-mod", path);
+        //?}
+    }
+
+    private static net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> type(String path) {
+        return new net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<>(rl(path));
+    }
+
+    private static net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, RawPayload> codec(
+            net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> type) {
+        return net.minecraft.network.codec.StreamCodec.of(
+            (buf, payload) -> buf.writeBytes(payload.data()),
+            buf -> {
+                // 拷贝到堆内存缓冲区：网络 buf 归 Netty 池管理，处理器异步读取不能持有其切片
+                byte[] bytes = new byte[buf.readableBytes()];
+                buf.readBytes(bytes);
+                return new RawPayload(type, new FriendlyByteBuf(io.netty.buffer.Unpooled.wrappedBuffer(bytes)));
+            }
+        );
+    }
+
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> OPEN_BOT_PANEL_TYPE = type("open_bot_panel");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BOT_LIST_TYPE = type("bot_list");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> UPDATE_SETTING_TYPE = type("update_bot_setting");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> REQUEST_BOT_LIST_TYPE = type("request_bot_list");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BATON_ACTION_TYPE = type("baton_action");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BOT_LIST_UPDATE_TYPE = type("bot_list_update");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BOT_SKIN_TYPE = type("bot_skin");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> REQUEST_BEHAVIOR_LIST_TYPE = type("request_behavior_list");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BEHAVIOR_COMMAND_TYPE = type("behavior_command");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BEHAVIOR_LIST_TYPE = type("behavior_list");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BEHAVIOR_SAVE_TYPE = type("behavior_save");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BEHAVIOR_SOURCE_REQUEST_TYPE = type("behavior_source_request");
+    public static final net.minecraft.network.protocol.common.custom.CustomPacketPayload.Type<RawPayload> BEHAVIOR_SOURCE_TYPE = type("behavior_source");
+
+    // 负载类型必须在注册接收器前注册；S2C 与 C2S 分别注册到对应方向
+    // 幂等：单人游戏中服务端与客户端初始化都会调用，重复注册会抛异常
+    private static boolean payloadTypesRegistered;
+    public static void registerPayloadTypes() {
+        if (payloadTypesRegistered) return;
+        payloadTypesRegistered = true;
+        var s2c = net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.playS2C();
+        s2c.register(OPEN_BOT_PANEL_TYPE, codec(OPEN_BOT_PANEL_TYPE));
+        s2c.register(BOT_LIST_TYPE, codec(BOT_LIST_TYPE));
+        s2c.register(BOT_LIST_UPDATE_TYPE, codec(BOT_LIST_UPDATE_TYPE));
+        s2c.register(BOT_SKIN_TYPE, codec(BOT_SKIN_TYPE));
+        s2c.register(BEHAVIOR_LIST_TYPE, codec(BEHAVIOR_LIST_TYPE));
+        s2c.register(BEHAVIOR_SOURCE_TYPE, codec(BEHAVIOR_SOURCE_TYPE));
+        var c2s = net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry.playC2S();
+        c2s.register(UPDATE_SETTING_TYPE, codec(UPDATE_SETTING_TYPE));
+        c2s.register(REQUEST_BOT_LIST_TYPE, codec(REQUEST_BOT_LIST_TYPE));
+        c2s.register(BATON_ACTION_TYPE, codec(BATON_ACTION_TYPE));
+        c2s.register(REQUEST_BEHAVIOR_LIST_TYPE, codec(REQUEST_BEHAVIOR_LIST_TYPE));
+        c2s.register(BEHAVIOR_COMMAND_TYPE, codec(BEHAVIOR_COMMAND_TYPE));
+        c2s.register(BEHAVIOR_SAVE_TYPE, codec(BEHAVIOR_SAVE_TYPE));
+        c2s.register(BEHAVIOR_SOURCE_REQUEST_TYPE, codec(BEHAVIOR_SOURCE_REQUEST_TYPE));
+    }
+    *///?} else {
+
     /** S2C：打开假人设置面板 */
     public static final ResourceLocation OPEN_BOT_PANEL =
         new ResourceLocation("my-bot-mod", "open_bot_panel");
@@ -52,19 +124,34 @@ public class BotNetworking {
     public static final ResourceLocation REQUEST_BEHAVIOR_LIST =
         new ResourceLocation("my-bot-mod", "request_behavior_list");
 
-    /** C2S：行为指令（0=分配 1=移除 2=启动 3=停止 4=重扫 5=上移） */
+    /** C2S：行为指令（0=分配 1=移除 2=启动 3=停止 4=重扫 5=上移 6=快速执行单个 7=下移 8=清空列表） */
     public static final ResourceLocation BEHAVIOR_COMMAND =
         new ResourceLocation("my-bot-mod", "behavior_command");
 
-    /** S2C：行为列表（可用行为 + 指定假人状态 + 解析错误） */
+    /** S2C：行为列表（可用行为 + 指定假人状态 + 解析错误 + 运行进度） */
     public static final ResourceLocation BEHAVIOR_LIST =
         new ResourceLocation("my-bot-mod", "behavior_list");
+
+    /** C2S：保存行为文件（游戏内编辑器导出：JSON原文 + 文件名 + 目标目录） */
+    public static final ResourceLocation BEHAVIOR_SAVE =
+        new ResourceLocation("my-bot-mod", "behavior_save");
+
+    /** C2S：请求行为文件原文（编辑器打开已有行为） */
+    public static final ResourceLocation BEHAVIOR_SOURCE_REQUEST =
+        new ResourceLocation("my-bot-mod", "behavior_source_request");
+
+    /** S2C：行为文件原文（文件名 + 内容，不存在时内容为空） */
+    public static final ResourceLocation BEHAVIOR_SOURCE =
+        new ResourceLocation("my-bot-mod", "behavior_source");
+    //?}
 
     /** 网络协议版本（C2S 包携带并由服务端校验，防旧客户端/异常输入） */
     public static final int PROTOCOL_VERSION = 1;
     private static final int MAX_NAME_LEN = 16;
     private static final int MAX_KEY_LEN = 32;
     private static final int MAX_BEHAVIOR_LEN = 128;
+    private static final int MAX_BEHAVIOR_JSON_LEN = name.modid.behavior.BehaviorStorage.MAX_JSON_LENGTH;
+    private static final int MAX_DIR_LEN = 512;
 
     /** 创建带协议版本前缀的 C2S 缓冲（客户端发送 C2S 包时使用） */
     public static FriendlyByteBuf c2s() {
@@ -82,65 +169,175 @@ public class BotNetworking {
      * 注册服务端接收器（在主初始化中调用一次）
      */
     public static void registerServerReceivers() {
+        //? if >=1.20.5 {
+        /*registerPayloadTypes();
+        ServerPlayNetworking.registerGlobalReceiver(UPDATE_SETTING_TYPE,
+            (payload, ctx) -> handleUpdateSetting(ctx.server(), ctx.player(), payload.data()));
+        ServerPlayNetworking.registerGlobalReceiver(REQUEST_BOT_LIST_TYPE,
+            (payload, ctx) -> handleRequestBotList(ctx.server(), ctx.player(), payload.data()));
+        ServerPlayNetworking.registerGlobalReceiver(BATON_ACTION_TYPE,
+            (payload, ctx) -> handleBatonActionPacket(ctx.server(), ctx.player(), payload.data()));
+        ServerPlayNetworking.registerGlobalReceiver(REQUEST_BEHAVIOR_LIST_TYPE,
+            (payload, ctx) -> handleRequestBehaviorList(ctx.server(), ctx.player(), payload.data()));
+        ServerPlayNetworking.registerGlobalReceiver(BEHAVIOR_COMMAND_TYPE,
+            (payload, ctx) -> handleBehaviorCommandPacket(ctx.server(), ctx.player(), payload.data()));
+        ServerPlayNetworking.registerGlobalReceiver(BEHAVIOR_SAVE_TYPE,
+            (payload, ctx) -> handleBehaviorSave(ctx.server(), ctx.player(), payload.data()));
+        ServerPlayNetworking.registerGlobalReceiver(BEHAVIOR_SOURCE_REQUEST_TYPE,
+            (payload, ctx) -> handleBehaviorSourceRequest(ctx.server(), ctx.player(), payload.data()));
+        *///?} else {
         // 更新假人个人配置
         ServerPlayNetworking.registerGlobalReceiver(UPDATE_SETTING,
-            (server, player, handler, buf, responseSender) -> {
-                if (badVersion(buf)) return;
-                String botName = buf.readUtf(MAX_NAME_LEN);
-                String key = buf.readUtf(MAX_KEY_LEN);
-                int stateId = buf.readVarInt();
-                server.execute(() -> {
-                    if (!player.hasPermissions(2) && !name.modid.config.ModConfig.getInstance().allowNonOpControlBot) {
-                        return;
-                    }
-                    BotPlayer bot = BotManager.getBot(botName);
-                    if (bot != null) {
-                        bot.getSettings().set(key, BotSettings.Override.byId(stateId));
-                        // 即时应用外观类设置（发光）
-                        bot.setGlowingTag(BotSettings.resolve(bot.getSettings().glowing,
-                            name.modid.config.ModConfig.getInstance().botGlowing));
-                        BotPersistenceManager.saveBot(bot);
-                    }
-                });
-            });
+            (server, player, handler, buf, responseSender) -> handleUpdateSetting(server, player, buf));
 
         // 请求假人列表
         ServerPlayNetworking.registerGlobalReceiver(REQUEST_BOT_LIST,
-            (server, player, handler, buf, responseSender) -> {
-                if (badVersion(buf)) return;
-                server.execute(() -> sendBotList(player));
-            });
+            (server, player, handler, buf, responseSender) -> handleRequestBotList(server, player, buf));
 
         // 指挥棒下令（寻路/传送）
         ServerPlayNetworking.registerGlobalReceiver(BATON_ACTION,
-            (server, player, handler, buf, responseSender) -> {
-                if (badVersion(buf)) return;
-                int actionType = buf.readVarInt();
-                String botName = buf.readUtf(MAX_NAME_LEN);
-                double x = buf.readDouble();
-                double y = buf.readDouble();
-                double z = buf.readDouble();
-                server.execute(() -> handleBatonAction(player, actionType, botName, x, y, z));
-            });
+            (server, player, handler, buf, responseSender) -> handleBatonActionPacket(server, player, buf));
 
         // 请求行为列表
         ServerPlayNetworking.registerGlobalReceiver(REQUEST_BEHAVIOR_LIST,
-            (server, player, handler, buf, responseSender) -> {
-                if (badVersion(buf)) return;
-                String botName = buf.readUtf(MAX_NAME_LEN);
-                server.execute(() -> sendBehaviorList(player, botName));
-            });
+            (server, player, handler, buf, responseSender) -> handleRequestBehaviorList(server, player, buf));
 
-        // 行为指令（分配/移除/启动/停止/重扫）
+        // 行为指令（分配/移除/启动/停止/重扫/上移/快速执行/下移）
         ServerPlayNetworking.registerGlobalReceiver(BEHAVIOR_COMMAND,
-            (server, player, handler, buf, responseSender) -> {
-                if (badVersion(buf)) return;
-                int action = buf.readVarInt();
-                String botName = buf.readUtf(MAX_NAME_LEN);
-                String behaviorName = buf.readUtf(MAX_BEHAVIOR_LEN);
-                server.execute(() -> handleBehaviorCommand(player, action, botName, behaviorName));
-            });
+            (server, player, handler, buf, responseSender) -> handleBehaviorCommandPacket(server, player, buf));
+
+        // 保存行为文件（游戏内编辑器导出）
+        ServerPlayNetworking.registerGlobalReceiver(BEHAVIOR_SAVE,
+            (server, player, handler, buf, responseSender) -> handleBehaviorSave(server, player, buf));
+
+        // 请求行为文件原文（编辑器打开已有行为）
+        ServerPlayNetworking.registerGlobalReceiver(BEHAVIOR_SOURCE_REQUEST,
+            (server, player, handler, buf, responseSender) -> handleBehaviorSourceRequest(server, player, buf));
+        //?}
     }
+
+    private static void handleUpdateSetting(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        if (badVersion(buf)) return;
+        String botName = buf.readUtf(MAX_NAME_LEN);
+        String key = buf.readUtf(MAX_KEY_LEN);
+        int stateId = buf.readVarInt();
+        server.execute(() -> {
+            if (!player.hasPermissions(2) && !name.modid.config.ModConfig.getInstance().allowNonOpControlBot) {
+                return;
+            }
+            BotPlayer bot = BotManager.getBot(botName);
+            if (bot != null) {
+                bot.getSettings().set(key, BotSettings.Override.byId(stateId));
+                // 即时应用外观类设置（发光）
+                bot.setGlowingTag(BotSettings.resolve(bot.getSettings().glowing,
+                    name.modid.config.ModConfig.getInstance().botGlowing));
+                BotPersistenceManager.saveBot(bot);
+            }
+        });
+    }
+
+    private static void handleRequestBotList(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        if (badVersion(buf)) return;
+        server.execute(() -> sendBotList(player));
+    }
+
+    private static void handleBatonActionPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        if (badVersion(buf)) return;
+        int actionType = buf.readVarInt();
+        String botName = buf.readUtf(MAX_NAME_LEN);
+        double x = buf.readDouble();
+        double y = buf.readDouble();
+        double z = buf.readDouble();
+        server.execute(() -> handleBatonAction(player, actionType, botName, x, y, z));
+    }
+
+    private static void handleRequestBehaviorList(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        if (badVersion(buf)) return;
+        String botName = buf.readUtf(MAX_NAME_LEN);
+        server.execute(() -> sendBehaviorList(player, botName));
+    }
+
+    private static void handleBehaviorCommandPacket(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        if (badVersion(buf)) return;
+        int action = buf.readVarInt();
+        String botName = buf.readUtf(MAX_NAME_LEN);
+        String behaviorName = buf.readUtf(MAX_BEHAVIOR_LEN);
+        server.execute(() -> handleBehaviorCommand(player, action, botName, behaviorName));
+    }
+
+    private static void handleBehaviorSave(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        if (badVersion(buf)) return;
+        String fileName = buf.readUtf(MAX_BEHAVIOR_LEN);
+        String dir = buf.readUtf(MAX_DIR_LEN);
+        String json = buf.readUtf(MAX_BEHAVIOR_JSON_LEN);
+        server.execute(() -> {
+            if (!player.hasPermissions(2)
+                    && !name.modid.config.ModConfig.getInstance().allowNonOpControlBot) {
+                return;
+            }
+            String error = name.modid.behavior.BehaviorStorage.save(fileName, json, dir);
+            if (error == null) {
+                player.sendSystemMessage(net.minecraft.network.chat.Component.translatable(
+                    "msg.my-bot-mod.behavior.save.ok", fileName));
+            } else {
+                player.sendSystemMessage(net.minecraft.network.chat.Component.translatable(
+                    "msg.my-bot-mod.behavior.save.fail", error));
+            }
+        });
+    }
+
+    private static void handleBehaviorSourceRequest(MinecraftServer server, ServerPlayer player, FriendlyByteBuf buf) {
+        if (badVersion(buf)) return;
+        String fileName = buf.readUtf(MAX_BEHAVIOR_LEN);
+        server.execute(() -> {
+            if (!player.hasPermissions(2)
+                    && !name.modid.config.ModConfig.getInstance().allowNonOpControlBot) {
+                return;
+            }
+            String content = name.modid.behavior.BehaviorStorage.readSource(fileName);
+            FriendlyByteBuf out = PacketByteBufs.create();
+            out.writeUtf(fileName, MAX_BEHAVIOR_LEN);
+            out.writeUtf(content == null ? "" : content, MAX_BEHAVIOR_JSON_LEN);
+            sendBehaviorSourcePayload(player, out);
+        });
+    }
+
+    // ==================== 版本分支发送辅助 ====================
+    // 各通道负载的 buf 由上方逻辑构建，此处仅负责按版本选择传输方式
+
+    //? if >=1.20.5 {
+    /*private static void sendOpenPanelPayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, new RawPayload(OPEN_BOT_PANEL_TYPE, buf));
+    }
+    private static void sendBotListPayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, new RawPayload(BOT_LIST_TYPE, buf));
+    }
+    private static void sendBotListUpdatePayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, new RawPayload(BOT_LIST_UPDATE_TYPE, buf));
+    }
+    private static void sendBehaviorListPayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, new RawPayload(BEHAVIOR_LIST_TYPE, buf));
+    }
+    private static void sendBehaviorSourcePayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, new RawPayload(BEHAVIOR_SOURCE_TYPE, buf));
+    }
+    *///?} else {
+    private static void sendOpenPanelPayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, OPEN_BOT_PANEL, buf);
+    }
+    private static void sendBotListPayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, BOT_LIST, buf);
+    }
+    private static void sendBotListUpdatePayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, BOT_LIST_UPDATE, buf);
+    }
+    private static void sendBehaviorListPayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, BEHAVIOR_LIST, buf);
+    }
+    private static void sendBehaviorSourcePayload(ServerPlayer player, FriendlyByteBuf buf) {
+        ServerPlayNetworking.send(player, BEHAVIOR_SOURCE, buf);
+    }
+    //?}
 
     /**
      * 处理指挥棒下令：校验权限后让假人寻路或传送到指定位置
@@ -153,9 +350,18 @@ public class BotNetworking {
         }
         // 校验坐标：拒绝 NaN/Infinity、世界边界外、以及远超建筑高度的 y（防恶意/异常客户端触发寻路死循环或在未加载区块操作）
         net.minecraft.server.level.ServerLevel plevel = player.serverLevel();
+        int minBuild;
+        int maxBuild;
+        //? if >=1.21.2 {
+        /*minBuild = plevel.dimensionType().minY();
+        maxBuild = minBuild + plevel.dimensionType().height();
+        *///?} else {
+        minBuild = plevel.getMinBuildHeight();
+        maxBuild = plevel.getMaxBuildHeight();
+        //?}
         if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(z)
                 || !plevel.getWorldBorder().isWithinBounds(net.minecraft.core.BlockPos.containing(x, y, z))
-                || y < plevel.getMinBuildHeight() - 64 || y > plevel.getMaxBuildHeight() + 64) {
+                || y < minBuild - 64 || y > maxBuild + 64) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.baton.invalid_pos"));
             return;
         }
@@ -185,14 +391,9 @@ public class BotNetworking {
                 player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.baton.pathfind_fail"));
             }
         } else {
-            // 传送模式：默认仅指挥者处于创造模式可用，配置可放开到其他模式
-            boolean creative = player.gameMode.getGameModeForPlayer().isCreative();
-            if (!creative && !config.allowBatonTeleportNonCreative) {
-                player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("msg.my-bot-mod.baton.tp_creative_only"));
-                return;
-            }
+            // 传送模式：任意游戏模式均可使用（OP/指挥棒权限校验已在上方完成）
             bot.getActionController().cancelPath();
-            bot.teleportTo(player.serverLevel(), x, y, z, player.getYRot(), 0.0F);
+            BotManager.teleportCrossLevel(bot, player.serverLevel(), x, y, z, player.getYRot(), 0.0F);
             player.displayClientMessage(net.minecraft.network.chat.Component.translatable(
                 "msg.my-bot-mod.baton.teleport_ok", botName, (int) x, (int) y, (int) z), true);
             player.playNotifySound(net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT,
@@ -206,7 +407,7 @@ public class BotNetworking {
     public static void sendOpenPanel(ServerPlayer player, BotPlayer bot) {
         FriendlyByteBuf buf = PacketByteBufs.create();
         BotPanelData.fromBot(bot).write(buf);
-        ServerPlayNetworking.send(player, OPEN_BOT_PANEL, buf);
+        sendOpenPanelPayload(player, buf);
     }
 
     /**
@@ -220,7 +421,7 @@ public class BotNetworking {
             buf.writeUtf(bot.getName().getString());
             buf.writeUtf(bot.level().dimension().location().toString());
         }
-        ServerPlayNetworking.send(player, BOT_LIST, buf);
+        sendBotListPayload(player, buf);
     }
 
     /**
@@ -257,14 +458,14 @@ public class BotNetworking {
             if (player instanceof BotPlayer) continue;
             FriendlyByteBuf buf = PacketByteBufs.create();
             writer.accept(buf);
-            ServerPlayNetworking.send(player, BOT_LIST_UPDATE, buf);
+            sendBotListUpdatePayload(player, buf);
         }
     }
 
     // ==================== 行为系统 ====================
 
     /**
-     * 处理行为指令：0=分配 1=移除 2=启动 3=停止 4=重扫；完成后回发最新列表
+     * 处理行为指令：0=分配 1=移除 2=启动 3=停止 4=重扫 5=上移 6=快速执行单个 7=下移；完成后回发最新列表
      */
     private static void handleBehaviorCommand(ServerPlayer player, int action, String botName, String behaviorName) {
         var config = name.modid.config.ModConfig.getInstance();
@@ -293,6 +494,17 @@ public class BotNetworking {
                 case 3 -> name.modid.behavior.BehaviorManager.stop(bot);
                 case 5 -> {
                     if (name.modid.behavior.BehaviorManager.moveUp(bot, behaviorName)) {
+                        name.modid.bot.BotPersistenceManager.saveBot(bot);
+                    }
+                }
+                case 6 -> name.modid.behavior.BehaviorManager.startSingle(bot, behaviorName);
+                case 7 -> {
+                    if (name.modid.behavior.BehaviorManager.moveDown(bot, behaviorName)) {
+                        name.modid.bot.BotPersistenceManager.saveBot(bot);
+                    }
+                }
+                case 8 -> {
+                    if (name.modid.behavior.BehaviorManager.clearAssigned(bot)) {
                         name.modid.bot.BotPersistenceManager.saveBot(bot);
                     }
                 }
@@ -328,6 +540,12 @@ public class BotNetworking {
             buf.writeUtf(n);
         }
         buf.writeBoolean(bot != null && name.modid.behavior.BehaviorManager.isRunning(bot));
+        // 运行进度：当前执行行为显示名 + 队列位置（未运行时为空/0）
+        String current = bot == null ? null : name.modid.behavior.BehaviorManager.currentBehaviorName(bot);
+        buf.writeUtf(current == null ? "" : truncate(current, 100), MAX_BEHAVIOR_LEN);
+        int[] progress = bot == null ? null : name.modid.behavior.BehaviorManager.progress(bot);
+        buf.writeVarInt(progress == null ? 0 : progress[0]);
+        buf.writeVarInt(progress == null ? 0 : progress[1]);
         // 解析错误
         var errors = name.modid.behavior.BehaviorManager.getErrors();
         buf.writeVarInt(errors.size());
@@ -335,7 +553,7 @@ public class BotNetworking {
             buf.writeUtf(e.getKey());
             buf.writeUtf(truncate(e.getValue(), 480), 512);
         }
-        ServerPlayNetworking.send(player, BEHAVIOR_LIST, buf);
+        sendBehaviorListPayload(player, buf);
     }
 
     private static String truncate(String s, int max) {
