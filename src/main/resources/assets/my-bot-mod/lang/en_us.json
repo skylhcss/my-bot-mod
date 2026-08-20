@@ -185,7 +185,7 @@
   "gui.my-bot-mod.behavior.playlist.clear": "Clear playlist",
   "gui.my-bot-mod.behavior.new": "+ New Behavior (in-game editor)",
   "gui.my-bot-mod.behavior.playlist.entry": "▲ %s. %s",
-  "gui.my-bot-mod.behavior.available.empty": "No behavior files - create one with the Behavior Editor (editor/behavior-editor.html)",
+  "gui.my-bot-mod.behavior.available.empty": "No behavior files - create one with the Behavior Editor (config/my-bot-mod/editor/behavior-editor.html)",
   "gui.my-bot-mod.behavior.available.entry": "+ %s (%s blocks) %s",
   "gui.my-bot-mod.behavior.loop_tag": "[loop]",
   "gui.my-bot-mod.panel.behavior_running": "Behavior: %s",

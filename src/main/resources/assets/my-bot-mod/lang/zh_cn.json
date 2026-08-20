@@ -185,7 +185,7 @@
   "gui.my-bot-mod.behavior.playlist.clear": "清空播放列表",
   "gui.my-bot-mod.behavior.new": "➕ 新建行为（游戏内编辑器）",
   "gui.my-bot-mod.behavior.playlist.entry": "▲ %s. %s",
-  "gui.my-bot-mod.behavior.available.empty": "没有行为文件 — 用行为编辑器创建（editor/behavior-editor.html）",
+  "gui.my-bot-mod.behavior.available.empty": "没有行为文件 — 用行为编辑器创建（config/my-bot-mod/editor/behavior-editor.html）",
   "gui.my-bot-mod.behavior.available.entry": "+ %s（%s 块）%s",
   "gui.my-bot-mod.behavior.loop_tag": "[循环]",
   "gui.my-bot-mod.panel.behavior_running": "行为: %s",

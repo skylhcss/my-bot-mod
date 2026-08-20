@@ -38,6 +38,9 @@ public class MyBotMod implements ModInitializer {
 		// 初始化行为系统（扫描 config/my-bot-mod/behaviors/）
 		name.modid.behavior.BehaviorManager.init();
 
+		// 释放行为编辑器到 config/my-bot-mod/editor/（编辑器随 JAR 打包，发布无需单独附带）
+		name.modid.behavior.BehaviorEditorInstaller.install();
+
 		// 玩家聊天 → 行为脚本 onChat 事件（假人自身的 say 为系统消息，不经过此事件，不会自触发）
 		net.fabricmc.fabric.api.message.v1.ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
 			if (!(sender instanceof name.modid.bot.BotPlayer)) {

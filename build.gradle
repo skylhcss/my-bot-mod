@@ -78,6 +78,12 @@ processResources {
 	filesMatching("fabric.mod.json") {
 		expand "version": version, "mc_dep": mcDep, "java_dep": javaDep
 	}
+
+	// 行为编辑器（HTML + 离线 Blockly 资源 + 示例）打包进 JAR：客户端启动时由
+	// BehaviorEditorInstaller 释放到 config/my-bot-mod/editor/，发布只需 JAR 即附带编辑器
+	from(rootProject.file('editor')) {
+		into 'assets/my-bot-mod/editor'
+	}
 }
 
 // 1.20.5+ 需 Java 21；1.20.1–1.20.4 保持 Java 17

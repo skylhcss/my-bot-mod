@@ -22,7 +22,7 @@ Spawn player-like bots, control their actions, send them around with smart pathf
 - 🪄 **Command Baton** — a handheld item with an on-screen HUD; `Ctrl+Scroll` to switch modes; command a bot to **pathfind** or **teleport** to wherever you look
 - 🗺️ **Smart pathfinding** — optimized A* (one-shot search bounded by iteration/node caps; boxing-free hash structures, lazy deletion, block-state cache, admissible heuristic) with width-aware path smoothing (configurable), swimming, gap-crossing, hazard avoidance and stuck-detour/give-up logic (same-dimension only)
 - 🎒 **Inventory / Ender Chest / settings panel** — right-click a bot to edit its inventory, switch game mode, teleport, delete, and set per-bot options (7 tri-state overrides incl. glowing & fire immunity)
-- 🧩 **Behavior scripts** — program bots with a Scratch-like **visual Blockly editor** (`editor/behavior-editor.html`, offline): variables, expressions, loops, conditions, 100+ blocks; assign multi-behavior playlists in-game and export data to files (txt/JSON/CSV)
+- 🧩 **Behavior scripts** — program bots with a Scratch-like **visual Blockly editor** (bundled in the JAR and auto-extracted to `config/my-bot-mod/editor/behavior-editor.html` on first launch, offline): variables, expressions, loops, conditions, 100+ blocks; assign multi-behavior playlists in-game and export data to files (txt/JSON/CSV)
 - 🎨 **Skin system** — Mojang API → local PNG → Base64 → default, with graceful fallback
 - 💾 **Bot persistence** — bots can stay in the world after you leave (optional); their chunks stay loaded, across dimensions
 - ⚙️ **Configuration** — in-game GUI (press **B**): browser-style tabs, crafting-table home page and a bilingual search box; plus commands + JSON file
@@ -83,7 +83,7 @@ MIT License. Author: **Skyline_hcss**. Bots are intended for singleplayer and pr
 - 🪄 **指挥棒**（v1.3.1 新增）：手持道具，四周 HUD 显示信息，Ctrl+滚轮切模式，指挥假人**寻路**或**传送**到你看向的位置
 - 🗺️ **智能寻路**：优化 A*（一次性同步搜索，受迭代/节点硬上限约束；免装箱哈希结构、懒删除、方块状态缓存、可采纳启发式），宽度感知路径平滑（可配置），支持游泳、跨越裂谷、危险规避，卡住自动绕行/放弃（仅限同维度）
 - 🎒 **背包/末影箱/设置面板**：右键假人打开，可编辑背包、切换游戏模式、传送、删除，并含每假人 7 项三态个人配置（含发光、免疫火焰）
-- 🧩 **行为脚本**：类 Scratch 的 **Blockly 图形化编辑器**（`editor/behavior-editor.html`，离线可用）编排假人行为：变量/表达式/循环/条件、100+ 积木；游戏内分配多行为播放列表，可导出数据到文件（txt/JSON/CSV）
+- 🧩 **行为脚本**：类 Scratch 的 **Blockly 图形化编辑器**（随 JAR 一并发布，首次启动自动释放到 `config/my-bot-mod/editor/behavior-editor.html`，离线可用）编排假人行为：变量/表达式/循环/条件、100+ 积木；游戏内分配多行为播放列表，可导出数据到文件（txt/JSON/CSV）
 - 🎨 **皮肤系统**：Mojang API → PNG → Base64 → 默认，三级回退
 - 💾 **假人驻留**：退出世界后假人可保留（可选），跨维度区块保持加载
 - ⚙️ **配置系统**：图形界面（B 键）——浏览器式标签页、工作台风格主页、中英文搜索框；另有命令 + JSON 文件

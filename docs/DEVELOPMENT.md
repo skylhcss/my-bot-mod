@@ -21,7 +21,8 @@ src/main/java/name/modid/
 │   ├── BehaviorRuntime      # Scratch 式多线程解释器（预算/挂起/事件）
 │   ├── BehaviorProgram / BehaviorValue / BehaviorParseException
 │   ├── BotOutput            # 外置输出（txt/jsonl/csv/模板/表格，异步单线程写入，追加/覆盖）
-│   └── BehaviorStorage      # 行为文件保存/读取（游戏内编辑器导出，目录校验）
+│   ├── BehaviorStorage      # 行为文件保存/读取（游戏内编辑器导出，目录校验）
+│   └── BehaviorEditorInstaller # 行为编辑器释放（JAR 内资源 → config/my-bot-mod/editor/）
 ├── command/                # BotCommand / BotModCommand
 ├── config/ModConfig        # 配置
 ├── item/                   # 指挥棒（v1.3.1）
@@ -98,6 +99,8 @@ server.getPlayerList().placeNewPlayer(connection, bot);
 - **注意**：源文件中不要使用 `'\\'` 反斜杠字符字面量（会使 Stonecutter 词法解析异常，导致该文件所有条件注释失效），用 `File.separatorChar` 等替代。
 
 GitHub Actions（`.github/workflows/build.yml`）在每次 push/PR 上执行 `chiseledBuild` 并上传全版本 artifact。
+
+根目录 `editor/`（HTML 行为编辑器 + 离线 Blockly 资源 + 示例）经 `processResources` 打包进各版本 JAR 的 `assets/my-bot-mod/editor/`，游戏启动时由 `BehaviorEditorInstaller` 释放到 `config/my-bot-mod/editor/`——发布只需上传 JAR，编辑器随之附带。
 
 ## 代码规范
 
